@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "EDC Roulette",
+    "slug": "edc-roulette",
+    "version": "1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "edcroulette",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "app.edcroulette.ios",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "EDC Roulette uses the camera to take photos of your gear for your collection.",
+        "NSPhotoLibraryUsageDescription": "EDC Roulette lets you pick photos of your gear from your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.edcroulette.android",
+      "adaptiveIcon": {
+        "backgroundColor": "#16191E",
+        "foregroundImage": "./assets/images/android-foreground.png",
+        "monochromeImage": "./assets/images/android-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://edcroulette.app"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#16191E",
+          "image": "./assets/images/splash.png",
+          "imageWidth": 140
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EDC Roulette lets you pick photos of your gear from your library.",
+          "cameraPermission": "EDC Roulette uses the camera to take photos of your gear for your collection.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-apple-authentication",
+      "./plugins/with-xcode-cloud"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

@@ -1,0 +1,114 @@
+# Starts an iOS build on Xcode Cloud (Apple's build service, 25 free compute
+# hours a month with the Apple Developer Program, shared with Belay Buddy)
+# instead of building on a GitHub macOS runner. This job only makes one App
+# Store Connect API call, so it runs on Linux and uses a few seconds of minutes.
+#
+# When it runs:
+#   - A push to master or develop whose last commit message contains [ios].
+#     master builds production (prod Supabase); develop builds dev (dev Supabase).
+#   - By hand: Actions tab > "Start iOS build on Xcode Cloud" > Run workflow.
+# Xcode Cloud then clones the branch, runs scripts/xcode-cloud/post-clone.sh
+# (Expo prebuild, pods, backend choice), archives, and uploads to TestFlight.
+#
+# Needs the App Store Connect API key secrets (ASC_KEY_ID, ASC_ISSUER_ID,
+# ASC_KEY_P8: the same key as Belay Buddy's; it needs the App Manager or Admin
+# role) and two Xcode Cloud workflows for the EDC Roulette app: "TestFlight Prod"
+# (master, prod tester group) and "TestFlight Dev" (develop, dev tester group).
+# See docs/xcode-cloud.md.
+name: Start iOS build on Xcode Cloud
+
+on:
+  push:
+    branches: [master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-xcode-cloud-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  start:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[ios]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BUNDLE_ID: app.edcroulette.ios
+      # master -> prod workflow/tester group, anything else -> dev.
+      XCODE_CLOUD_WORKFLOW: ${{ github.ref_name == 'master' && 'TestFlight Prod' || 'TestFlight Dev' }}
+      BRANCH: ${{ github.ref_name }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Start the Xcode Cloud build
+        run: |
+          python3 -m pip install --quiet pyjwt cryptography
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error, urllib.parse, jwt
+
+          API = 'https://api.appstoreconnect.apple.com'
+          for name in ('ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_KEY_P8'):
+              if not os.environ.get(name):
+                  raise SystemExit(f'::error::Missing repository secret {name}')
+
+          def token():
+              now = int(time.time())
+              return jwt.encode({'iss': os.environ['ASC_ISSUER_ID'], 'iat': now, 'exp': now + 1100,
+                                 'aud': 'appstoreconnect-v1'},
+                                os.environ['ASC_KEY_P8'], algorithm='ES256',
+                                headers={'kid': os.environ['ASC_KEY_ID']})
+
+          def call(method, url, body=None):
+              if url.startswith('/'):
+                  url = API + url
+              req = urllib.request.Request(url, method=method,
+                                           data=json.dumps(body).encode() if body is not None else None,
+                                           headers={'Authorization': 'Bearer ' + token(),
+                                                    'Content-Type': 'application/json'})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      raw = r.read()
+                      return json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as e:
+                  raise SystemExit(f'::error::{method} {url} -> {e.code}: {e.read().decode()[:600]}')
+
+          def every(path):
+              url = path
+              while url:
+                  page = call('GET', url)
+                  yield from page.get('data', [])
+                  url = page.get('links', {}).get('next')
+
+          bundle, branch, wanted = os.environ['BUNDLE_ID'], os.environ['BRANCH'], os.environ['XCODE_CLOUD_WORKFLOW']
+
+          apps = call('GET', '/v1/apps?filter[bundleId]=' + urllib.parse.quote(bundle)).get('data', [])
+          if not apps:
+              raise SystemExit(f'::error::No App Store Connect app for {bundle}')
+          product = call('GET', f"/v1/apps/{apps[0]['id']}/ciProduct")['data']
+
+          workflows = list(every(f"/v1/ciProducts/{product['id']}/workflows?limit=200"))
+          workflow = next((w for w in workflows if w['attributes'].get('name') == wanted), None)
+          if not workflow:
+              names = ', '.join(w['attributes'].get('name', '?') for w in workflows) or 'none'
+              raise SystemExit(f"::error::No Xcode Cloud workflow named '{wanted}' (found: {names})")
+
+          repos = call('GET', f"/v1/ciProducts/{product['id']}/primaryRepositories").get('data', [])
+          if not repos:
+              raise SystemExit('::error::The Xcode Cloud product has no connected repository')
+          ref = next((g for g in every(f"/v1/scmRepositories/{repos[0]['id']}/gitReferences?limit=200")
+                      if g['attributes'].get('canonicalName') == f'refs/heads/{branch}'
+                      and not g['attributes'].get('isDeleted')), None)
+          if not ref:
+              raise SystemExit(f"::error::Xcode Cloud can't see branch {branch} yet; check the repository connection")
+
+          run = call('POST', '/v1/ciBuildRuns', {'data': {
+              'type': 'ciBuildRuns', 'attributes': {},
+              'relationships': {
+                  'workflow': {'data': {'type': 'ciWorkflows', 'id': workflow['id']}},
+                  'sourceBranchOrTag': {'data': {'type': 'scmGitReferences', 'id': ref['id']}},
+              }}})['data']
+          print(f"::notice::Started Xcode Cloud build {run['attributes'].get('number')} of '{wanted}' on {branch}. "
+                f"Progress: App Store Connect > EDC Roulette > Xcode Cloud.")
+          PY
