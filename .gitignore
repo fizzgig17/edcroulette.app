@@ -7,3 +7,11 @@ dist/
 *.p12
 *.jks
 *.mobileprovision
+expo-env.d.ts
+*.tsbuildinfo
+.metro-health-check*
+# generated native folders (ios/ci_scripts is kept: Xcode Cloud needs it at
+# checkout, and plugins/with-xcode-cloud.js rewrites it on every prebuild)
+/ios/*
+!/ios/ci_scripts/
+/android
