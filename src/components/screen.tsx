@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 
 type ScreenProps = {
@@ -26,12 +26,13 @@ type ScreenProps = {
 
 /** Standard scrollable screen shell. */
 export function Screen({ title, subtitle, children, showTitle = true, action, readable, tab, footer }: ScreenProps) {
+  const insets = useSafeAreaInsets();
   return (
     <ThemedView style={styles.container}>
       {/* The dev banner already covers the status-bar area. */}
       <SafeAreaView style={styles.flex} edges={showTitle && !IS_DEV_BUILD ? ['top'] : []}>
         <ScrollView
-          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: BottomTabInset + Spacing.six }]}
+          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 110 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>

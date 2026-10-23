@@ -9,6 +9,7 @@
  * aren't on screen still pick a piece (it appears in Today's carry), they just
  * don't turn. The order strip lets the person drag wheels into a new order.
  */
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
@@ -17,7 +18,7 @@ import { GearThumb } from '@/components/gear-thumb';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { Radius, Spacing } from '@/constants/theme';
+import { lift, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
 import { pickCoordinated } from '@/lib/api';
@@ -146,42 +147,53 @@ function Reel({
 
   const isLocked = !!locked;
   const canLock = !busy && (isLocked || !!shown);
-  const fade = theme.reel + 'B3';
-  const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
+    const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
 
   return (
     <View style={styles.reelCol}>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.center}>
         {slot.category}
       </ThemedText>
-      <View
-        style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel, borderColor: isLocked ? theme.accent : theme.border }]}
-        accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
-        <Animated.View style={{ transform: [{ translateY: y }] }}>
-          {strip.map((item, i) => (
-            <View key={i} style={[styles.row, { height: rowHeight }, wide && styles.rowWide, strip.length <= 3 && i !== 1 && styles.dim]}>
-              {item ? (
-                <>
-                  <GearThumb item={item} size={thumb} />
-                  <ThemedText
-                    numberOfLines={2}
-                    style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: wide ? 13 : 14, lineHeight: wide ? 16 : 18, fontWeight: '600' }]}>
-                    {item.name}
+      <LinearGradient colors={isLocked ? [theme.brassHi, theme.brassLo] : [theme.metalHi, theme.metalLo]} style={[styles.bezel, lift(theme.shadow, 3)]}>
+        <View
+          style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel }]}
+          accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
+          <Animated.View style={{ transform: [{ translateY: y }] }}>
+            {strip.map((item, i) => (
+              <View key={i} style={[styles.row, { height: rowHeight }, wide && styles.rowWide, strip.length <= 3 && i !== 1 && styles.dim]}>
+                {item ? (
+                  <>
+                    <GearThumb item={item} size={thumb} />
+                    <ThemedText
+                      numberOfLines={2}
+                      style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: wide ? 13 : 14, lineHeight: wide ? 16 : 18, fontWeight: '600' }]}>
+                      {item.name}
+                    </ThemedText>
+                  </>
+                ) : i === 1 ? (
+                  <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
+                    {`No ${slot.category.toLowerCase()} yet`}
                   </ThemedText>
-                </>
-              ) : i === 1 ? (
-                <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
-                  {`No ${slot.category.toLowerCase()} yet`}
-                </ThemedText>
-              ) : null}
-            </View>
-          ))}
-        </Animated.View>
-        {/* Soft fade above and below, and the line the pieces land on. */}
-        <View pointerEvents="none" style={[styles.shade, { top: 0, height: rowHeight * 0.8, backgroundColor: fade }]} />
-        <View pointerEvents="none" style={[styles.shade, { bottom: 0, height: rowHeight * 0.8, backgroundColor: fade }]} />
-        <View pointerEvents="none" style={[styles.payline, { top: rowHeight, height: rowHeight, borderColor: theme.accent }]} />
-      </View>
+                ) : null}
+              </View>
+            ))}
+          </Animated.View>
+          {/* The drum curves away at the top and bottom, with a soft sheen across the middle. */}
+          <LinearGradient pointerEvents="none" colors={[theme.reel, theme.reel + 'D9', theme.reel + '00']} style={[styles.shade, { top: 0, height: rowHeight * 0.95 }]} />
+          <LinearGradient pointerEvents="none" colors={[theme.reel + '00', theme.reel + 'D9', theme.reel]} style={[styles.shade, { bottom: 0, height: rowHeight * 0.95 }]} />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['#FFFFFF00', '#FFFFFF14', '#FFFFFF00']}
+            style={[styles.shade, { top: rowHeight, height: rowHeight }]}
+          />
+          <View pointerEvents="none" style={[styles.line, { top: rowHeight, backgroundColor: theme.brassHi }]} />
+          <View pointerEvents="none" style={[styles.line, { top: rowHeight * 2 - 1.5, backgroundColor: theme.brassHi }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: rowHeight * 1.5 - 7, borderLeftColor: theme.brassHi }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: rowHeight * 1.5 - 7, borderRightColor: theme.brassHi }]} />
+          {/* Glass edge: light from the top left. */}
+          <LinearGradient pointerEvents="none" colors={['#FFFFFF26', '#FFFFFF00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium }]} />
+        </View>
+      </LinearGradient>
       <Pressable
         onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
         disabled={!canLock}
@@ -468,13 +480,17 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   reels: { flexDirection: 'row', gap: Spacing.two },
   reelCol: { flex: 1, gap: Spacing.two, alignItems: 'stretch' },
-  window: { borderRadius: Radius.medium, borderWidth: 1.5, overflow: 'hidden' },
+  bezel: { borderRadius: Radius.large, padding: 4 },
+  window: { borderRadius: Radius.medium, overflow: 'hidden' },
+  line: { position: 'absolute', left: 0, right: 0, height: 1.5, opacity: 0.9 },
+  pointer: { position: 'absolute', width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderTopColor: 'transparent', borderBottomColor: 'transparent' },
+  pointerL: { left: 0, borderLeftWidth: 9 },
+  pointerR: { right: 0, borderRightWidth: 9 },
   row: { alignItems: 'center', justifyContent: 'center', gap: Spacing.one, paddingHorizontal: Spacing.one },
   rowWide: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two },
   nameWide: { flex: 1 },
-  dim: { opacity: 0.4 },
+  dim: { opacity: 0.45, transform: [{ scale: 0.86 }] },
   shade: { position: 'absolute', left: 0, right: 0 },
-  payline: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1.5, borderBottomWidth: 1.5 },
   lock: { flexDirection: 'row', gap: Spacing.one, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.pill },
   center: { textAlign: 'center' },
   order: { marginBottom: -Spacing.one },

@@ -1,9 +1,10 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import type { IconName } from '@/constants/icons';
-import { Radius, Spacing } from '@/constants/theme';
+import { lift, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { tap } from '@/lib/haptics';
 
@@ -47,7 +48,8 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         big && styles.big,
-        { backgroundColor: bg },
+        { backgroundColor: variant === 'primary' ? 'transparent' : bg },
+        variant === 'primary' && !off && lift(theme.shadow, 2),
         variant === 'danger' && { borderWidth: 1, borderColor: theme.danger },
         off && styles.off,
         pressed && styles.pressed,
