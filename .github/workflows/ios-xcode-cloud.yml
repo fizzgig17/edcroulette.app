@@ -89,7 +89,8 @@ jobs:
           product = call('GET', f"/v1/apps/{apps[0]['id']}/ciProduct")['data']
 
           workflows = list(every(f"/v1/ciProducts/{product['id']}/workflows?limit=200"))
-          workflow = next((w for w in workflows if w['attributes'].get('name') == wanted), None)
+          # Capitalization doesn't matter ("Testflight Dev" matches "TestFlight Dev").
+          workflow = next((w for w in workflows if (w['attributes'].get('name') or '').strip().lower() == wanted.lower()), None)
           if not workflow:
               names = ', '.join(w['attributes'].get('name', '?') for w in workflows) or 'none'
               raise SystemExit(f"::error::No Xcode Cloud workflow named '{wanted}' (found: {names})")
