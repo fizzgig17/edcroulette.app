@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+.env*.local
+.DS_Store
+*.p8
+*.p12
+*.jks
+*.mobileprovision
