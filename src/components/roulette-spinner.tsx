@@ -87,18 +87,45 @@ function Reel({
   onToggleLock: (slotIndex: number, item: GearItem | null) => void;
 }) {
   const theme = useTheme();
-  const y = useRef(new Animated.Value(0)).current;
-  const [strip, setStrip] = useState<(GearItem | null)[]>(() => idleStrip(candidates, shown));
+  // The pieces and their scroll position live in one state value, so a new strip
+  // always arrives with a fresh position (resetting them separately could leave
+  // the window scrolled past a short strip, which showed as a blank wheel).
+  const [reel, setReel] = useState<{ strip: (GearItem | null)[]; y: Animated.Value; go: number }>(() => ({
+    strip: idleStrip(candidates, shown),
+    y: new Animated.Value(0),
+    go: 0,
+  }));
+  const { strip, y } = reel;
   const lastToken = useRef(spinToken);
   const animating = useRef(false);
+  const stopAtRef = useRef(0);
 
   // Follow collection and lock changes while standing still.
   useEffect(() => {
     if (!animating.current && lastToken.current === spinToken) {
-      setStrip(idleStrip(candidates, shown));
-      y.setValue(0);
+      setReel({ strip: idleStrip(candidates, shown), y: new Animated.Value(0), go: 0 });
     }
-  }, [candidates, shown, spinToken, y]);
+  }, [candidates, shown, spinToken]);
+
+  // Run the turn once the new strip is on screen.
+  useEffect(() => {
+    if (!reel.go) return;
+    const anim = Animated.timing(reel.y, {
+      toValue: -(stopAtRef.current - 1) * rowHeight,
+      duration: durationMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    anim.start(({ finished }) => {
+      animating.current = false;
+      if (finished) {
+        select();
+        onSettled(slot.slotIndex);
+      }
+    });
+    return () => anim.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reel.go]);
 
   useEffect(() => {
     if (lastToken.current === spinToken) return;
@@ -108,35 +135,19 @@ function Reel({
     const s: (GearItem | null)[] = idleStrip(candidates, shown);
     for (let i = 0; i < LOOPS; i += 1) s.push(...shuffle(candidates));
     s.push(target, neighbour(candidates, target, 1));
-    const stopAt = s.length - 2;
-    setStrip(s);
-    y.setValue(0);
+    stopAtRef.current = s.length - 2;
     animating.current = true;
-
-    const anim = Animated.timing(y, {
-      toValue: -(stopAt - 1) * rowHeight,
-      duration: durationMs,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-    anim.start(({ finished }) => {
-      animating.current = false;
-      setStrip(idleStrip(candidates, target));
-      y.setValue(0);
-      if (finished) {
-        select();
-        onSettled(slot.slotIndex);
-      }
-    });
-    return () => anim.stop();
+    // The strip stays where it stops; the next change swaps in a fresh one.
+    setReel((r) => ({ strip: s, y: new Animated.Value(0), go: r.go + 1 }));
+    return undefined;
     // Only a new token starts a spin; everything else is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinToken]);
 
   const isLocked = !!locked;
   const canLock = !busy && (isLocked || !!shown);
-  const fade = theme.reel + '99';
-  const thumb = Math.round(rowHeight * (wide ? 0.56 : 0.42));
+  const fade = theme.reel + 'B3';
+  const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
 
   return (
     <View style={styles.reelCol}>
@@ -153,23 +164,22 @@ function Reel({
                 <>
                   <GearThumb item={item} size={thumb} />
                   <ThemedText
-                    type="small"
-                    numberOfLines={wide ? 2 : 2}
-                    style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: 12, lineHeight: 15 }]}>
+                    numberOfLines={2}
+                    style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: wide ? 13 : 14, lineHeight: wide ? 16 : 18, fontWeight: '600' }]}>
                     {item.name}
                   </ThemedText>
                 </>
-              ) : (
-                <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                  —
+              ) : i === 1 ? (
+                <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
+                  {`No ${slot.category.toLowerCase()} yet`}
                 </ThemedText>
-              )}
+              ) : null}
             </View>
           ))}
         </Animated.View>
         {/* Soft fade above and below, and the line the pieces land on. */}
-        <View pointerEvents="none" style={[styles.shade, { top: 0, height: rowHeight * 0.9, backgroundColor: fade }]} />
-        <View pointerEvents="none" style={[styles.shade, { bottom: 0, height: rowHeight * 0.9, backgroundColor: fade }]} />
+        <View pointerEvents="none" style={[styles.shade, { top: 0, height: rowHeight * 0.8, backgroundColor: fade }]} />
+        <View pointerEvents="none" style={[styles.shade, { bottom: 0, height: rowHeight * 0.8, backgroundColor: fade }]} />
         <View pointerEvents="none" style={[styles.payline, { top: rowHeight, height: rowHeight, borderColor: theme.accent }]} />
       </View>
       <Pressable
@@ -201,7 +211,7 @@ function WheelOrder({ slots, visibleCount, disabled }: { slots: SlotConfig[]; vi
         items={slots}
         keyOf={(s) => String(s.slotIndex)}
         direction="row"
-        itemSize={38}
+        itemSize={44}
         gap={6}
         onReorder={(next) => void saveSlots(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
         renderItem={(s, i, grip) => {
@@ -214,7 +224,7 @@ function WheelOrder({ slots, visibleCount, disabled }: { slots: SlotConfig[]; vi
               style={[styles.chip, { backgroundColor: onScreen ? theme.backgroundElement : 'transparent', borderColor: onScreen ? theme.border : theme.textSecondary, borderStyle: onScreen ? 'solid' : 'dashed' }]}>
               <Icon name="grip" size={12} color={theme.textSecondary} />
               <ThemedText type="small" numberOfLines={1} style={[styles.chipText, { color: onScreen ? theme.text : theme.textSecondary }]}>
-                {s.category}
+                {slots.length > 4 ? String(i + 1) : s.category}
               </ThemedText>
             </View>
           );
@@ -236,7 +246,7 @@ export function RouletteSpinner() {
 
   const visibleCount = landscape ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
   const hiddenCount = slots.length - visibleCount;
-  const rowHeight = landscape ? Math.max(52, Math.min(64, Math.round((height - 250) / VISIBLE_ROWS))) : 88;
+  const rowHeight = landscape ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
 
   const candidates = useMemo(() => {
     const m = new Map<number, GearItem[]>();
@@ -458,7 +468,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   reels: { flexDirection: 'row', gap: Spacing.two },
   reelCol: { flex: 1, gap: Spacing.two, alignItems: 'stretch' },
-  window: { borderRadius: Radius.large, borderWidth: 2, overflow: 'hidden' },
+  window: { borderRadius: Radius.medium, borderWidth: 1.5, overflow: 'hidden' },
   row: { alignItems: 'center', justifyContent: 'center', gap: Spacing.one, paddingHorizontal: Spacing.one },
   rowWide: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two },
   nameWide: { flex: 1 },
@@ -469,6 +479,6 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   order: { marginBottom: -Spacing.one },
   chip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.two, borderRadius: Radius.pill, borderWidth: 1 },
-  chipText: { flex: 1, fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  chipText: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700' },
   why: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
 });

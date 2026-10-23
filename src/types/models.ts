@@ -4,7 +4,7 @@
  * tables both map onto these.
  */
 
-export const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Other'] as const;
+export const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Other'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood'] as const;

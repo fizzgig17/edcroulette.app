@@ -24,7 +24,7 @@ const IP_LIMIT = Number(Deno.env.get('EDC_AI_IP_DAILY') ?? '60');
 const GLOBAL_LIMIT = Number(Deno.env.get('EDC_AI_GLOBAL_DAILY') ?? '3000');
 const MAX_IMAGE_CHARS = 2_000_000; // base64 characters, about 1.5 MB
 
-const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Other'];
+const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Other'];
 const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood'];
 const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated'];
 

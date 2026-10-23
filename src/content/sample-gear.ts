@@ -106,4 +106,16 @@ export const SAMPLE_GEAR: GearDraft[] = [
     ['Copper Bottle Opener', 'Dango', 'Copper Opener', 'Copper', 'Patina', '#B87333', 30],
     ['Brass Key Ring', 'Saddleback Leather', 'Brass Ring', 'Brass', 'Polished', '#C9A24B', 18],
   ]),
+  ...make('Pry bar', [
+    ['Gerber Gator Crate Opener', 'Gerber', 'Gator Crate Opener', 'Steel', 'Coated', '#B33A3A', 150],
+    ['Vaughan Mini Bar', 'Vaughan', 'Mini Bar', 'Steel', 'Polished', '#9CA2A9', 60],
+    ['Fenix Pry Bar', 'Fenix', 'Flat Pry Bar', 'Steel', 'Coated', '#2B2E33', 70],
+    ['Nitecore Pry Bar', 'Nitecore', 'Pry Bar', 'Titanium', 'Stonewashed', '#8B9198', 35],
+    ['Ti2 Design Pry Bar', 'Ti2 Design', 'Pry Bar', 'Titanium', 'Blasted', '#7C8289', 28],
+    ['Big Idea Ti Pry', 'Big Idea Design', 'Ti Pry Bar', 'Titanium', 'Stonewashed', '#8B9198', 30],
+    ['Copper Pocket Pry', 'Dango', 'Copper Pry', 'Copper', 'Patina', '#B87333', 60],
+    ['Brass Mini Pry', 'Saddleback Leather', 'Brass Pry', 'Brass', 'Polished', '#C9A24B', 55],
+    ['Flat Bar Keychain Pry', 'KeyBar', 'Pry Tool', 'Aluminum', 'Anodized', '#4A4F55', 22],
+    ['Steel Nail Puller', 'Stanley', 'Mini Nail Puller', 'Steel', 'Raw', '#6D737A', 110],
+  ]),
 ];

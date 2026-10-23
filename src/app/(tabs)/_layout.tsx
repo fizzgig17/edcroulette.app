@@ -13,7 +13,7 @@ export default function TabsLayout() {
       labelStyle={{ selected: { color: colors.accent } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Spin</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'dice', selected: 'dice.fill' }} md="casino" />
+        <NativeTabs.Trigger.Icon sf={{ default: 'arrow.triangle.2.circlepath', selected: 'arrow.triangle.2.circlepath' }} md="autorenew" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="collection">
         <NativeTabs.Trigger.Label>Collection</NativeTabs.Trigger.Label>

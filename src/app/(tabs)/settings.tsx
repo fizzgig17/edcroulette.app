@@ -67,7 +67,7 @@ function WheelsEditor() {
         items={slots}
         keyOf={(s) => String(s.slotIndex)}
         direction="column"
-        itemSize={104}
+        itemSize={250}
         gap={8}
         onReorder={(next) => void apply(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
         renderItem={(s, i, grip) => (
@@ -86,7 +86,6 @@ function WheelsEditor() {
               options={CATEGORIES}
               value={s.category as (typeof CATEGORIES)[number]}
               onChange={(v) => v && void apply(current().map((d, k) => (k === i ? { ...d, category: v } : d)))}
-              scroll
             />
           </View>
         )}
