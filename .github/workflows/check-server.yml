@@ -1,0 +1,51 @@
+# Checks the website deploy settings without deploying anything: logs in to
+# Spaceship over SSH with the SPACESHIP_* secrets and confirms the dev and prod
+# site folders exist and can be written to.
+#   Actions > Check website server > Run workflow
+name: Check website server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check the secrets are set
+        env:
+          HOST: ${{ secrets.SPACESHIP_HOST }}
+          PORT: ${{ secrets.SPACESHIP_PORT }}
+          USER: ${{ secrets.SPACESHIP_USER }}
+          KEY: ${{ secrets.SPACESHIP_SSH_KEY }}
+          DEV: ${{ secrets.SPACESHIP_DEV_PATH }}
+          PROD: ${{ secrets.SPACESHIP_PROD_PATH }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing SPACESHIP_HOST"
+          [ -n "$USER" ] || missing="$missing SPACESHIP_USER"
+          [ -n "$KEY" ] || missing="$missing SPACESHIP_SSH_KEY"
+          [ -n "$DEV" ] || missing="$missing SPACESHIP_DEV_PATH"
+          [ -n "$PROD" ] || missing="$missing SPACESHIP_PROD_PATH"
+          [ -n "$PORT" ] || echo "::warning::SPACESHIP_PORT is not set, so port 22 is used."
+          if [ -n "$missing" ]; then echo "::error::Missing secrets:$missing"; exit 1; fi
+          case "$KEY" in *"PRIVATE KEY"*) ;; *) echo "::error::SPACESHIP_SSH_KEY doesn't look like a private key (it should start with -----BEGIN ... PRIVATE KEY-----)"; exit 1 ;; esac
+
+      - name: Log in and check the site folders
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SPACESHIP_HOST }}
+          port: ${{ secrets.SPACESHIP_PORT }}
+          username: ${{ secrets.SPACESHIP_USER }}
+          key: ${{ secrets.SPACESHIP_SSH_KEY }}
+          passphrase: ${{ secrets.SPACESHIP_SSH_PASSPHRASE }}
+          script: |
+            ok=1
+            for pair in "dev|${{ secrets.SPACESHIP_DEV_PATH }}" "prod|${{ secrets.SPACESHIP_PROD_PATH }}"; do
+              name=${pair%%|*}; dir=${pair#*|}
+              if [ ! -d "$dir" ]; then echo "PROBLEM: $name folder $dir doesn't exist (create the domain in cPanel, or fix the path)"; ok=0; continue; fi
+              t="$dir/.deploy-check-$$"
+              if touch "$t" 2>/dev/null; then rm -f "$t"; echo "OK: $name folder $dir exists and is writable ($(ls -A "$dir" | wc -l) items in it)"; else echo "PROBLEM: can't write to $name folder $dir"; ok=0; fi
+            done
+            echo "Logged in as $(whoami) on $(hostname)"
+            [ "$ok" = 1 ]
