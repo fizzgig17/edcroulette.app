@@ -1,17 +1,30 @@
 // The phone app's root (the website uses _layout.web.tsx).
+// First, so fatal errors anywhere after this are shown instead of closing the app.
+import '@/lib/crash-catcher';
+
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { DevBanner } from '@/components/dev-banner';
+import { StartupError } from '@/components/startup-error';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { lastFatalError, onFatalError } from '@/lib/crash-catcher';
 import { useGear } from '@/lib/gear';
 import { LocalDataProvider } from '@/lib/local-database';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Expo Router shows this when the layout or a screen throws while drawing. */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+  return <StartupError error={error} retry={() => void retry()} />;
+}
 
 function HideSplashWhenLoaded() {
   const { loading } = useGear();
@@ -22,6 +35,16 @@ function HideSplashWhenLoaded() {
 }
 
 export default function RootLayout() {
+  const [fatal, setFatal] = useState<Error | null>(lastFatalError);
+  useEffect(() => onFatalError(setFatal), []);
+  useEffect(() => {
+    if (fatal) SplashScreen.hideAsync();
+  }, [fatal]);
+  if (fatal) return <StartupError error={fatal} />;
+  return <App />;
+}
+
+function App() {
   const scheme = useColorScheme();
   const colors = Colors[scheme];
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme;
