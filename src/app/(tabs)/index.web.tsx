@@ -1,7 +1,8 @@
 import Head from 'expo-router/head';
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -23,70 +24,73 @@ const FEATURES = [
 export default function Landing() {
   const theme = useTheme();
   return (
-    <View style={styles.page}>
-      <Head>
-        <title>EDC Roulette — spin for today's carry</title>
-        <meta name="description" content="A slot-machine randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
-        <meta property="og:title" content="EDC Roulette" />
-        <meta property="og:description" content="Spin for today's everyday carry." />
-        <meta property="og:image" content="/og-image.png" />
-      </Head>
+    <ScrollView>
+      <View style={styles.page}>
+        <Head>
+          <title>EDC Roulette — spin for today's carry</title>
+          <meta name="description" content="A slot-machine randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
+          <meta property="og:title" content="EDC Roulette" />
+          <meta property="og:description" content="Spin for today's everyday carry." />
+          <meta property="og:image" content="/og-image.png" />
+        </Head>
 
-      <View style={styles.hero}>
-        <Image source={require('@/../assets/images/icon.png')} style={styles.icon} accessibilityLabel="EDC Roulette icon" />
-        <ThemedText type="title" style={styles.center}>
-          Spin for today's carry
-        </ThemedText>
-        <ThemedText themeColor="textSecondary" style={[styles.center, styles.lead]}>
-          EDC Roulette picks your everyday-carry combo from your own collection. Lock the pieces you're definitely carrying, spin for the rest.
-        </ThemedText>
-        <View style={[styles.badge, { backgroundColor: theme.accentSoft }]}>
-          <ThemedText type="smallBold" style={{ color: theme.accent }}>
-            Coming soon to iPhone and Android
+        <View style={styles.hero}>
+          <Image source={require('@/../assets/images/icon.png')} style={styles.icon} accessibilityLabel="EDC Roulette icon" />
+          <ThemedText type="title" style={styles.center}>
+            Spin for today's carry
           </ThemedText>
-        </View>
-      </View>
-
-      <View style={[styles.machine, { backgroundColor: theme.surface, borderColor: theme.border }]} accessibilityLabel="Example spin">
-        {SAMPLE.map((s) => (
-          <View key={s.slot} style={styles.reelCol}>
-            <ThemedText type="caption" themeColor="textSecondary" style={styles.center}>
-              {s.slot}
+          <ThemedText themeColor="textSecondary" style={[styles.center, styles.lead]}>
+            EDC Roulette picks your everyday-carry combo from your own collection. Lock the pieces you're definitely carrying, spin for the rest.
+          </ThemedText>
+          <View style={[styles.badge, { backgroundColor: theme.accentSoft }]}>
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Coming soon to iPhone and Android
             </ThemedText>
-            <View style={[styles.reel, { backgroundColor: theme.reel, borderColor: s.locked ? theme.accent : theme.border }]}>
-              <View style={[styles.swatch, { backgroundColor: s.color }]} />
-              <ThemedText type="smallBold" style={[styles.center, { color: theme.reelText }]}>
-                {s.name}
+          </View>
+        </View>
+
+        <View style={[styles.machine, { backgroundColor: theme.surface, borderColor: theme.border }]} accessibilityLabel="Example spin">
+          {SAMPLE.map((s) => (
+            <View key={s.slot} style={styles.reelCol}>
+              <ThemedText type="caption" themeColor="textSecondary" style={styles.center}>
+                {s.slot}
               </ThemedText>
-              <ThemedText type="small" style={[styles.center, { color: theme.textSecondary, fontSize: 12 }]}>
-                {s.detail}
+              <View style={[styles.reel, { backgroundColor: theme.reel, borderColor: s.locked ? theme.accent : theme.border }]}>
+                <View style={[styles.swatch, { backgroundColor: s.color }]} />
+                <ThemedText type="smallBold" style={[styles.center, { color: theme.reelText }]}>
+                  {s.name}
+                </ThemedText>
+                <ThemedText type="small" style={[styles.center, { color: theme.textSecondary, fontSize: 12 }]}>
+                  {s.detail}
+                </ThemedText>
+              </View>
+              <ThemedText type="smallBold" style={[styles.center, { color: s.locked ? theme.accent : theme.textSecondary, fontSize: 12 }]}>
+                {s.locked ? 'Locked' : 'Spun'}
               </ThemedText>
             </View>
-            <ThemedText type="smallBold" style={[styles.center, { color: s.locked ? theme.accent : theme.textSecondary, fontSize: 12 }]}>
-              {s.locked ? 'Locked' : 'Spun'}
-            </ThemedText>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      <View style={styles.grid}>
-        {FEATURES.map((f) => (
-          <View key={f.title} style={styles.cell}>
-            <Card>
-              <ThemedText type="heading">{f.title}</ThemedText>
-              <ThemedText themeColor="textSecondary">{f.body}</ThemedText>
-            </Card>
-          </View>
-        ))}
-      </View>
+        <View style={styles.grid}>
+          {FEATURES.map((f) => (
+            <View key={f.title} style={styles.cell}>
+              <Card>
+                <ThemedText type="heading">{f.title}</ThemedText>
+                <ThemedText themeColor="textSecondary">{f.body}</ThemedText>
+              </Card>
+            </View>
+          ))}
+        </View>
 
-      <Card>
-        <ThemedText type="heading">Premium is on the way</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          Unlimited gear and slots, cloud backup across devices, EDC Friends to see each other's collections, and a web dashboard to manage your collection from a computer.
-        </ThemedText>
-      </Card>
-    </View>
+        <Card>
+          <ThemedText type="heading">Premium is on the way</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            Unlimited gear and slots, cloud backup across devices, EDC Friends to see each other's collections, and a web dashboard to manage your collection from a computer.
+          </ThemedText>
+        </Card>
+      </View>
+      <SiteFooter />
+    </ScrollView>
   );
 }
 
@@ -102,5 +106,5 @@ const styles = StyleSheet.create({
   reel: { height: 170, borderRadius: Radius.medium, borderWidth: 2, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.two },
   swatch: { width: 40, height: 40, borderRadius: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
-  cell: { flexGrow: 1, flexBasis: 280 },
+  cell: { flexGrow: 1, flexBasis: 360 },
 });

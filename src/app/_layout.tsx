@@ -1,10 +1,6 @@
 // The phone app's root (the website uses _layout.web.tsx).
-// localStorage backs small settings such as the theme choice.
-import 'expo-sqlite/localStorage/install';
-
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -12,8 +8,8 @@ import { View } from 'react-native';
 import { DevBanner } from '@/components/dev-banner';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { DATABASE_NAME, migrate } from '@/lib/db';
-import { GearProvider, useGear } from '@/lib/gear';
+import { useGear } from '@/lib/gear';
+import { LocalDataProvider } from '@/lib/local-database';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,8 +26,7 @@ export default function RootLayout() {
   const colors = Colors[scheme];
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme;
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
-      <GearProvider>
+    <LocalDataProvider>
         <HideSplashWhenLoaded />
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, background: colors.background, card: colors.background, primary: colors.accent, text: colors.text, border: colors.border } }}>
           <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
@@ -48,7 +43,6 @@ export default function RootLayout() {
             </Stack>
           </View>
         </ThemeProvider>
-      </GearProvider>
-    </SQLiteProvider>
+    </LocalDataProvider>
   );
 }

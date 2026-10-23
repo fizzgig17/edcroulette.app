@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
@@ -44,6 +45,7 @@ export function Screen({ title, subtitle, children, showTitle = true, action, re
           )}
           {subtitle ? <ThemedText themeColor="textSecondary">{subtitle}</ThemedText> : null}
           {children}
+          {Platform.OS === 'web' ? <SiteFooter /> : null}
         </ScrollView>
         {footer}
       </SafeAreaView>

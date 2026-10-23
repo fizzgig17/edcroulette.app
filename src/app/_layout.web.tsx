@@ -3,13 +3,12 @@
 // database isn't used on the web).
 import { DarkTheme, DefaultTheme, Link, Stack, ThemeProvider } from 'expo-router';
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { DevBanner } from '@/components/dev-banner';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { SUPPORT_EMAIL } from '@/lib/env';
 
 function SiteHeader() {
   const scheme = useColorScheme();
@@ -17,9 +16,11 @@ function SiteHeader() {
   return (
     <View style={[styles.header, { borderBottomColor: c.border, backgroundColor: c.background }]}>
       <View style={styles.inner}>
-        <Link href="/" style={styles.brand} accessibilityLabel="EDC Roulette home">
-          <Image source={require('@/../assets/images/icon.png')} style={styles.logo} />
-          <ThemedText type="heading">EDC Roulette</ThemedText>
+        <Link href="/" asChild>
+          <Pressable style={styles.brand} accessibilityRole="link" accessibilityLabel="EDC Roulette home">
+            <Image source={require('@/../assets/images/icon.png')} style={styles.logo} />
+            <ThemedText type="heading">EDC Roulette</ThemedText>
+          </Pressable>
         </Link>
         <View style={styles.nav}>
           <Link href="/support">
@@ -27,33 +28,6 @@ function SiteHeader() {
           </Link>
           <Link href="/privacy">
             <ThemedText type="link">Privacy</ThemedText>
-          </Link>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function SiteFooter() {
-  const c = Colors[useColorScheme()];
-  return (
-    <View style={[styles.footer, { borderTopColor: c.border }]}>
-      <View style={[styles.inner, styles.footerInner]}>
-        <ThemedText type="small" themeColor="textSecondary">
-          © {new Date().getFullYear()} EDC Roulette · {SUPPORT_EMAIL}
-        </ThemedText>
-        <View style={styles.nav}>
-          <Link href="/privacy">
-            <ThemedText type="small" themeColor="textSecondary">Privacy</ThemedText>
-          </Link>
-          <Link href="/terms">
-            <ThemedText type="small" themeColor="textSecondary">Terms</ThemedText>
-          </Link>
-          <Link href="/delete-account">
-            <ThemedText type="small" themeColor="textSecondary">Delete your data</ThemedText>
-          </Link>
-          <Link href="/support">
-            <ThemedText type="small" themeColor="textSecondary">Support</ThemedText>
           </Link>
         </View>
       </View>
@@ -73,7 +47,6 @@ export default function SiteLayout() {
         <View style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }} />
         </View>
-        <SiteFooter />
       </View>
     </ThemeProvider>
   );
@@ -85,6 +58,4 @@ const styles = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   logo: { width: 36, height: 36, borderRadius: 9 },
   nav: { flexDirection: 'row', gap: Spacing.three, flexWrap: 'wrap' },
-  footer: { borderTopWidth: StyleSheet.hairlineWidth },
-  footerInner: { paddingVertical: Spacing.four },
 });
