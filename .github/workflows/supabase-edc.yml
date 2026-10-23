@@ -17,6 +17,8 @@
 # Repository secrets — the same values as in belaybuddy.app (GitHub can't copy
 # secrets between repos):
 #   SUPABASE_ACCESS_TOKEN, DEV_PROJECT_ID, DEV_DB_PASSWORD, PROD_PROJECT_ID, PROD_DB_PASSWORD
+# Also for photo identify (optional; without it the app just hides nothing and
+# says identify isn't set up): ANTHROPIC_API_KEY.
 name: Supabase (EDC schema)
 
 on:
@@ -24,6 +26,7 @@ on:
     branches: [develop, master]
     paths:
       - 'supabase/edc/**'
+      - 'supabase/functions/**'
       - '.github/workflows/supabase-edc.yml'
   workflow_dispatch:
 
@@ -43,6 +46,7 @@ jobs:
       DEV_PROJECT_ID: ${{ secrets.DEV_PROJECT_ID }}
       PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
       PROD_PROJECT_ID: ${{ secrets.PROD_PROJECT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       TARGET: ${{ github.ref_name == 'master' && 'belaybuddy-prod' || 'belaybuddy-dev' }}
       # Same session pooler hosts as Belay Buddy (GitHub runners are IPv4-only).
       DEV_POOLER_HOST: aws-0-us-east-1.pooler.supabase.com
@@ -149,3 +153,30 @@ jobs:
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @body.json)
           [ "$code" -lt 300 ] || { echo "::error::Updating auth settings failed: HTTP $code $(head -c 300 response.json)"; exit 1; }
           echo "::notice::Sign in with Apple on $TARGET now accepts: $(jq -r .external_apple_client_id body.json)"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Photo identify and coordinated spins (supabase/functions/edc-identify, edc-pair). It is open to anyone
+      # (no account yet), so no JWT check; it limits use itself, per device,
+      # per network address and per day.
+      - name: Deploy the edc-identify and edc-pair functions
+        run: |
+          set -o pipefail
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            key=$(printf '%s' "$ANTHROPIC_API_KEY" | tr -d '[:space:]')
+            echo "::add-mask::$key"
+            supabase secrets set "ANTHROPIC_API_KEY=$key" --project-ref "$PROJECT_ID" 2>&1 | tail -n 3
+          else
+            echo "::warning::ANTHROPIC_API_KEY is not set in this repo's secrets; photo identify will say it is not set up yet."
+          fi
+          if ! supabase functions deploy edc-identify --project-ref "$PROJECT_ID" --no-verify-jwt --use-api 2>&1 | tee "$RUNNER_TEMP/deploy-identify.log"; then
+            echo "::error::Deploying edc-identify failed: $(tail -n 5 "$RUNNER_TEMP/deploy-identify.log" | tr '\n' ' ' | head -c 600)"
+            exit 1
+          fi
+          if ! supabase functions deploy edc-pair --project-ref "$PROJECT_ID" --no-verify-jwt --use-api 2>&1 | tee "$RUNNER_TEMP/deploy-pair.log"; then
+            echo "::error::Deploying edc-pair failed: $(tail -n 5 "$RUNNER_TEMP/deploy-pair.log" | tr '\n' ' ' | head -c 600)"
+            exit 1
+          fi
+          echo "::notice::edc-identify and edc-pair deployed to $TARGET"

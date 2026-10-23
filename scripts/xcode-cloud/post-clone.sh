@@ -4,7 +4,7 @@
 # Xcode workspace, the same way .github/workflows/ios-testflight.yml does:
 #   - installs Node and CocoaPods (not preinstalled on Xcode Cloud)
 #   - picks the backend: master -> prod Supabase, anything else -> dev
-#   - sets the build number, Apple team and (for dev) the "EDC Roulette Dev" name
+#   - sets the build number, Apple team and (for dev) the "EDC Roulette Dev" name and DEV icon
 #   - generates ios/ with expo prebuild and installs the pods
 #
 # Optional Xcode Cloud custom environment variables (workflow > Environment):
@@ -51,6 +51,9 @@ node -e '
     // Only the display name: changing expo.name would rename the Xcode project
     // the Xcode Cloud workflow points at.
     ios.infoPlist = { ...(ios.infoPlist || {}), CFBundleDisplayName: "EDC Roulette Dev" };
+    // The same icon with a red DEV band, so the dev app is easy to tell apart.
+    app.expo.icon = "./assets/images/icon-dev.png";
+    ios.icon = "./assets/images/icon-dev.png";
   }
   fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
   console.log(`Version ${app.expo.version} (${ios.buildNumber || "unset"})`);

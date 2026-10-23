@@ -6,12 +6,16 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { SAMPLE_GEAR } from '@/content/sample-gear';
 import * as db from '@/lib/db';
 import { FREE_MAX_ITEMS, FREE_MAX_SLOTS, MIN_SLOTS } from '@/lib/limits';
 import { deleteAllPhotos, deletePhoto } from '@/lib/photos';
 import type { GearDraft, GearItem, SlotConfig, SpinPick, SpinRecord } from '@/types/models';
 
 export type Result = { ok: true } | { ok: false; error: string };
+
+/** A wheel to save. `from` is the wheel's current index, so the last spin's result follows it when wheels are reordered. */
+export type SlotDraft = { category: string; lockedItemId: string | null; from?: number };
 
 type GearState = {
   loading: boolean;
@@ -20,12 +24,17 @@ type GearState = {
   lastSpin: SpinRecord | null;
   maxItems: number;
   maxSlots: number;
+  /** Items the person added themselves (the free limit counts these, not sample gear). */
+  ownCount: number;
+  sampleCount: number;
+  addSamples: () => Promise<number>;
+  removeSamples: () => Promise<void>;
   itemById: (id: string | null | undefined) => GearItem | null;
   addItem: (draft: GearDraft) => Promise<Result & { item?: GearItem }>;
   updateItem: (id: string, draft: GearDraft) => Promise<Result>;
   removeItem: (id: string) => Promise<void>;
   setLock: (slotIndex: number, itemId: string | null) => Promise<void>;
-  saveSlots: (slots: Omit<SlotConfig, 'slotIndex'>[]) => Promise<Result>;
+  saveSlots: (slots: SlotDraft[]) => Promise<Result>;
   recordSpin: (picks: SpinPick[]) => Promise<void>;
   eraseEverything: () => Promise<void>;
 };
@@ -63,6 +72,17 @@ export function GearProvider({ children }: { children: ReactNode }) {
       lastSpin: last,
       maxItems,
       maxSlots,
+      ownCount: items.filter((g) => !g.isSample).length,
+      sampleCount: items.filter((g) => g.isSample).length,
+      addSamples: async () => {
+        const n = await db.insertSamples(sqlite, SAMPLE_GEAR);
+        await reload();
+        return n;
+      },
+      removeSamples: async () => {
+        await db.deleteSamples(sqlite);
+        await reload();
+      },
       itemById: (id) => (id ? byId.get(id) ?? null : null),
 
       addItem: async (draft) => {
@@ -108,6 +128,16 @@ export function GearProvider({ children }: { children: ReactNode }) {
           return { category: s.category, lockedItemId: locked && locked.category === s.category ? locked.id : null };
         });
         await db.saveSlots(sqlite, cleaned);
+        // The last spin's results follow their wheels to the new positions; a wheel whose
+        // category changed (or that was removed) loses its result.
+        if (last) {
+          const kept: SpinPick[] = [];
+          next.forEach((s, i) => {
+            const old = s.from != null ? last.picks.find((p) => p.slotIndex === s.from) : undefined;
+            if (old && old.category === s.category) kept.push({ ...old, slotIndex: i, locked: !!cleaned[i]?.lockedItemId && old.locked });
+          });
+          await db.rewriteLastSpin(sqlite, kept);
+        }
         await reload();
         return { ok: true };
       },

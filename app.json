@@ -3,7 +3,7 @@
     "name": "EDC Roulette",
     "slug": "edc-roulette",
     "version": "1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "edcroulette",
     "userInterfaceStyle": "automatic",

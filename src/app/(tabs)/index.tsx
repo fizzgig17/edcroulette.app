@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { RouletteSpinner } from '@/components/roulette-spinner';
@@ -23,14 +23,17 @@ function when(ts: number): string {
 export default function SpinScreen() {
   const theme = useTheme();
   const { items, lastSpin, itemById, loading } = useGear();
+  const { width, height } = useWindowDimensions();
+  // Portrait is just the wheels: adding gear happens in the Collection tab.
+  const landscape = width > height;
 
   return (
     <Screen title="EDC Roulette" tab>
-      {!loading && items.length === 0 ? (
+      {landscape && !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>
           <ThemedText themeColor="textSecondary">
-            Add the knives, lights, pens and tools you carry. Each slot below spins through one category and picks today's piece. Lock anything you're definitely carrying.
+            Add the knives, lights, pens and tools you carry. Each wheel spins through one category and picks today's piece. Lock anything you're definitely carrying.
           </ThemedText>
           <Button label="Add your first piece" icon="add" onPress={() => router.push('/gear/new')} />
         </Card>

@@ -1,80 +1,118 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 
+import { DragReorder } from '@/components/drag-reorder';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
 import { Card } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
-import { useGear } from '@/lib/gear';
+import { useGear, type SlotDraft } from '@/lib/gear';
 import { select } from '@/lib/haptics';
+import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
+import { setAiConsent, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
+import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 import { CATEGORIES } from '@/types/models';
 
+const STYLES: Record<string, SpinStyle> = { Random: 'random', Coordinated: 'coordinated' };
 const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'light', Dark: 'dark' };
 
-function SlotsEditor() {
+function WheelsEditor() {
   const theme = useTheme();
   const { slots, saveSlots, maxSlots } = useGear();
-  const [draft, setDraft] = useState(slots.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId })));
-  useEffect(() => setDraft(slots.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId }))), [slots]);
 
-  const changed = JSON.stringify(draft) !== JSON.stringify(slots.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId })));
+  const apply = async (next: SlotDraft[]) => {
+    const r = await saveSlots(next);
+    if (!r.ok) Alert.alert('Wheels', r.error);
+  };
+  const current = (): SlotDraft[] => slots.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex }));
 
-  function move(i: number, by: number) {
-    const j = i + by;
-    if (j < 0 || j >= draft.length) return;
+  function add() {
     select();
-    const next = [...draft];
-    [next[i], next[j]] = [next[j]!, next[i]!];
-    setDraft(next);
+    const used = new Set(slots.map((s) => s.category));
+    void apply([...current(), { category: CATEGORIES.find((c) => !used.has(c)) ?? 'Other', lockedItemId: null }]);
   }
-
-  async function save() {
-    const r = await saveSlots(draft);
-    if (!r.ok) Alert.alert('Slots', r.error);
+  function removeAt(i: number) {
+    select();
+    void apply(current().filter((_, k) => k !== i));
   }
 
   return (
     <Card>
-      <ThemedText type="small" themeColor="textSecondary">
-        Each slot is one reel on the Spin screen and picks from one category. The free version has up to {maxSlots}.
-      </ThemedText>
-      {draft.map((s, i) => (
-        <View key={i} style={[styles.slot, { borderColor: theme.border }]}>
-          <View style={styles.slotHead}>
-            <ThemedText type="smallBold">Slot {i + 1}</ThemedText>
-            <View style={styles.inline}>
-              <SmallIcon icon="up" label={`Move slot ${i + 1} up`} onPress={() => move(i, -1)} disabled={i === 0} />
-              <SmallIcon icon="down" label={`Move slot ${i + 1} down`} onPress={() => move(i, 1)} disabled={i === draft.length - 1} />
-              <SmallIcon icon="trash" label={`Remove slot ${i + 1}`} onPress={() => setDraft(draft.filter((_, k) => k !== i))} disabled={draft.length <= 1} />
-            </View>
-          </View>
-          <ChipGroup options={CATEGORIES} value={s.category as (typeof CATEGORIES)[number]} onChange={(v) => v && setDraft(draft.map((d, k) => (k === i ? { ...d, category: v } : d)))} scroll />
+      <View style={styles.stepper}>
+        <View style={styles.flex}>
+          <ThemedText type="smallBold">Number of wheels</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Up to {maxSlots}. Portrait shows the first {PORTRAIT_WHEELS}; turn your phone sideways to see them all.
+          </ThemedText>
         </View>
-      ))}
-      <View style={styles.inline}>
-        <Button
-          label="Add slot"
-          icon="add"
-          variant="secondary"
-          disabled={draft.length >= maxSlots}
-          onPress={() => setDraft([...draft, { category: CATEGORIES.find((c) => !draft.some((d) => d.category === c)) ?? 'Other', lockedItemId: null }])}
-          style={styles.flex}
-        />
-        <Button label="Save slots" onPress={save} disabled={!changed} style={styles.flex} />
+        <View style={styles.inline}>
+          <SmallIcon icon="minus" label="Fewer wheels" onPress={() => removeAt(slots.length - 1)} disabled={slots.length <= MIN_SLOTS} />
+          <ThemedText type="heading" style={styles.count}>
+            {slots.length}
+          </ThemedText>
+          <SmallIcon icon="add" label="More wheels" onPress={add} disabled={slots.length >= maxSlots} />
+        </View>
       </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        Pick what each wheel spins through, and hold the grip and drag to change the order.
+      </ThemedText>
+      <DragReorder
+        items={slots}
+        keyOf={(s) => String(s.slotIndex)}
+        direction="column"
+        itemSize={104}
+        gap={8}
+        onReorder={(next) => void apply(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
+        renderItem={(s, i, grip) => (
+          <View style={[styles.wheel, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+            <View style={styles.wheelHead}>
+              <View {...grip} accessibilityRole="adjustable" accessibilityLabel={`Wheel ${i + 1}. Drag to reorder.`} style={styles.gripArea}>
+                <Icon name="grip" size={18} color={theme.textSecondary} />
+                <ThemedText type="smallBold">
+                  Wheel {i + 1}
+                  {i >= PORTRAIT_WHEELS ? ' · sideways only' : ''}
+                </ThemedText>
+              </View>
+              <SmallIcon icon="trash" label={`Remove wheel ${i + 1}`} onPress={() => removeAt(i)} disabled={slots.length <= MIN_SLOTS} />
+            </View>
+            <ChipGroup
+              options={CATEGORIES}
+              value={s.category as (typeof CATEGORIES)[number]}
+              onChange={(v) => v && void apply(current().map((d, k) => (k === i ? { ...d, category: v } : d)))}
+              scroll
+            />
+          </View>
+        )}
+      />
     </Card>
   );
 }
 
-function SmallIcon({ icon, label, onPress, disabled }: { icon: 'up' | 'down' | 'trash'; label: string; onPress: () => void; disabled?: boolean }) {
+function ToggleRow({ label, hint, value, onValueChange, first }: { label: string; hint?: string; value: boolean; onValueChange: (v: boolean) => void; first?: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.toggle, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }]}>
+      <View style={styles.flex}>
+        <ThemedText type="smallBold">{label}</ThemedText>
+        {hint ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {hint}
+          </ThemedText>
+        ) : null}
+      </View>
+      <Switch value={value} onValueChange={(v) => { select(); onValueChange(v); }} trackColor={{ true: theme.accent }} accessibilityLabel={label} />
+    </View>
+  );
+}
+
+function SmallIcon({ icon, label, onPress, disabled }: { icon: 'up' | 'down' | 'trash' | 'minus' | 'add'; label: string; onPress: () => void; disabled?: boolean }) {
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} hitSlop={6} style={[styles.small, { backgroundColor: theme.backgroundElement }, disabled && { opacity: 0.3 }]}>
@@ -98,20 +136,80 @@ function LinkRow({ label, href, first }: { label: string; href: Href; first?: bo
 
 export default function SettingsScreen() {
   const pref = useThemePref();
-  const { eraseEverything, items } = useGear();
+  const spinStyle = useSpinStyle();
+  const sound = useSoundOn();
+  const ai = useAiConsent();
+  const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
   const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
 
   function erase() {
-    Alert.alert('Erase everything?', `This deletes all ${items.length} items, their photos, your slots and spin history from this phone. It can't be undone.`, [
+    Alert.alert('Erase everything?', `This deletes all ${items.length} items, their photos, your wheels and spin history from this phone. It can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Erase', style: 'destructive', onPress: () => void eraseEverything() },
     ]);
   }
 
+  async function loadSamples() {
+    const n = await addSamples();
+    Alert.alert('Sample gear', n > 0 ? `Added ${n} sample pieces. They don't count toward your ${maxItems} items, and you can remove them here any time.` : 'The sample gear is already loaded.');
+  }
+
+  function dropSamples() {
+    Alert.alert('Remove sample gear?', `This removes the ${sampleCount} sample pieces. Anything you added yourself, or edited, stays.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void removeSamples() },
+    ]);
+  }
+
   return (
     <Screen title="Settings" tab>
-      <ThemedText type="heading">Slots</ThemedText>
-      <SlotsEditor />
+      <ThemedText type="heading">Wheels</ThemedText>
+      <WheelsEditor />
+
+      <ThemedText type="heading">Spinning</ThemedText>
+      <Card padded={false}>
+        <View style={styles.pad}>
+          <ThemedText type="smallBold">Spin style</ThemedText>
+          <ChipGroup options={Object.keys(STYLES)} value={Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random'} onChange={(v) => v && setSpinStyle(STYLES[v] ?? 'random')} />
+          <ThemedText type="small" themeColor="textSecondary">
+            {spinStyle === 'coordinated'
+              ? 'An AI picks pieces that go well together: matching materials and finishes, colors that sit well side by side. Locked wheels stay put, and it falls back to random if it can’t connect.'
+              : 'Every wheel lands on a random piece from its category.'}
+          </ThemedText>
+        </View>
+        <ToggleRow
+          label="Sound"
+          hint="Soft ticks while the wheels turn, slow down and stop."
+          value={sound}
+          onValueChange={(v) => {
+            setSoundOn(v);
+            if (v) landSound();
+          }}
+        />
+      </Card>
+
+      <ThemedText type="heading">AI help</ThemedText>
+      <Card padded={false}>
+        <ToggleRow
+          first
+          label="Allow AI help"
+          hint="Used to identify gear from a photo you choose and to pick coordinated sets. Photos and item details are sent to an AI service (Anthropic’s Claude) and aren’t stored by EDC Roulette. Off by default until you say yes."
+          value={ai === 'allowed'}
+          onValueChange={(v) => setAiConsent(v ? 'allowed' : 'declined')}
+        />
+      </Card>
+
+      <ThemedText type="heading">Sample gear</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">
+          Want to try the wheels before adding your own? Load about ten pieces for each category. They don’t count toward your {maxItems} items ({ownCount} used) and you can remove them in one tap.
+        </ThemedText>
+        {sampleCount > 0 ? (
+          <Button label={`Remove ${sampleCount} sample pieces`} variant="secondary" icon="trash" onPress={dropSamples} />
+        ) : (
+          <Button label="Load sample gear" variant="secondary" icon="add" onPress={() => void loadSamples()} />
+        )}
+      </Card>
 
       <ThemedText type="heading">Appearance</ThemedText>
       <Card>
@@ -121,7 +219,7 @@ export default function SettingsScreen() {
       <ThemedText type="heading">Premium</ThemedText>
       <Card>
         <ThemedText themeColor="textSecondary">
-          Coming soon: unlimited gear and slots, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade.
+          Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade.
         </ThemedText>
       </Card>
 
@@ -144,8 +242,13 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  slot: { gap: Spacing.two, paddingTop: Spacing.two, borderTopWidth: StyleSheet.hairlineWidth },
-  slotHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pad: { padding: Spacing.three, gap: Spacing.two },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  count: { minWidth: 24, textAlign: 'center' },
+  wheel: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.two },
+  wheelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gripArea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one, paddingRight: Spacing.three },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   small: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   link: { flexDirection: 'row', alignItems: 'center', padding: Spacing.three },
   center: { textAlign: 'center' },

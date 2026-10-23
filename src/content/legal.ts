@@ -3,7 +3,9 @@
  * website (/privacy, /terms, /support, /delete-account) and in the app.
  *
  * Keep this in step with what the app really does. Today: no account, no
- * server, no analytics, no ads; everything stays on the phone. When Premium
+ * analytics, no ads; the collection stays on the phone. The only things that
+ * leave it are the optional features listed under "Optional online features"
+ * (brand list, suggest a brand, photo identify, coordinated spins). When Premium
  * (sign-in, cloud sync, photo checks with Google Cloud Vision, subscriptions)
  * ships, update the privacy policy BEFORE that build reaches testers.
  */
@@ -20,14 +22,25 @@ export const PRIVACY: Section[] = [
   {
     title: 'What the app stores, and where',
     body: [
-      'Your collection (names, categories, materials, finishes, colors, weights, notes and photos), your slots and locks, and your recent spins are stored only on your phone, in the app’s own storage. They are not sent to us or anyone else.',
+      'Your collection (names, brands, models, categories, materials, finishes, colors, weights, notes and photos), your wheels and locks, your settings and your recent spins are stored only on your phone, in the app’s own storage. Your collection is never uploaded.',
       'Photos you add are copied into the app, resized, and kept on your phone. EDC Roulette asks for camera or photo library access only when you choose to add a photo, and only uses the photos you pick.',
+    ],
+  },
+  {
+    title: 'Optional online features',
+    body: [
+      'A few features talk to our server (hosted on Supabase). None of them needs an account, and the app works without them.',
+      'Brand list: the app downloads the list of approved brands now and then, so a brand you type can be matched. Nothing about you or your collection is sent with that request.',
+      'Suggest a brand: if you tap “Suggest it” for a brand that isn’t on the list, the brand name, the item’s category and a random device number are sent for review. The device number is not tied to you; it is used only to limit how many suggestions one phone can send.',
+      'Identify from a photo (asks first, can be turned off in Settings): the photo you chose is sent to our server, which passes it to an AI service (Anthropic’s Claude) to work out what the item is, and sends back the type, brand, model, material, finish and color. We do not store the photo or the answer. We keep only a daily count per random device number and per network address (both scrambled so they can’t be read back) to stop abuse.',
+      'Coordinated spins (asks first, can be turned off in Settings): when you choose the “Coordinated” spin style, the text details of the pieces in your wheels (names, brands, models, materials, finishes and colors, no photos) are sent the same way so the AI can pick pieces that go well together. Nothing is stored.',
+      'The AI service handles what it receives under its own terms and privacy policy. If you decline or turn AI help off, no photos or item details leave your phone, and spins are random.',
     ],
   },
   {
     title: 'What we don’t do',
     body: [
-      'The current version has no account and no sign-in, and does not send your collection anywhere. It has no advertising, no analytics or tracking, and we do not sell or share data.',
+      'The current version has no account and no sign-in. It has no advertising, no analytics or tracking, and we do not sell or share data.',
     ],
   },
   {
@@ -45,7 +58,7 @@ export const PRIVACY: Section[] = [
   {
     title: 'Your choices',
     body: [
-      'You can edit or delete any item at any time. Settings → “Erase everything on this phone” removes your whole collection, its photos, your slots and spin history. Deleting the app also removes everything it stored.',
+      'You can edit or delete any item at any time. Settings → “Erase everything on this phone” removes your whole collection, its photos, your wheels and spin history. Settings → “Allow AI help” turns the photo and coordinated-spin features off at any time. Deleting the app also removes everything it stored.',
     ],
   },
   {
@@ -74,7 +87,7 @@ export const TERMS: Section[] = [
   {
     title: 'Your content',
     body: [
-      'You own the information and photos you add. Only add photos you have the right to use. In the current version they stay on your phone.',
+      'You own the information and photos you add. Only add photos you have the right to use. They stay on your phone, except a photo you choose to identify, which is sent for that request as described in the privacy policy.',
     ],
   },
   {
@@ -100,12 +113,18 @@ export const SUPPORT: Section[] = [
   {
     title: 'How does the spin work?',
     body: [
-      'Each slot is one reel and picks from one category, like Knife or Flashlight. Spin, and each unlocked reel lands on a random piece from your collection in that category. Tap Lock under a reel to keep its current piece for the next spins.',
+      'Each wheel picks from one category, like Knife or Flashlight. Spin, and each unlocked wheel lands on a piece from your collection in that category: a random one, or a set that goes well together if you choose the Coordinated spin style in Settings. Tap Lock under a wheel to keep its current piece for the next spins. Portrait shows the first three wheels; turn your phone sideways to see up to six. Wheels that aren’t on screen still pick a piece, they just don’t turn.',
+    ],
+  },
+  {
+    title: 'How do I add gear quickly?',
+    body: [
+      'Open Collection, tap +, and take or choose a photo. If you allow AI help, EDC Roulette suggests the type, brand, model, material, finish and color for you to check. You can also tap a popular brand or start typing: a misspelled brand is matched to the right one, and if yours isn’t on the list you can suggest it. Settings → “Load sample gear” fills the collection with examples to try.',
     ],
   },
   {
     title: 'How many items and slots can I have?',
-    body: ['The free version holds up to 20 items and 4 slots. Premium, when it arrives, removes both limits.'],
+    body: ['The free version holds up to 20 of your own items (sample gear doesn’t count) and up to 6 wheels. Premium, when it arrives, lifts the item limit.'],
   },
   {
     title: 'I got a new phone. Can I move my collection?',

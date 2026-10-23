@@ -38,7 +38,8 @@ EDC Roulette uses Belay Buddy's Supabase projects. Everything EDC owns is in the
 
 ## Product rules
 
-- Free tier: no account, at most 20 items and 4 slots (`src/lib/limits.ts`), all data on the phone.
+- Free tier: no account, at most 20 items (sample gear excluded) and 6 wheels (`src/lib/limits.ts`; portrait shows the first 3), all data on the phone.
 - Premium ($1.99/month) requires sign-in; only premium accounts may write cloud data (enforced by row-level security).
 - It's a randomizer, not gambling: no betting, wagering, prizes, coins or casino language anywhere, including store metadata. Never sell spins or random rewards.
+- Optional online features (no account): brand list/suggestions, `edc-identify` (photo → AI), `edc-pair` (coordinated spins). They are opt-in (`src/lib/ai-consent.ts`), rate-limited server-side, and must stay listed in the privacy policy.
 - Keep `src/content/legal.ts` (privacy, terms, support, data deletion) in step with what the app really does; update it before a feature that sends data anywhere ships.

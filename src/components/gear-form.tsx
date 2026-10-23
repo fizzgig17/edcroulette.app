@@ -1,62 +1,124 @@
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
+import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
-import { Field, Input } from '@/components/ui/field';
-import { Spacing } from '@/constants/theme';
+import { Card, Field, Input } from '@/components/ui/field';
+import { Icon } from '@/components/ui/icon';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { ensureAiConsent } from '@/lib/ai-consent';
+import { identifyPhoto, type Identified } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
-import { choosePhoto, deletePhoto, type PhotoSource } from '@/lib/photos';
+import { choosePhoto, deletePhoto, photoBase64, type PhotoSource } from '@/lib/photos';
+import { useAiConsent } from '@/lib/preferences';
 import { CATEGORIES, FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
-const EMPTY: GearDraft = { name: '', category: 'Knife', material: null, finish: null, primaryColor: null, weightGrams: null, notes: null, imageUri: null };
+const EMPTY: GearDraft = { name: '', brand: null, model: null, category: 'Knife', material: null, finish: null, primaryColor: null, weightGrams: null, notes: null, imageUri: null };
 
-/** Add (no `item`) or edit (`item`) a piece of gear. */
+type Identify = { state: 'idle' } | { state: 'working' } | { state: 'done'; summary: string; unsure: boolean } | { state: 'failed'; message: string };
+
+const autoName = (brand: string | null, model: string | null) => [brand?.trim(), model?.trim()].filter(Boolean).join(' ');
+
+/** Add (no `item`) or edit (`item`) a piece of gear. A photo fills in most of the details. */
 export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCategory?: string }) {
   const theme = useTheme();
   const { addItem, updateItem, removeItem } = useGear();
+  const aiConsent = useAiConsent();
   const [draft, setDraft] = useState<GearDraft>(() => (item ? { ...item } : { ...EMPTY, category: defaultCategory ?? EMPTY.category }));
   const [weightText, setWeightText] = useState(item?.weightGrams != null ? String(item.weightGrams) : '');
   const [busy, setBusy] = useState(false);
+  const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
+  // Text fields keep their own text (so typing is never interrupted); this number
+  // replaces what they show when the form is filled in from the photo.
+  const [formKey, setFormKey] = useState(0);
+  // Same idea for the free-text material box when a material chip is tapped.
+  const [materialKey, setMaterialKey] = useState(0);
   // Photos taken in this session that end up unused are deleted on leaving.
   const [newPhotos, setNewPhotos] = useState<string[]>([]);
 
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  // The name follows "Brand Model" until the person types their own.
+  const nameIsAuto = useRef(!item || !item.name || item.name === autoName(item.brand, item.model));
+
   const set = <K extends keyof GearDraft>(k: K, v: GearDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const canSave = draft.name.trim().length > 0 && !busy;
+
+  function setBrandOrModel(patch: Partial<Pick<GearDraft, 'brand' | 'model'>>) {
+    const next = { ...draftRef.current, ...patch };
+    const name = nameIsAuto.current ? autoName(next.brand, next.model) : next.name;
+    if (nameIsAuto.current && name !== draftRef.current.name) setFormKey((k) => k + 1);
+    setDraft({ ...next, name });
+  }
+
+  // The header's Cancel always calls the latest cancel(), without new header options each render.
+  const cancelRef = useRef<() => void>(() => router.back());
+  const headerOptions = useRef({
+    headerShown: true,
+    title: item ? 'Edit gear' : 'Add gear',
+    headerLeft: () => <HeaderButton label="Cancel" onPress={() => cancelRef.current()} />,
+  });
+  const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
+
+  async function runIdentify(stored: string) {
+    if (!(await ensureAiConsent('photo'))) {
+      setIdentify({ state: 'idle' });
+      return;
+    }
+    setIdentify({ state: 'working' });
+    const b64 = await photoBase64(stored);
+    if (!b64) {
+      setIdentify({ state: 'failed', message: 'Could not read the photo.' });
+      return;
+    }
+    const r = await identifyPhoto(b64);
+    if (!r.ok) {
+      setIdentify({ state: 'failed', message: r.error });
+      return;
+    }
+    applyIdentified(r);
+  }
+
+  function applyIdentified(r: Identified) {
+    const d = draftRef.current;
+    const brandText = r.brand ?? r.brandRead;
+    const next: GearDraft = {
+      ...d,
+      category: (CATEGORIES as readonly string[]).includes(r.category) ? r.category : d.category,
+      brand: d.brand || brandText || null,
+      model: d.model || r.model || null,
+      material: d.material ?? r.material,
+      finish: d.finish ?? r.finish,
+      primaryColor: d.primaryColor ?? r.color,
+      notes: d.notes ?? r.notes,
+    };
+    if (nameIsAuto.current || !d.name.trim()) {
+      nameIsAuto.current = true;
+      next.name = autoName(next.brand, next.model) || d.name;
+    }
+    setDraft(next);
+    setFormKey((k) => k + 1);
+    const bits = [next.category, autoName(next.brand, next.model), next.material, next.finish].filter(Boolean);
+    setIdentify({ state: 'done', summary: bits.join(' · '), unsure: r.confidence === 'low' || (!r.brand && !!r.brandRead) });
+  }
 
   async function getPhoto(source: PhotoSource) {
     try {
-      const uri = await choosePhoto(source);
-      if (uri) {
-        setNewPhotos((p) => [...p, uri]);
-        set('imageUri', uri);
+      const stored = await choosePhoto(source);
+      if (stored) {
+        setNewPhotos((p) => [...p, stored]);
+        set('imageUri', stored);
+        void runIdentify(stored);
       }
     } catch (e) {
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not get the photo.');
-    }
-  }
-
-  function photoMenu() {
-    const options = ['Take photo', 'Choose from library', ...(draft.imageUri ? ['Remove photo'] : []), 'Cancel'];
-    const run = (i: number) => {
-      if (options[i] === 'Take photo') void getPhoto('camera');
-      else if (options[i] === 'Choose from library') void getPhoto('library');
-      else if (options[i] === 'Remove photo') set('imageUri', null);
-    };
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: options.length - 1, destructiveButtonIndex: draft.imageUri ? 2 : undefined },
-        run,
-      );
-    } else {
-      Alert.alert('Photo', undefined, options.map((label, i) => ({ text: label, style: label === 'Cancel' ? 'cancel' : 'default', onPress: () => run(i) })));
     }
   }
 
@@ -68,7 +130,9 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     }
     const clean: GearDraft = {
       ...draft,
-      name: draft.name.trim(),
+      name: draft.name.trim() || autoName(draft.brand, draft.model),
+      brand: draft.brand?.trim() || null,
+      model: draft.model?.trim() || null,
       material: draft.material?.trim() || null,
       finish: draft.finish?.trim() || null,
       notes: draft.notes?.trim() || null,
@@ -90,10 +154,13 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     for (const uri of newPhotos) deletePhoto(uri);
     router.back();
   }
+  useEffect(() => {
+    cancelRef.current = cancel;
+  });
 
   function remove() {
     if (!item) return;
-    Alert.alert(`Delete ${item.name}?`, 'It will be removed from your collection and any slot it is locked in.', [
+    Alert.alert(`Delete ${item.name}?`, 'It will be removed from your collection and any wheel it is locked in.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -109,28 +176,95 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
 
   return (
     <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: item ? 'Edit gear' : 'Add gear',
-          headerLeft: () => <HeaderButton label="Cancel" onPress={cancel} />,
-          headerRight: () => <HeaderButton label="Save" bold disabled={!canSave} onPress={save} />,
-        }}
-      />
-      <Pressable onPress={photoMenu} accessibilityRole="button" accessibilityLabel={draft.imageUri ? 'Change photo' : 'Add a photo'} style={styles.photo}>
-        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor }} size={120} />
-        <ThemedText type="link">{draft.imageUri ? 'Change photo' : 'Add a photo'}</ThemedText>
-      </Pressable>
+      {/* Header options stay the same on every render: rebuilding header buttons
+          on each keystroke took focus away from the text fields on iOS. */}
+      <Stack.Screen options={headerOptions.current} />
 
-      <Field label="Name">
-        <Input value={draft.name} onChangeText={(t) => set('name', t)} placeholder="e.g. Spyderco Para 3" maxLength={80} autoFocus={!item} returnKeyType="done" />
-      </Field>
+      <View style={styles.photo}>
+        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor }} size={132} />
+        <View style={styles.photoButtons}>
+          <Button label="Take photo" icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} style={styles.flex} />
+          <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} style={styles.flex} />
+        </View>
+        {draft.imageUri ? (
+          <View style={styles.photoButtons}>
+            <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!)} disabled={identify.state === 'working'} style={styles.flex} />
+            <Button label="Remove photo" icon="close" variant="ghost" onPress={() => set('imageUri', null)} style={styles.flex} />
+          </View>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+            {aiConsent === 'declined'
+              ? 'Photo identify is off. You can turn it on in Settings.'
+              : 'Start with a photo and EDC Roulette fills in the type, brand, model, material and color for you to check.'}
+          </ThemedText>
+        )}
+      </View>
+
+      {identify.state === 'working' ? (
+        <Card>
+          <View style={styles.status}>
+            <ActivityIndicator color={theme.accent} />
+            <ThemedText style={styles.flex}>Looking at your photo…</ThemedText>
+          </View>
+        </Card>
+      ) : null}
+      {identify.state === 'done' ? (
+        <View style={[styles.banner, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
+          <Icon name="sparkle" size={16} color={theme.accent} />
+          <View style={styles.flex}>
+            <ThemedText type="smallBold">{identify.summary || 'Nothing recognized'}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {identify.unsure ? 'I’m not sure about the brand or model, so please check them.' : 'Filled in from your photo. Fix anything that’s off.'}
+            </ThemedText>
+          </View>
+        </View>
+      ) : null}
+      {identify.state === 'failed' ? (
+        <ThemedText type="small" style={{ color: theme.danger }}>
+          {identify.message} You can fill the details in yourself.
+        </ThemedText>
+      ) : null}
+
       <Field label="Category">
-        <ChipGroup options={CATEGORIES} value={draft.category as (typeof CATEGORIES)[number]} onChange={(v) => v && set('category', v)} />
+        <ChipGroup options={CATEGORIES} value={draft.category as (typeof CATEGORIES)[number]} onChange={(v) => v && set('category', v)} scroll />
+      </Field>
+      <Field label="Brand">
+        <BrandPicker initial={draft.brand ?? ''} resetKey={formKey} category={draft.category} onChange={(b) => setBrandOrModel({ brand: b })} />
+      </Field>
+      <Field label="Model">
+        <Input
+          key={`model-${formKey}`}
+          defaultValue={draft.model ?? ''}
+          onChangeText={(t) => setBrandOrModel({ model: t || null })}
+          placeholder="e.g. Para 3"
+          maxLength={60}
+          returnKeyType="done"
+          autoCorrect={false}
+        />
+      </Field>
+      <Field label="Name" hint="Fills in from the brand and model. Type your own if you like.">
+        <Input
+          key={`name-${formKey}`}
+          defaultValue={draft.name}
+          onChangeText={(t) => {
+            nameIsAuto.current = false;
+            set('name', t);
+          }}
+          placeholder="e.g. Spyderco Para 3"
+          maxLength={80}
+          returnKeyType="done"
+          autoCorrect={false}
+        />
       </Field>
       <Field label="Material">
-        <ChipGroup options={MATERIALS} value={(MATERIALS as readonly string[]).includes(draft.material ?? '') ? (draft.material as (typeof MATERIALS)[number]) : null} onChange={(v) => set('material', v)} allowNone scroll />
-        <Input value={draft.material ?? ''} onChangeText={(t) => set('material', t || null)} placeholder="Or type your own" maxLength={40} />
+        <ChipGroup options={MATERIALS} value={(MATERIALS as readonly string[]).includes(draft.material ?? '') ? (draft.material as (typeof MATERIALS)[number]) : null} onChange={(v) => {
+            set('material', v);
+            setMaterialKey((k) => k + 1);
+          }}
+          allowNone
+          scroll
+        />
+        <Input key={`material-${formKey}-${materialKey}`} defaultValue={draft.material ?? ''} onChangeText={(t) => set('material', t || null)} placeholder="Or type your own" maxLength={40} />
       </Field>
       <Field label="Finish">
         <ChipGroup options={FINISHES} value={(FINISHES as readonly string[]).includes(draft.finish ?? '') ? (draft.finish as (typeof FINISHES)[number]) : null} onChange={(v) => set('finish', v)} allowNone scroll />
@@ -139,10 +273,10 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
         <ColorPicker value={draft.primaryColor} onChange={(hex) => set('primaryColor', hex)} />
       </Field>
       <Field label="Weight (grams)">
-        <Input value={weightText} onChangeText={setWeightText} placeholder="Optional" keyboardType="decimal-pad" maxLength={8} />
+        <Input defaultValue={weightText} onChangeText={setWeightText} placeholder="Optional" keyboardType="decimal-pad" maxLength={8} />
       </Field>
       <Field label="Notes">
-        <Input value={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
+        <Input key={`notes-${formKey}`} defaultValue={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
       </Field>
 
       <Button label={item ? 'Save changes' : 'Add to collection'} onPress={save} disabled={!canSave} busy={busy} />
@@ -164,6 +298,11 @@ function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPre
 }
 
 const styles = StyleSheet.create({
-  photo: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
+  flex: { flex: 1 },
+  center: { textAlign: 'center' },
+  photo: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
+  photoButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
+  status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  banner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
   notes: { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' },
 });

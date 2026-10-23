@@ -9,7 +9,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig, type SpinPick, type SpinRecord } from '@/types/models';
 
 export const DATABASE_NAME = 'edc-roulette.db';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 export async function migrate(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -49,7 +49,15 @@ export async function migrate(db: SQLiteDatabase) {
     }
     version = 1;
   }
-  // if (version === 1) { ...next migration...; version = 2; }
+  if (version === 1) {
+    // Brand and model, and the sample-gear flag.
+    await db.execAsync(`
+      ALTER TABLE gear_items ADD COLUMN brand TEXT;
+      ALTER TABLE gear_items ADD COLUMN model TEXT;
+      ALTER TABLE gear_items ADD COLUMN is_sample INTEGER NOT NULL DEFAULT 0;
+    `);
+    version = 2;
+  }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
@@ -60,6 +68,8 @@ export async function migrate(db: SQLiteDatabase) {
 interface GearRow {
   id: string;
   name: string;
+  brand: string | null;
+  model: string | null;
   category: string;
   material: string | null;
   finish: string | null;
@@ -67,6 +77,7 @@ interface GearRow {
   weight_grams: number | null;
   notes: string | null;
   image_uri: string | null;
+  is_sample: number;
   created_at: number;
   updated_at: number;
 }
@@ -74,6 +85,8 @@ interface GearRow {
 const toGear = (r: GearRow): GearItem => ({
   id: r.id,
   name: r.name,
+  brand: r.brand,
+  model: r.model,
   category: r.category,
   material: r.material,
   finish: r.finish,
@@ -81,6 +94,7 @@ const toGear = (r: GearRow): GearItem => ({
   weightGrams: r.weight_grams,
   notes: r.notes,
   imageUri: r.image_uri,
+  isSample: r.is_sample === 1,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -90,28 +104,52 @@ export async function listGear(db: SQLiteDatabase): Promise<GearItem[]> {
   return rows.map(toGear);
 }
 
+/** Items the person added themselves (sample gear doesn't count toward the free limit). */
 export async function countGear(db: SQLiteDatabase): Promise<number> {
-  const r = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM gear_items');
+  const r = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM gear_items WHERE is_sample = 0');
   return r?.n ?? 0;
 }
 
 export async function insertGear(db: SQLiteDatabase, draft: GearDraft): Promise<GearItem> {
   const now = Date.now();
-  const item: GearItem = { ...draft, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
+  const item: GearItem = { ...draft, isSample: draft.isSample ?? false, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
   await db.runAsync(
-    `INSERT INTO gear_items (id, name, category, material, finish, primary_color, weight_grams, notes, image_uri, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    item.id, item.name, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, now, now,
+    `INSERT INTO gear_items (id, name, brand, model, category, material, finish, primary_color, weight_grams, notes, image_uri, is_sample, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    item.id, item.name, item.brand, item.model, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, item.isSample ? 1 : 0, now, now,
   );
   return item;
 }
 
 export async function updateGear(db: SQLiteDatabase, id: string, draft: GearDraft): Promise<void> {
   await db.runAsync(
-    `UPDATE gear_items SET name = ?, category = ?, material = ?, finish = ?, primary_color = ?, weight_grams = ?, notes = ?, image_uri = ?, updated_at = ?
+    // Editing a sample piece makes it the person's own (it stays when samples are removed).
+    `UPDATE gear_items SET name = ?, brand = ?, model = ?, category = ?, material = ?, finish = ?, primary_color = ?, weight_grams = ?, notes = ?, image_uri = ?, is_sample = 0, updated_at = ?
      WHERE id = ?`,
-    draft.name, draft.category, draft.material, draft.finish, draft.primaryColor, draft.weightGrams, draft.notes, draft.imageUri, Date.now(), id,
+    draft.name, draft.brand, draft.model, draft.category, draft.material, draft.finish, draft.primaryColor, draft.weightGrams, draft.notes, draft.imageUri, Date.now(), id,
   );
+}
+
+/** Adds the sample drafts (skipping any already loaded) in one go. Returns how many were added. */
+export async function insertSamples(db: SQLiteDatabase, drafts: GearDraft[]): Promise<number> {
+  let added = 0;
+  await db.withTransactionAsync(async () => {
+    const have = new Set((await db.getAllAsync<{ name: string }>('SELECT name FROM gear_items WHERE is_sample = 1')).map((r) => r.name));
+    for (const d of drafts) {
+      if (have.has(d.name)) continue;
+      await insertGear(db, { ...d, isSample: true });
+      added += 1;
+    }
+  });
+  return added;
+}
+
+/** Removes every sample piece and unlocks any slot that held one. */
+export async function deleteSamples(db: SQLiteDatabase): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('UPDATE slots SET locked_item_id = NULL WHERE locked_item_id IN (SELECT id FROM gear_items WHERE is_sample = 1)');
+    await db.runAsync('DELETE FROM gear_items WHERE is_sample = 1');
+  });
 }
 
 /** Deletes the item and unlocks any slot that had it locked. */
@@ -155,6 +193,11 @@ export async function recordSpin(db: SQLiteDatabase, picks: SpinPick[]): Promise
   // Keep the last 200 spins; older ones aren't shown anywhere.
   await db.runAsync('DELETE FROM spins WHERE id NOT IN (SELECT id FROM spins ORDER BY id DESC LIMIT 200)');
   return { id: r.lastInsertRowId, spunAt, picks };
+}
+
+/** Replaces the picks of the newest spin (after the wheels were reordered or changed). */
+export async function rewriteLastSpin(db: SQLiteDatabase, picks: SpinPick[]): Promise<void> {
+  await db.runAsync('UPDATE spins SET picks = ? WHERE id = (SELECT MAX(id) FROM spins)', JSON.stringify(picks));
 }
 
 export async function lastSpin(db: SQLiteDatabase): Promise<SpinRecord | null> {

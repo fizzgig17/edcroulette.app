@@ -9,6 +9,7 @@ import { FREE_MAX_ITEMS, FREE_MAX_SLOTS } from '@/lib/limits';
 import type { GearDraft, GearItem, SlotConfig, SpinPick, SpinRecord } from '@/types/models';
 
 export type Result = { ok: true } | { ok: false; error: string };
+export type SlotDraft = { category: string; lockedItemId: string | null; from?: number };
 
 const unavailable: Result = { ok: false, error: 'Your collection lives in the EDC Roulette app.' };
 
@@ -19,12 +20,16 @@ const state = {
   lastSpin: null as SpinRecord | null,
   maxItems: FREE_MAX_ITEMS,
   maxSlots: FREE_MAX_SLOTS,
+  ownCount: 0,
+  sampleCount: 0,
+  addSamples: async () => 0,
+  removeSamples: async () => {},
   itemById: (_id: string | null | undefined): GearItem | null => null,
   addItem: async (_draft: GearDraft): Promise<Result & { item?: GearItem }> => unavailable,
   updateItem: async (_id: string, _draft: GearDraft): Promise<Result> => unavailable,
   removeItem: async (_id: string) => {},
   setLock: async (_slotIndex: number, _itemId: string | null) => {},
-  saveSlots: async (_slots: Omit<SlotConfig, 'slotIndex'>[]): Promise<Result> => unavailable,
+  saveSlots: async (_slots: SlotDraft[]): Promise<Result> => unavailable,
   recordSpin: async (_picks: SpinPick[]) => {},
   eraseEverything: async () => {},
 };

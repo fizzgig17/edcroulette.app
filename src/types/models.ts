@@ -16,6 +16,9 @@ export const DEFAULT_SLOT_CATEGORIES: Category[] = ['Knife', 'Flashlight', 'Pen'
 export interface GearItem {
   id: string;
   name: string;
+  /** From the brand list, or typed by the person. */
+  brand: string | null;
+  model: string | null;
   category: string;
   /** One of MATERIALS, or anything the person typed. */
   material: string | null;
@@ -26,11 +29,13 @@ export interface GearItem {
   notes: string | null;
   /** file:// URI of the photo saved on this phone, or null. */
   imageUri: string | null;
+  /** Part of the sample set (not counted toward the free limit; removed with "Remove sample gear"). */
+  isSample: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
-export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt'>;
+export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt' | 'isSample'> & { isSample?: boolean };
 
 export interface SlotConfig {
   slotIndex: number;

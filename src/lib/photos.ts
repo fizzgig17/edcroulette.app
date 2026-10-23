@@ -2,6 +2,11 @@
  * Gear photos for the free tier: picked or taken with the camera, shrunk, and
  * saved in the app's own documents folder (the picker's copy lives in a cache
  * the system can clear). Photos stay on the phone.
+ *
+ * The database stores only the file's name inside the app ("gear-photos/x.jpg"),
+ * never the full path: iOS can move the app's folder between installs and
+ * updates, which would break full paths. photoUri() turns a stored name back
+ * into a path that's valid right now.
  */
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -9,16 +14,25 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 const MAX_EDGE = 1280;
+const FOLDER = 'gear-photos';
+
+/** A displayable file URI for a stored photo (also accepts older full-path values). */
+export function photoUri(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  const i = stored.lastIndexOf(`${FOLDER}/`);
+  if (i === -1) return stored.includes('://') ? stored : null;
+  return new File(Paths.document, stored.slice(i)).uri;
+}
 
 function photosDir(): Directory {
-  const dir = new Directory(Paths.document, 'gear-photos');
+  const dir = new Directory(Paths.document, FOLDER);
   if (!dir.exists) dir.create({ intermediates: true });
   return dir;
 }
 
 export type PhotoSource = 'camera' | 'library';
 
-/** Lets the person pick or take a photo; returns the saved file's URI, or null if they cancelled. */
+/** Lets the person pick or take a photo; returns the stored name ("gear-photos/x.jpg"), or null if they cancelled. */
 export async function choosePhoto(source: PhotoSource): Promise<string | null> {
   const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
   if (source === 'camera') {
@@ -37,14 +51,23 @@ async function savePhoto(uri: string, width: number, height: number): Promise<st
   }
   const image = await ctx.renderAsync();
   const out = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
-  const dest = new File(photosDir(), `${Crypto.randomUUID()}.jpg`);
-  new File(out.uri).move(dest);
-  return dest.uri;
+  const name = `${Crypto.randomUUID()}.jpg`;
+  const dest = new File(photosDir(), name);
+  // copy() is asynchronous in Expo 57: wait for it, or the photo may not be there yet.
+  await new File(out.uri).copy(dest);
+  try {
+    new File(out.uri).delete();
+  } catch {
+    // The cache copy is cleaned up by the system anyway.
+  }
+  if (!dest.exists) throw new Error('The photo could not be saved.');
+  return `${FOLDER}/${name}`;
 }
 
 /** Removes a photo this app saved. Ignores anything outside its own folder. */
-export function deletePhoto(uri: string | null | undefined) {
-  if (!uri || !uri.includes('/gear-photos/')) return;
+export function deletePhoto(stored: string | null | undefined) {
+  const uri = photoUri(stored);
+  if (!uri || !uri.includes(`/${FOLDER}/`)) return;
   try {
     const f = new File(uri);
     if (f.exists) f.delete();
@@ -56,9 +79,20 @@ export function deletePhoto(uri: string | null | undefined) {
 /** Removes every saved photo (used by "Erase everything"). */
 export function deleteAllPhotos() {
   try {
-    const dir = new Directory(Paths.document, 'gear-photos');
+    const dir = new Directory(Paths.document, FOLDER);
     if (dir.exists) dir.delete();
   } catch {
     // Nothing to remove.
+  }
+}
+
+/** A stored photo as base64 (for sending to photo identify), or null if it can't be read. */
+export async function photoBase64(stored: string | null | undefined): Promise<string | null> {
+  const uri = photoUri(stored);
+  if (!uri) return null;
+  try {
+    return await new File(uri).base64();
+  } catch {
+    return null;
   }
 }

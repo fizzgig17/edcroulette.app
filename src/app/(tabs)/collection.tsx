@@ -14,8 +14,8 @@ import { CATEGORIES, type GearItem } from '@/types/models';
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { items, maxItems, slots } = useGear();
-  const full = items.length >= maxItems;
+  const { items, maxItems, slots, ownCount, sampleCount } = useGear();
+  const full = ownCount >= maxItems;
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
 
   // Known categories first, in their usual order, then anything else.
@@ -39,7 +39,7 @@ export default function CollectionScreen() {
         </Pressable>
       }>
       <ThemedText type="small" themeColor="textSecondary">
-        {items.length} of {maxItems} items in the free version{full ? ' — remove one to add another.' : '.'}
+        {ownCount} of {maxItems} items in the free version{full ? ' — remove one to add another.' : '.'}{sampleCount > 0 ? ` Plus ${sampleCount} sample pieces (they don't count; remove them in Settings).` : ''}
       </ThemedText>
 
       {items.length === 0 ? (
@@ -70,7 +70,7 @@ export default function CollectionScreen() {
                       {g.name}
                     </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                      {[g.material, g.finish, g.weightGrams != null ? `${g.weightGrams} g` : null].filter(Boolean).join(' · ') || 'No details yet'}
+                      {[g.isSample ? 'Sample' : null, g.material, g.finish, g.weightGrams != null ? `${g.weightGrams} g` : null].filter(Boolean).join(' · ') || 'No details yet'}
                     </ThemedText>
                   </View>
                   {lockedIds.has(g.id) ? <Icon name="lock" size={14} color={theme.accent} /> : null}

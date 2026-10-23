@@ -3,14 +3,16 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+import { photoUri } from '@/lib/photos';
 import type { GearItem } from '@/types/models';
 
 /** The gear's photo, or a disc in its color with the first letter of its name. */
 export function GearThumb({ item, size = 44 }: { item: Pick<GearItem, 'name' | 'imageUri' | 'primaryColor'> | null; size?: number }) {
   const theme = useTheme();
   const box = { width: size, height: size, borderRadius: size * 0.28 };
-  if (item?.imageUri) {
-    return <Image source={{ uri: item.imageUri }} style={[box, { backgroundColor: theme.backgroundElement }]} contentFit="cover" accessibilityIgnoresInvertColors />;
+  const uri = photoUri(item?.imageUri);
+  if (uri) {
+    return <Image source={{ uri }} style={[box, { backgroundColor: theme.backgroundElement }]} contentFit="cover" accessibilityIgnoresInvertColors />;
   }
   const bg = item?.primaryColor ?? theme.backgroundSelected;
   return (
