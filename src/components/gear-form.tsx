@@ -159,9 +159,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     setBatch({ ...c, current: index });
     applyIdentified(it);
     setPreparing(true);
+    // Don't show the whole photo while the item's own (blurred) one is made; it would flash clear first.
+    set('imageUri', null);
     try {
-      const stored = await cropFor(index, dims);
-      if (stored) set('imageUri', stored);
+      set('imageUri', (await cropFor(index, dims)) ?? c.stored);
     } finally {
       setPreparing(false);
     }
