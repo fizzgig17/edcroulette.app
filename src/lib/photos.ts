@@ -33,15 +33,15 @@ function photosDir(): Directory {
 export type PhotoSource = 'camera' | 'library';
 
 /** Lets the person pick or take a photo; returns the stored name ("gear-photos/x.jpg"), or null if they cancelled. */
-export async function choosePhoto(source: PhotoSource): Promise<string | null> {
+export async function choosePhoto(source: PhotoSource, onPicked?: () => void): Promise<string | null> {
   // No crop screen: iOS's editor misbehaved inside the form sheet (taps only landing on one
   // side, photos not coming back), and the whole frame gives photo identify more to go on.
-  // Thumbnails fill their square from the middle of the photo anyway.
+  // Thumbnails fill their square from the middle of the photo anyway. The photo is left as the
+  // phone has it (no full-size conversion, which took seconds); shrinking below handles any format.
   const options: ImagePicker.ImagePickerOptions = {
     mediaTypes: ['images'],
     allowsEditing: false,
     quality: 1,
-    preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
   };
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -49,6 +49,7 @@ export async function choosePhoto(source: PhotoSource): Promise<string | null> {
   }
   const result = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   if (result.canceled || !result.assets?.[0]) return null;
+  onPicked?.(); // the picker is closed; shrinking and saving still takes a moment
   return savePhoto(result.assets[0].uri, result.assets[0].width, result.assets[0].height);
 }
 

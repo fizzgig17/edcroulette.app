@@ -36,6 +36,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   const [draft, setDraft] = useState<GearDraft>(() => (item ? { ...item } : { ...EMPTY, category: defaultCategory ?? EMPTY.category }));
   const [weightText, setWeightText] = useState(item?.weightGrams != null ? String(item.weightGrams) : '');
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
   // replaces what they show when the form is filled in from the photo.
@@ -115,7 +116,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
 
   async function getPhoto(source: PhotoSource) {
     try {
-      const stored = await choosePhoto(source);
+      const stored = await choosePhoto(source, () => setPreparing(true));
       if (stored) {
         setNewPhotos((p) => [...p, stored]);
         set('imageUri', stored);
@@ -123,6 +124,8 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       }
     } catch (e) {
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not get the photo.');
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -206,6 +209,14 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
         )}
       </View>
 
+      {preparing ? (
+        <Card>
+          <View style={styles.status}>
+            <ActivityIndicator color={theme.accent} />
+            <ThemedText style={styles.flex}>Preparing your photo…</ThemedText>
+          </View>
+        </Card>
+      ) : null}
       {identify.state === 'working' ? (
         <Card>
           <View style={styles.status}>
