@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Image } from 'expo-image';
-import { Alert, Modal, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { DragReorder } from '@/components/drag-reorder';
 import { Screen } from '@/components/screen';
@@ -190,6 +190,7 @@ export default function SettingsScreen() {
       Alert.alert('App icon', 'The icon could not be changed just now.');
     }
   }
+  const canSwitchIcon = Platform.OS === 'ios' && supportsAlternateIcons;
   const follows = useIconFollowsMetal();
   const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
@@ -247,7 +248,7 @@ export default function SettingsScreen() {
         <ThemedText themeColor="textSecondary">The metal for the Spin button and the trim around the wheels.</ThemedText>
         <View style={styles.metals}>
           {METALS.map((m) => (
-            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); if (supportsAlternateIcons && follows && m.id !== iconId) void chooseIcon(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
+            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); if (canSwitchIcon && follows && m.id !== iconId) void chooseIcon(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
               <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === metal.id ? theme.accent : theme.border, borderWidth: m.id === metal.id ? 3 : 1 }]} />
               <ThemedText type="small" style={m.id === metal.id ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
                 {m.label}
@@ -255,7 +256,7 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
-        {supportsAlternateIcons ? (
+        {canSwitchIcon ? (
           <View style={styles.followRow}>
             <ThemedText type="small" style={styles.flex}>
               Use this metal for the app icon too
@@ -265,7 +266,7 @@ export default function SettingsScreen() {
         ) : null}
       </Card>
 
-      {supportsAlternateIcons && !follows ? (
+      {canSwitchIcon && !follows ? (
         <>
           <ThemedText type="heading">App icon</ThemedText>
           <Card>

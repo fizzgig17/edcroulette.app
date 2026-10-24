@@ -5,7 +5,7 @@
  */
 import type { ReactNode } from 'react';
 
-import { FREE_MAX_ITEMS, FREE_MAX_SLOTS } from '@/lib/limits';
+import { FREE_MAX_SLOTS, MAX_ITEMS } from '@/lib/limits';
 import type { GearDraft, GearItem, SlotConfig, SpinPick, SpinRecord } from '@/types/models';
 
 export type Result = { ok: true } | { ok: false; error: string };
@@ -18,7 +18,7 @@ const state = {
   items: [] as GearItem[],
   slots: [] as SlotConfig[],
   lastSpin: null as SpinRecord | null,
-  maxItems: FREE_MAX_ITEMS,
+  maxItems: MAX_ITEMS,
   maxSlots: FREE_MAX_SLOTS,
   ownCount: 0,
   sampleCount: 0,

@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon';
 import type { IconName } from '@/constants/icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear } from '@/lib/gear';
 import { setCollectionView, useCollectionView, type CollectionView } from '@/lib/preferences';
 import { CATEGORIES, type GearItem } from '@/types/models';
@@ -116,7 +117,7 @@ export default function CollectionScreen() {
         </Pressable>
       }>
       <ThemedText type="small" themeColor="textSecondary" style={styles.small}>
-        {ownCount} of {maxItems} items in the free version{full ? ' — remove one to add another.' : '.'}
+        {IS_DEV_BUILD ? `${ownCount} items. Dev build: no item limit.` : `${ownCount} of ${maxItems} items in the free version${full ? ' — remove one to add another.' : '.'}`}
         {sampleCount > 0 ? ` Plus ${sampleCount} samples (Settings removes them).` : ''}
       </ThemedText>
 
