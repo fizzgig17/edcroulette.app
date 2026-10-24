@@ -1,9 +1,13 @@
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { Screen } from '@/components/screen';
+import { DeleteAction, UndoBar } from '@/components/swipe-delete';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -14,6 +18,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear } from '@/lib/gear';
+import { select, success, tap } from '@/lib/haptics';
 import { setCollectionView, useCollectionView, type CollectionView } from '@/lib/preferences';
 import { CATEGORIES, type GearItem } from '@/types/models';
 
@@ -31,7 +36,83 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { items, maxItems, slots, ownCount, sampleCount, addSamples } = useGear();
+  const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem } = useGear();
+  const insets = useSafeAreaInsets();
+
+  // Selecting several: press and hold a piece (or tap "Select"), tap to add or remove.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const swipers = useRef(new Map<string, SwipeableMethods>());
+  const fullSwipe = useRef<string | null>(null);
+  // Swipe-to-delete is instant: the row goes away at once and an "Undo" bar stays for a few
+  // seconds before the piece is really removed.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [undoFor, setUndoFor] = useState<string[] | null>(null);
+  const pending = useRef<{ ids: string[]; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const items = useMemo(() => allItems.filter((g) => !hidden.has(g.id)), [allItems, hidden]);
+
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const toggleSelected = (id: string) => {
+    select();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const startSelecting = (id?: string) => {
+    tap();
+    setSelecting(true);
+    setSelected(new Set(id ? [id] : []));
+  };
+
+  async function removeMany(ids: string[], quiet = false) {
+    for (const id of ids) await removeItem(id);
+    if (!quiet) success();
+    stopSelecting();
+  }
+  function confirmRemove(ids: string[]) {
+    if (ids.length === 0) return;
+    const title = ids.length === 1 ? 'Remove this piece?' : `Remove ${ids.length} pieces?`;
+    const detail = 'They are taken out of your collection and wheels, and their photos are deleted from this phone.';
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm?.(`${title} ${detail}`) ?? true) void removeMany(ids);
+      return;
+    }
+    Alert.alert(title, detail, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void removeMany(ids) },
+    ]);
+  }
+  const flushPending = useCallback(() => {
+    const p = pending.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.current = null;
+    setUndoFor(null);
+    void removeMany(p.ids, true).finally(() => setHidden((h) => new Set([...h].filter((id) => !p.ids.includes(id)))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  function removeWithUndo(ids: string[]) {
+    flushPending(); // a new removal settles the previous one
+    setHidden((h) => new Set([...h, ...ids]));
+    setUndoFor(ids);
+    pending.current = { ids, timer: setTimeout(flushPending, 5000) };
+  }
+  function undoRemove() {
+    const p = pending.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.current = null;
+    setUndoFor(null);
+    setHidden((h) => new Set([...h].filter((id) => !p.ids.includes(id))));
+  }
+  // Leaving the tab makes the removal final.
+  useFocusEffect(useCallback(() => flushPending, [flushPending]));
   // An unfolded Fold, an iPad or a big window: two columns of rows.
   const wide = useWindowDimensions().width >= 840;
   const view = useCollectionView();
@@ -103,10 +184,95 @@ export default function CollectionScreen() {
   const open = (g: GearItem) => router.push({ pathname: '/gear/[id]', params: { id: g.id } });
   const detail = (g: GearItem) => [g.isSample ? 'Sample' : null, g.brand, g.material, g.finish, g.weightGrams != null ? `${g.weightGrams} g` : null].filter(Boolean).join(' · ') || 'No details yet';
 
+  const renderRow = (g: GearItem, i: number) => {
+    const checked = selected.has(g.id);
+    const row = (
+      <Pressable
+        key={g.id}
+        onPress={() => (selecting ? toggleSelected(g.id) : open(g))}
+        onLongPress={selecting ? undefined : () => startSelecting(g.id)}
+        delayLongPress={350}
+        accessibilityRole={selecting ? 'checkbox' : 'button'}
+        accessibilityState={selecting ? { checked } : undefined}
+        accessibilityHint={selecting ? undefined : 'Press and hold to select pieces to remove'}
+        accessibilityLabel={`${g.name}, ${[g.material, g.finish].filter(Boolean).join(', ')}`}
+        style={({ pressed }) => [view === 'compact' ? styles.rowCompact : styles.row, { backgroundColor: theme.surface }, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }, (pressed || checked) && { backgroundColor: theme.backgroundElement }]}>
+        {selecting ? (
+          <View style={[styles.check, { borderColor: checked ? theme.accent : theme.border, backgroundColor: checked ? theme.accent : 'transparent' }]}>
+            {checked ? <Icon name="check" size={13} color={theme.onAccent} /> : null}
+          </View>
+        ) : null}
+        <GearThumb item={g} size={view === 'compact' ? 30 : 44} />
+        <View style={styles.flex}>
+          <ThemedText type="smallBold" numberOfLines={1} style={{ fontSize: view === 'compact' ? 14 : 16 }}>
+            {g.name}
+          </ThemedText>
+          {view === 'compact' ? null : (
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {detail(g)}
+            </ThemedText>
+          )}
+        </View>
+        {lockedIds.has(g.id) ? <Icon name="lock" size={14} color={theme.accent} /> : null}
+        {g.primaryColor ? <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} /> : null}
+        {selecting ? null : <Icon name="chevron" size={14} color={theme.textSecondary} />}
+      </Pressable>
+    );
+    // On the phone, swipe a piece left to reveal Delete.
+    if (Platform.OS === 'web' || selecting) return row;
+    return (
+      <ReanimatedSwipeable
+        key={g.id}
+        ref={(r) => {
+          if (r) swipers.current.set(g.id, r);
+          else swipers.current.delete(g.id);
+        }}
+        friction={1}
+        rightThreshold={40}
+        overshootRight
+        onSwipeableWillOpen={() => {
+          // Let go past the full-swipe line: remove right away, no questions.
+          if (fullSwipe.current === g.id) {
+            fullSwipe.current = null;
+            removeWithUndo([g.id]);
+          }
+        }}
+        renderRightActions={(_progress, drag) => (
+          <DeleteAction
+            drag={drag}
+            label={`Delete ${g.name}`}
+            onFullChange={(full) => {
+              fullSwipe.current = full ? g.id : fullSwipe.current === g.id ? null : fullSwipe.current;
+              tap();
+            }}
+            onPress={() => removeWithUndo([g.id])}
+          />
+        )}>
+        {row}
+      </ReanimatedSwipeable>
+    );
+  };
+
   return (
     <Screen
       title="Collection"
       tab
+      footer={
+        undoFor || selecting ? (
+          <View style={[styles.floating, { bottom: insets.bottom + 84 }]} pointerEvents="box-none">
+            {undoFor ? <UndoBar text={undoFor.length === 1 ? 'Piece removed' : `${undoFor.length} pieces removed`} onUndo={undoRemove} /> : null}
+            {selecting ? (
+              <Button
+                label={selected.size ? `Remove ${selected.size} ${selected.size === 1 ? 'piece' : 'pieces'}` : 'Remove'}
+                variant="danger"
+                icon="trash"
+                disabled={selected.size === 0}
+                onPress={() => confirmRemove([...selected])}
+              />
+            ) : null}
+          </View>
+        ) : undefined
+      }
       action={
         <Pressable
           onPress={() => router.push('/gear/new')}
@@ -122,6 +288,37 @@ export default function CollectionScreen() {
         {IS_DEV_BUILD ? `${ownCount} items. Dev build: no item limit.` : `${ownCount} of ${maxItems} items in the free version${full ? ' — remove one to add another.' : '.'}`}
         {sampleCount > 0 ? ` Plus ${sampleCount} samples (Settings removes them).` : ''}
       </ThemedText>
+
+      {items.length > 0 && !selecting ? (
+        <Pressable onPress={() => startSelecting()} hitSlop={8} accessibilityRole="button" style={styles.selectLink}>
+          <ThemedText type="smallBold" style={{ color: theme.accent }}>
+            Select
+          </ThemedText>
+        </Pressable>
+      ) : null}
+      {selecting ? (
+        <View style={styles.toolbar}>
+          <Pressable onPress={stopSelecting} hitSlop={8} accessibilityRole="button">
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              Cancel
+            </ThemedText>
+          </Pressable>
+          <ThemedText type="small" themeColor="textSecondary" style={[styles.flex, styles.centerText]}>
+            {selected.size} selected
+          </ThemedText>
+          <Pressable
+            onPress={() => {
+              select();
+              setSelected(selected.size === shown.length ? new Set() : new Set(shown.map((g) => g.id)));
+            }}
+            hitSlop={8}
+            accessibilityRole="button">
+            <ThemedText type="smallBold" style={{ color: theme.accent }}>
+              {selected.size === shown.length && shown.length > 0 ? 'Select none' : 'Select all'}
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
 
       {items.length === 0 ? (
         <Card>
@@ -207,8 +404,18 @@ export default function CollectionScreen() {
               {view === 'grid' ? (
                 <View style={styles.grid}>
                   {list.map((g) => (
-                    <Pressable key={g.id} onPress={() => open(g)} accessibilityRole="button" accessibilityLabel={g.name} style={({ pressed }) => [styles.tile, pressed && { opacity: 0.7 }]}>
+                    <Pressable
+                      key={g.id}
+                      onPress={() => (selecting ? toggleSelected(g.id) : open(g))}
+                      onLongPress={selecting ? undefined : () => startSelecting(g.id)}
+                      delayLongPress={350}
+                      accessibilityRole={selecting ? 'checkbox' : 'button'}
+                      accessibilityState={selecting ? { checked: selected.has(g.id) } : undefined}
+                      accessibilityLabel={g.name}
+                      accessibilityHint={selecting ? undefined : 'Press and hold to select pieces to remove'}
+                      style={({ pressed }) => [styles.tile, pressed && { opacity: 0.7 }]}>
                       <GearThumb item={g} size={92} />
+                      {selecting ? <View style={[styles.tileCheck, { borderColor: selected.has(g.id) ? theme.accent : theme.border, backgroundColor: selected.has(g.id) ? theme.accent : theme.surface }]}>{selected.has(g.id) ? <Icon name="check" size={13} color={theme.onAccent} /> : null}</View> : null}
                       {lockedIds.has(g.id) ? (
                         <View style={[styles.lockBadge, { backgroundColor: theme.accent }]}>
                           <Icon name="lock" size={11} color={theme.onAccent} />
@@ -225,29 +432,7 @@ export default function CollectionScreen() {
                   {(wide && list.length > 1 ? [list.slice(0, Math.ceil(list.length / 2)), list.slice(Math.ceil(list.length / 2))] : [list]).map((part, pi) => (
                     <View key={pi} style={wide ? styles.flex : undefined}>
                       <Card padded={false}>
-                  {part.map((g, i) => (
-                    <Pressable
-                      key={g.id}
-                      onPress={() => open(g)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${g.name}, ${[g.material, g.finish].filter(Boolean).join(', ')}`}
-                      style={({ pressed }) => [view === 'compact' ? styles.rowCompact : styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }, pressed && { backgroundColor: theme.backgroundElement }]}>
-                      <GearThumb item={g} size={view === 'compact' ? 30 : 44} />
-                      <View style={styles.flex}>
-                        <ThemedText type="smallBold" numberOfLines={1} style={{ fontSize: view === 'compact' ? 14 : 16 }}>
-                          {g.name}
-                        </ThemedText>
-                        {view === 'compact' ? null : (
-                          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                            {detail(g)}
-                          </ThemedText>
-                        )}
-                      </View>
-                      {lockedIds.has(g.id) ? <Icon name="lock" size={14} color={theme.accent} /> : null}
-                      {g.primaryColor ? <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} /> : null}
-                      <Icon name="chevron" size={14} color={theme.textSecondary} />
-                    </Pressable>
-                  ))}
+                  {part.map((g, i) => renderRow(g, i))}
                       </Card>
                     </View>
                   ))}
@@ -365,6 +550,12 @@ const styles = StyleSheet.create({
   dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   tile: { width: '30%', alignItems: 'center', gap: 4 },
+  tileCheck: { position: 'absolute', top: 4, right: 12, width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  selectLink: { alignSelf: 'flex-end' },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  centerText: { textAlign: 'center' },
+  floating: { position: 'absolute', left: Spacing.three, right: Spacing.three, gap: Spacing.two },
   tileName: { textAlign: 'center', fontSize: 12, lineHeight: 15 },
   lockBadge: { position: 'absolute', top: 2, right: '8%', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   scrim: { flex: 1, backgroundColor: '#000A', justifyContent: 'flex-end' },

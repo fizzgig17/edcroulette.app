@@ -44,6 +44,7 @@ export default function SpinScreen() {
   const landscape = width > height;
   const { setControl, topSignal } = useSpinDock();
   const [open, setOpen] = useState<GearItem | null>(null);
+  const hasCarry = !!lastSpin && lastSpin.picks.some((p) => !!itemById(p.itemId));
   const emptyCard = !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>
@@ -61,7 +62,7 @@ export default function SpinScreen() {
       <RouletteSpinner onControl={setControl} />
       {landscape ? null : emptyCard}
 
-      {lastSpin ? (
+      {lastSpin && hasCarry ? (
         <View style={styles.result}>
           <View style={styles.resultHead}>
             <ThemedText type="heading">Today's carry</ThemedText>
@@ -103,7 +104,14 @@ export default function SpinScreen() {
                         {[g.material, g.finish].filter(Boolean).join(' · ') || 'Material not set'}
                       </ThemedText>
                     </View>
-                  ) : null}
+                  ) : !loading && !emptyCard ? (
+        <View style={styles.result}>
+          <ThemedText type="heading">Today's carry</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            {lastSpin ? 'Nothing picked: the pieces from your last spin are no longer in your collection. Spin again to choose.' : 'Nothing spun yet. Spin to pick today\'s carry.'}
+          </ThemedText>
+        </View>
+      ) : null}
                 </Pressable>
               );
             })}
