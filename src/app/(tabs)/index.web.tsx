@@ -2,6 +2,7 @@ import Head from 'expo-router/head';
 import { Image } from 'expo-image';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { PhotoDemo } from '@/components/photo-demo';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/field';
@@ -81,6 +82,8 @@ export default function Landing() {
             </View>
           ))}
         </View>
+
+        <PhotoDemo />
 
         <Card>
           <ThemedText type="heading">Premium is on the way</ThemedText>
