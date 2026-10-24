@@ -1,9 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
-const native = Platform.OS === 'ios';
+const native = Platform.OS === 'ios' || Platform.OS === 'android';
 
-/** A clear tap for presses. Silent on the web and Android. */
+/** A clear tap for presses. Silent on the web. */
 export function tap() {
   if (native) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 }
