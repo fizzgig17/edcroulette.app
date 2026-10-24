@@ -110,3 +110,12 @@ export async function pickCoordinated(wheels: PairWheel[]): Promise<PairResult> 
     return { ok: false, code: 'offline', error: 'Could not reach the server.' };
   }
 }
+
+export type AiCheck = { ok: true } | { ok: false; error: string };
+
+/** Sends a tiny made-up request to the coordinated-set service to see whether the AI side is reachable and set up. Nothing of the person's is sent. */
+export async function checkAi(): Promise<AiCheck> {
+  const res = await pickCoordinated([{ slot: 0, category: 'Pen', options: [{ id: 'check-a', name: 'Test pen', material: 'Steel' }, { id: 'check-b', name: 'Spare pen', material: 'Brass' }] }]);
+  if (res.ok) return { ok: true };
+  return { ok: false, error: res.code === 'offline' ? res.error : `The AI service answered with a problem: ${res.error}` };
+}

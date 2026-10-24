@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { DragReorder } from '@/components/drag-reorder';
 import { Screen } from '@/components/screen';
@@ -11,6 +12,7 @@ import { Card } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { checkAi } from '@/lib/api';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear, type SlotDraft } from '@/lib/gear';
 import { select } from '@/lib/haptics';
@@ -26,6 +28,7 @@ const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'lig
 function WheelsEditor() {
   const theme = useTheme();
   const { slots, saveSlots, maxSlots } = useGear();
+  const [picking, setPicking] = useState<number | null>(null);
 
   const apply = async (next: SlotDraft[]) => {
     const r = await saveSlots(next);
@@ -42,14 +45,20 @@ function WheelsEditor() {
     select();
     void apply(current().filter((_, k) => k !== i));
   }
+  function choose(category: string) {
+    if (picking === null) return;
+    select();
+    void apply(current().map((d, k) => (k === picking ? { ...d, category } : d)));
+    setPicking(null);
+  }
 
   return (
     <Card>
       <View style={styles.stepper}>
         <View style={styles.flex}>
-          <ThemedText type="smallBold">Number of wheels</ThemedText>
+          <ThemedText type="smallBold">Wheels</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Up to {maxSlots}. Portrait shows the first {PORTRAIT_WHEELS}; turn your phone sideways to see them all.
+            Upright shows the first {PORTRAIT_WHEELS}; sideways shows all. Drag ≡ to reorder.
           </ThemedText>
         </View>
         <View style={styles.inline}>
@@ -60,36 +69,65 @@ function WheelsEditor() {
           <SmallIcon icon="add" label="More wheels" onPress={add} disabled={slots.length >= maxSlots} />
         </View>
       </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        Pick what each wheel spins through, and hold the grip and drag to change the order.
-      </ThemedText>
       <DragReorder
         items={slots}
         keyOf={(s) => String(s.slotIndex)}
         direction="column"
-        itemSize={250}
+        itemSize={56}
         gap={8}
         onReorder={(next) => void apply(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
         renderItem={(s, i, grip) => (
           <View style={[styles.wheel, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-            <View style={styles.wheelHead}>
-              <View {...grip} accessibilityRole="adjustable" accessibilityLabel={`Wheel ${i + 1}. Drag to reorder.`} style={styles.gripArea}>
-                <Icon name="grip" size={18} color={theme.textSecondary} />
-                <ThemedText type="smallBold">
-                  Wheel {i + 1}
-                  {i >= PORTRAIT_WHEELS ? ' · sideways only' : ''}
-                </ThemedText>
-              </View>
-              <SmallIcon icon="trash" label={`Remove wheel ${i + 1}`} onPress={() => removeAt(i)} disabled={slots.length <= MIN_SLOTS} />
+            <View {...grip} accessibilityRole="adjustable" accessibilityLabel={`${s.category} wheel. Drag to reorder.`} style={styles.gripArea}>
+              <Icon name="grip" size={20} color={theme.textSecondary} />
             </View>
-            <ChipGroup
-              options={CATEGORIES}
-              value={s.category as (typeof CATEGORIES)[number]}
-              onChange={(v) => v && void apply(current().map((d, k) => (k === i ? { ...d, category: v } : d)))}
-            />
+            <Pressable
+              onPress={() => setPicking(i)}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.category}. Change what this wheel spins.`}
+              style={({ pressed }) => [styles.wheelName, pressed && { opacity: 0.6 }]}>
+              <ThemedText type="smallBold" style={styles.wheelTitle}>
+                {s.category}
+              </ThemedText>
+              {i >= PORTRAIT_WHEELS ? (
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Sideways
+                </ThemedText>
+              ) : null}
+              <View style={styles.flex} />
+              <ThemedText type="small" style={{ color: theme.accent }}>
+                Change
+              </ThemedText>
+              <Icon name="chevron" size={12} color={theme.accent} />
+            </Pressable>
+            <SmallIcon icon="trash" label={`Remove ${s.category} wheel`} onPress={() => removeAt(i)} disabled={slots.length <= MIN_SLOTS} />
           </View>
         )}
       />
+      <Modal visible={picking !== null} transparent animationType="fade" onRequestClose={() => setPicking(null)}>
+        <Pressable style={styles.scrim} onPress={() => setPicking(null)} accessibilityLabel="Close">
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => undefined}>
+            <ThemedText type="heading">What does this wheel spin?</ThemedText>
+            <View style={styles.tiles}>
+              {CATEGORIES.map((c) => {
+                const on = picking !== null && slots[picking]?.category === c;
+                return (
+                  <Pressable
+                    key={c}
+                    onPress={() => choose(c)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    style={({ pressed }) => [styles.tile, { backgroundColor: on ? theme.accent : theme.backgroundElement, borderColor: on ? theme.accent : theme.border }, pressed && { opacity: 0.7 }]}>
+                    <ThemedText type="smallBold" style={{ color: on ? theme.onAccent : theme.text }}>
+                      {c}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Card>
   );
 }
@@ -134,11 +172,18 @@ function LinkRow({ label, href, first }: { label: string; href: Href; first?: bo
 }
 
 export default function SettingsScreen() {
+  const theme = useTheme();
   const pref = useThemePref();
   const spinStyle = useSpinStyle();
   const sound = useSoundOn();
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
+  const [aiTest, setAiTest] = useState<'idle' | 'running' | 'ok' | string>('idle');
+  async function runAiCheck() {
+    setAiTest('running');
+    const r = await checkAi();
+    setAiTest(r.ok ? 'ok' : r.error);
+  }
   const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
 
   function erase() {
@@ -229,6 +274,17 @@ export default function SettingsScreen() {
         <LinkRow label="Help and support" href="/support" />
       </Card>
 
+      <ThemedText type="heading">AI check</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">Tests whether the AI side is reachable and set up. It sends a made-up pair of pens, nothing of yours.</ThemedText>
+        <Button label={aiTest === 'running' ? 'Checking…' : 'Check AI connection'} variant="secondary" icon="sparkle" onPress={() => void runAiCheck()} disabled={aiTest === 'running'} />
+        {aiTest !== 'idle' && aiTest !== 'running' ? (
+          <ThemedText type="smallBold" style={{ color: aiTest === 'ok' ? theme.accent : theme.danger }}>
+            {aiTest === 'ok' ? 'AI is working. Coordinated spins and photo identify are ready.' : aiTest}
+          </ThemedText>
+        ) : null}
+      </Card>
+
       <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
       <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
         EDC Roulette {version}
@@ -244,9 +300,14 @@ const styles = StyleSheet.create({
   pad: { padding: Spacing.three, gap: Spacing.two },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   count: { minWidth: 24, textAlign: 'center' },
-  wheel: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.two },
-  wheelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gripArea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one, paddingRight: Spacing.three },
+  wheel: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, paddingHorizontal: Spacing.two },
+  gripArea: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.two },
+  wheelName: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, alignSelf: 'stretch' },
+  wheelTitle: { fontSize: 16 },
+  scrim: { flex: 1, backgroundColor: '#000A', justifyContent: 'flex-end', padding: Spacing.three },
+  sheet: { borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.three, gap: Spacing.three },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  tile: { width: '48%', minHeight: 48, borderRadius: Radius.medium, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   small: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   link: { flexDirection: 'row', alignItems: 'center', padding: Spacing.three },
