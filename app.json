@@ -4,11 +4,11 @@
     "slug": "edc-roulette",
     "version": "1.0",
     "orientation": "default",
-    "icon": "./assets/images/icons/damascus.png",
+    "icon": "./assets/images/icons/mixed.png",
     "scheme": "edcroulette",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icons/damascus.png",
+      "icon": "./assets/images/icons/mixed.png",
       "bundleIdentifier": "app.edcroulette.ios",
       "supportsTablet": false,
       "usesAppleSignIn": true,
@@ -67,6 +67,10 @@
       [
         "expo-alternate-app-icons",
         [
+          {
+            "name": "Damascus",
+            "ios": "./assets/images/icons/damascus.png"
+          },
           {
             "name": "Mokume",
             "ios": "./assets/images/icons/mokume.png"

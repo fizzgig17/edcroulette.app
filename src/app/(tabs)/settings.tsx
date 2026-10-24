@@ -183,7 +183,7 @@ export default function SettingsScreen() {
   async function chooseIcon(id: string) {
     select();
     try {
-      const name = id === 'damascus' ? null : id.charAt(0).toUpperCase() + id.slice(1);
+      const name = id === 'mixed' ? null : id.charAt(0).toUpperCase() + id.slice(1);
       await setAlternateAppIcon(name);
       setAppIcon(name);
     } catch {
@@ -191,7 +191,7 @@ export default function SettingsScreen() {
     }
   }
   const follows = useIconFollowsMetal();
-  const iconId = appIcon ? appIcon.toLowerCase() : 'damascus';
+  const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
   const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
@@ -271,9 +271,17 @@ export default function SettingsScreen() {
           <Card>
             <ThemedText themeColor="textSecondary">Pick the home screen icon separately. iOS shows a short notice each time it changes.</ThemedText>
             <View style={styles.metals}>
-              {METALS.map((m) => (
+              {[{ id: 'mixed', label: 'Mixed' }, ...METALS].map((m) => (
                 <Pressable key={m.id} onPress={() => void chooseIcon(m.id)} accessibilityRole="button" accessibilityState={{ selected: m.id === iconId }} accessibilityLabel={`${m.label} icon`} style={styles.metal}>
-                  <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === iconId ? theme.accent : theme.border, borderWidth: m.id === iconId ? 3 : 1 }]} />
+                  {'texture' in m ? (
+                    <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === iconId ? theme.accent : theme.border, borderWidth: m.id === iconId ? 3 : 1 }]} />
+                  ) : (
+                    <View style={[styles.swatch, styles.mixedSwatch, { borderColor: m.id === iconId ? theme.accent : theme.border, borderWidth: m.id === iconId ? 3 : 1 }]}>
+                      {(['damascus', 'mokume', 'timascus', 'brass'] as const).map((id) => (
+                        <Image key={id} source={metalById(id).texture} contentFit="cover" style={styles.mixedCell} />
+                      ))}
+                    </View>
+                  )}
                   <ThemedText type="small" style={m.id === iconId ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
                     {m.label}
                   </ThemedText>
@@ -339,6 +347,8 @@ const styles = StyleSheet.create({
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   metal: { width: '21%', alignItems: 'center', gap: 4 },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  mixedSwatch: { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' },
+  mixedCell: { width: '50%', height: '50%' },
   swatch: { width: 56, height: 56, borderRadius: 28 },
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
