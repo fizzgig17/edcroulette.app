@@ -42,8 +42,8 @@ import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/so
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
-const BASE_MS = 1600;
-const STAGGER_MS = 420;
+const BASE_MS = 2200;
+const STAGGER_MS = 500;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
 
@@ -70,7 +70,7 @@ function shuffle<T>(list: readonly T[]): T[] {
 const MAX_RING = 36; // rows kept on a drum; bigger collections show a sample
 export const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
 export const SETTLE_MS = 240;
-const TICK_ROWS = 14; // rows the first wheel travels; later wheels travel further
+const TICK_ROWS = 10; // rows the first wheel travels; later wheels travel further
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 
@@ -231,7 +231,7 @@ function Reel({
     const base = Math.round(pos.value);
     const to = Math.max(0, next.findIndex((g) => g.id === target.id));
     const delta = mod(to - mod(base, m), m);
-    const rows = TICK_ROWS + order * 5;
+    const rows = TICK_ROWS + order * 3;
     const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
     endRef.current = base + delta + extra;
     onPlan(slot.slotIndex, delta + extra, durationMs);

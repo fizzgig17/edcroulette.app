@@ -37,23 +37,23 @@ function finish(x: Float32Array, cutoff: number, fadeMs = 1.5): Float32Array {
   return y;
 }
 
+/** A pitched wooden "tok": clear enough to tell clicks apart, with a tiny edge at the front. */
 function makeTick(pitch: number): Float32Array {
-  const n = Math.floor(SR * 0.045);
-  const noise = new Float32Array(n);
+  const n = Math.floor(SR * 0.07);
+  const edge = new Float32Array(n);
   const body = new Float32Array(n);
   for (let i = 0; i < n; i += 1) {
     const t = i / SR;
-    noise[i] = (Math.random() * 2 - 1) * Math.exp(-t * 900);
+    edge[i] = (Math.random() * 2 - 1) * Math.exp(-t * 1400);
     body[i] =
-      Math.sin(2 * Math.PI * 1250 * pitch * t) * Math.exp(-t * 230) * 0.7 +
-      Math.sin(2 * Math.PI * 2310 * pitch * t) * Math.exp(-t * 330) * 0.32 +
-      Math.sin(2 * Math.PI * 410 * pitch * t) * Math.exp(-t * 120) * 0.5 +
-      Math.sin(2 * Math.PI * 3100 * pitch * t) * Math.exp(-t * 500) * 0.12;
+      Math.sin(2 * Math.PI * 880 * pitch * t) * Math.exp(-t * 95) +
+      Math.sin(2 * Math.PI * 1760 * pitch * t) * Math.exp(-t * 170) * 0.45 +
+      Math.sin(2 * Math.PI * 440 * pitch * t) * Math.exp(-t * 70) * 0.3;
   }
-  const low = lowpass(noise, 1400); // keep the top of the noise, lose the rumble
+  const low = lowpass(edge, 1800);
   const x = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) x[i] = ((noise[i] as number) - (low[i] as number)) * 0.55 + (body[i] as number);
-  return finish(x, 6500);
+  for (let i = 0; i < n; i += 1) x[i] = ((edge[i] as number) - (low[i] as number)) * 0.4 + (body[i] as number);
+  return finish(x, 5500);
 }
 
 /** A soft wooden thock: a mid body that phone speakers can reproduce, a little low weight, no ring. */
@@ -80,7 +80,7 @@ let kit: { ticks: Float32Array[]; clunk: Float32Array; land: Float32Array } | nu
 function getKit() {
   if (!kit) {
     kit = {
-      ticks: [0.84, 0.92, 1.0, 1.08, 1.17, 1.27].map(makeTick),
+      ticks: [0.8, 1.0, 1.26].map(makeTick), // one pitch per wheel, so the wheels can be told apart
       clunk: makeClunk(1.15, 0, 0.3),
       land: makeClunk(0.9, 1, 0.5),
     };
@@ -123,8 +123,14 @@ function toWav(hits: Hit[]): Uint8Array {
 let ready = false;
 let player: AudioPlayer | null = null;
 let flip = 0;
+let playToken = 0;
 
-function play(hits: Hit[]) {
+/**
+ * Builds the clip and plays it once it has really loaded (playing a clip that
+ * hasn't loaded yet sometimes does nothing). If loading takes a moment the clip
+ * starts part-way in, so the clicks still line up with the wheels.
+ */
+function play(hits: Hit[], startedAt = Date.now()) {
   if (!getSoundOn() || hits.length === 0) return;
   try {
     if (!ready) {
@@ -136,20 +142,40 @@ function play(hits: Hit[]) {
     if (Platform.OS === 'web') {
       uri = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
     } else {
-      flip = (flip + 1) % 2; // alternate names so the player never reuses a cached clip
+      flip = (flip + 1) % 2; // alternate names so a clip is never mistaken for the last one
       const file = new File(Paths.cache, `spin-sound-${flip}.wav`);
       if (!file.exists) file.create();
       file.write(bytes);
       uri = file.uri;
     }
-    try {
-      player?.remove();
-    } catch {
-      // Already gone.
-    }
-    player = createAudioPlayer({ uri });
-    player.volume = 0.9;
-    player.play();
+    const mine = ++playToken;
+    const next = createAudioPlayer({ uri });
+    next.volume = 0.9;
+    const attempt = () => {
+      try {
+        if (mine !== playToken) {
+          next.remove();
+          return;
+        }
+        const waited = Date.now() - startedAt;
+        if (!next.isLoaded && waited < 1500) {
+          setTimeout(attempt, 12);
+          return;
+        }
+        const old = player;
+        player = next;
+        try {
+          old?.remove();
+        } catch {
+          // Already gone.
+        }
+        if (waited > 40) next.seekTo(waited / 1000).catch(() => {}).finally(() => mine === playToken && next.play());
+        else next.play();
+      } catch {
+        // Sound is a nicety; never break a spin over it.
+      }
+    };
+    attempt();
   } catch {
     // Sound is a nicety; never break a spin over it.
   }
@@ -172,9 +198,9 @@ export function startSpinSound(runs: { rows: number; durationMs: number }[], ove
     for (let k = 1; k <= run.rows; k += 1) {
       // The wheel eases out, so rows pass further and further apart.
       const at = d * (1 - Math.sqrt(1 - (k - 0.5) / (run.rows + overshoot)));
-      if (prev >= 0 && at - prev < 0.022) continue; // too close together to hear as separate clicks
+      if (prev >= 0 && at - prev < 0.04) continue; // too close together to hear as separate clicks
       prev = at;
-      hits.push({ at, sound: ticks[Math.floor(Math.random() * ticks.length)] as Float32Array, gain });
+      hits.push({ at, sound: ticks[index % ticks.length] as Float32Array, gain });
     }
     const end = d + settleMs / 1000;
     if (end > lastEnd) {
@@ -205,6 +231,7 @@ export function warmUpSounds() {
 
 /** Silences everything (leaving the screen, turning sound off mid-spin, a spin cut short). */
 export function stopAllSounds() {
+  playToken += 1;
   try {
     player?.pause();
   } catch {
