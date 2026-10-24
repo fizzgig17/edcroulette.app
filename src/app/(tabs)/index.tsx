@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
@@ -33,10 +34,12 @@ export default function SpinScreen() {
   const [open, setOpen] = useState<GearItem | null>(null);
   // Two blocks across in portrait, three sideways.
   const cols = landscape ? 3 : 2;
-  const blockWidth = (Math.min(width, MaxContentWidth) - Spacing.three * 2 - Spacing.two * (cols - 1)) / cols;
+  const insets = useSafeAreaInsets();
+  const room = landscape ? width - Math.max(insets.left, 0) - Math.max(insets.right, 0) : Math.min(width, MaxContentWidth);
+  const blockWidth = Math.floor((room - Spacing.three * 2 - Spacing.two * (cols - 1)) / cols);
 
   return (
-    <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal}>
+    <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal} fullWidth={landscape}>
       {landscape && !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>

@@ -28,10 +28,12 @@ type ScreenProps = {
   topSignal?: number;
   /** Set false to hold the page still (while something on it is being dragged). */
   scrollEnabled?: boolean;
+  /** Uses the whole width of the screen instead of a centered column (the Spin screen sideways). */
+  fullWidth?: boolean;
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true, fullWidth }: ScreenProps) {
   const insets = useSafeAreaInsets();
   const scroll = useRef<ScrollView>(null);
   useEffect(() => {
@@ -44,7 +46,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
         <ScrollView
           ref={scroll}
           scrollEnabled={scrollEnabled}
-          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 120 }]}
+          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, fullWidth && { maxWidth: undefined, paddingLeft: Math.max(insets.left, 0) + Spacing.three, paddingRight: Math.max(insets.right, 0) + Spacing.three }, tab && { paddingBottom: insets.bottom + 120 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>

@@ -119,9 +119,9 @@ function ReelRow({
     return {
       opacity: interpolate(a, [0, 1, 1.7], [1, 0.5, 0], Extrapolation.CLAMP),
       transform: [
-        { perspective: 520 },
         { translateY: rel * rowHeight },
-        { rotateX: `${-rel * 24}deg` },
+        // Rows curve away by shrinking a little; true 3D tilt made the gold pointers flicker.
+        { scaleY: interpolate(a, [0, 1.5], [1, 0.8], Extrapolation.CLAMP) },
         { scale: interpolate(a, [0, 1], [1, 0.9], Extrapolation.CLAMP) },
       ],
     };
@@ -606,8 +606,8 @@ const styles = StyleSheet.create({
   bezel: { borderRadius: Radius.large, padding: 5 },
   bezelMetal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.large, overflow: 'hidden' },
   window: { borderRadius: Radius.medium, overflow: 'hidden' },
-  line: { position: 'absolute', left: 0, right: 0, height: 1.5, opacity: 0.9 },
-  pointer: { position: 'absolute', width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderTopColor: 'transparent', borderBottomColor: 'transparent' },
+  line: { position: 'absolute', zIndex: 3, left: 0, right: 0, height: 1.5, opacity: 0.9 },
+  pointer: { position: 'absolute', zIndex: 3, width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderTopColor: 'transparent', borderBottomColor: 'transparent' },
   pointerL: { left: 0, borderLeftWidth: 9 },
   pointerR: { right: 0, borderRightWidth: 9 },
   row: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', gap: Spacing.one, paddingHorizontal: 14 },
