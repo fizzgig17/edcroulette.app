@@ -11,6 +11,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { areaOf } from '@/lib/blur-items';
 import { hull } from '@/components/outlined-photo';
 import { decode } from '@/lib/jpeg';
+import { findObjects, type InstanceMask } from '@/lib/subject-mask';
 import { photoUri } from '@/lib/photos';
 import type { Identified } from '@/lib/api';
 
@@ -138,31 +139,86 @@ export function refineAreas(data: ArrayLike<number>, W: number, H: number, rough
       }
     }
     if (count < 12) return null;
-    // The item's left and right edge on every row, smoothed so a stray pixel doesn't spike the outline.
-    const rows: number[] = [];
-    const left: number[] = [];
-    const right: number[] = [];
-    for (let y = y0; y <= y1; y += 1) {
-      let lo = -1;
-      let hi = -1;
-      for (let x = x0; x <= x1; x += 1) if (seen[y * W + x]) { if (lo < 0) lo = x; hi = x; }
-      if (lo >= 0) { rows.push(y); left.push(lo); right.push(hi); }
-    }
-    if (rows.length < 6) return null;
-    const med = (arr: number[], i: number) => {
-      const w = arr.slice(Math.max(0, i - 3), Math.min(arr.length, i + 4)).sort((a, b) => a - b);
-      return w[Math.floor(w.length / 2)]!;
-    };
-    const L = left.map((_, i) => med(left, i) - 1.5); // a little over, for the erosion
-    const R = right.map((_, i) => med(right, i) + 2.5);
-    const poly2: Pt[] = [];
-    for (let i = 0; i < rows.length; i += 1) poly2.push([L[i]!, rows[i]!]);
-    for (let i = rows.length - 1; i >= 0; i -= 1) poly2.push([R[i]!, rows[i]! + 1]);
+    const poly2 = rowPolygon((x, y) => !!seen[y * W + x], x0, x1, y0, y1, 1.5, 2.5);
+    if (!poly2) return null;
     // The hull of the smoothed edges: tight, and not thrown off by a patch the colours got wrong.
     const simple = simplify(hull(poly2), 0.8);
     if (simple.length < 4) return null;
     const ratio = area(simple) / area(poly);
     if (ratio < 0.55 || ratio > 1.45) return null;
+    return simple.map(([x, y]) => [Math.min(1, Math.max(0, x / W)), Math.min(1, Math.max(0, y / H))] as Pt);
+  });
+}
+
+/** An item's left and right edge on every row, smoothed so a stray pixel doesn't spike the outline. */
+function rowPolygon(has: (x: number, y: number) => boolean, x0: number, x1: number, y0: number, y1: number, padL: number, padR: number): Pt[] | null {
+  const rows: number[] = [];
+  const left: number[] = [];
+  const right: number[] = [];
+  for (let y = y0; y <= y1; y += 1) {
+    let lo = -1;
+    let hi = -1;
+    for (let x = x0; x <= x1; x += 1) if (has(x, y)) { if (lo < 0) lo = x; hi = x; }
+    if (lo >= 0) { rows.push(y); left.push(lo); right.push(hi); }
+  }
+  if (rows.length < 6) return null;
+  const med = (arr: number[], i: number) => {
+    const w = arr.slice(Math.max(0, i - 3), Math.min(arr.length, i + 4)).sort((a, b) => a - b);
+    return w[Math.floor(w.length / 2)]!;
+  };
+  const out: Pt[] = [];
+  for (let i = 0; i < rows.length; i += 1) out.push([med(left, i) - padL, rows[i]!]);
+  for (let i = rows.length - 1; i >= 0; i -= 1) out.push([med(right, i) + padR, rows[i]! + 1]);
+  return out;
+}
+
+/** Outlines from the phone's object finder: each item is the labelled object that sits in its rough outline. */
+export function outlinesFromObjects(mask: InstanceMask, rough: (Pt[] | null)[]): (Pt[] | null)[] {
+  const { width: W, height: H, labels } = mask;
+  const polys = rough.map((r) => (r ? r.map(([x, y]) => [x * W, y * H] as Pt) : null));
+  const cores = polys.map((p) => (p ? scaled(p, 0.7) : null));
+  return polys.map((poly, idx) => {
+    const core = cores[idx];
+    if (!poly || !core) return null;
+    const box = scaled(poly, 1.6);
+    const bx0 = Math.max(0, Math.floor(Math.min(...box.map((p) => p[0]))));
+    const bx1 = Math.min(W - 1, Math.ceil(Math.max(...box.map((p) => p[0]))));
+    const by0 = Math.max(0, Math.floor(Math.min(...box.map((p) => p[1]))));
+    const by1 = Math.min(H - 1, Math.ceil(Math.max(...box.map((p) => p[1]))));
+    // Which object fills this item's middle?
+    const votes = new Map<number, number>();
+    let inCore = 0;
+    for (let y = by0; y <= by1; y += 1) {
+      for (let x = bx0; x <= bx1; x += 1) {
+        if (!inside(core, x + 0.5, y + 0.5)) continue;
+        inCore += 1;
+        const l = labels[y * W + x]!;
+        if (l) votes.set(l, (votes.get(l) ?? 0) + 1);
+      }
+    }
+    let label = 0;
+    let best = 0;
+    for (const [l, n] of votes) if (n > best) { best = n; label = l; }
+    if (!label || best < inCore * 0.35) return null;
+    // An object that also fills another item's middle is two items found as one: leave it.
+    for (let j = 0; j < cores.length; j += 1) {
+      const c = cores[j];
+      if (j === idx || !c) continue;
+      let shared = 0;
+      for (let y = by0; y <= by1; y += 1) for (let x = bx0; x <= bx1; x += 1) if (labels[y * W + x] === label && inside(c, x + 0.5, y + 0.5)) shared += 1;
+      if (shared > 40) return null;
+    }
+    // The object may only reach so far beyond the rough outline.
+    const wide = scaled(poly, 1.5);
+    let count = 0;
+    const has = (x: number, y: number) => labels[y * W + x] === label && inside(wide, x + 0.5, y + 0.5);
+    for (let y = by0; y <= by1; y += 1) for (let x = bx0; x <= bx1; x += 1) if (has(x, y)) count += 1;
+    const poly2 = rowPolygon(has, bx0, bx1, by0, by1, 0.5, 1.5);
+    if (!poly2) return null;
+    const simple = simplify(poly2, 0.9);
+    void count;
+    const ratio = area(simple) / area(poly);
+    if (simple.length < 4 || ratio < 0.4 || ratio > 1.8) return null;
     return simple.map(([x, y]) => [Math.min(1, Math.max(0, x / W)), Math.min(1, Math.max(0, y / H))] as Pt);
   });
 }
@@ -206,7 +262,12 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
     // Cleaned up with the cache.
   }
   const img = decode(bytes, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 128 });
-  const refined = refineAreas(img.data, img.width, img.height, items.map((it) => areaOf(it)));
+  const rough = items.map((it) => areaOf(it));
+  const colour = refineAreas(img.data, img.width, img.height, rough);
+  // The phone's own object finder, where there is one (iPhone): exact, so it wins.
+  const objects = await findObjects(uri);
+  const exact = objects ? outlinesFromObjects(objects, rough) : [];
+  const refined = colour.map((c, i) => exact[i] ?? c);
   return items.map((it, i) => {
     const r = refined[i];
     if (!r) return it;
