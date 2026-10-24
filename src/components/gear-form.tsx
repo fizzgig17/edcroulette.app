@@ -1,6 +1,7 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Asset } from 'expo-asset';
+import { Buffer } from 'buffer';
+import { File, Paths } from 'expo-file-system';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
@@ -20,7 +21,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { identifyPhoto, type Identified } from '@/lib/api';
-import { DEMO_ITEMS, DEMO_PHOTO, DEMO_SIZE } from '@/content/demo-photo';
+import { DEMO_ITEMS, DEMO_SIZE } from '@/content/demo-photo';
+import { DEMO_PHOTO_BASE64 } from '@/content/demo-photo-data';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
 import { ItemPicker } from '@/components/item-picker';
@@ -207,10 +209,12 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   async function startDemo() {
     setPreparing(true);
     try {
-      // Android release builds name bundled images by resource, which can't be opened as a file: copy it out first.
-      const asset = Asset.fromModule(DEMO_PHOTO);
-      await asset.downloadAsync();
-      const stored = await savePhoto({ uri: asset.localUri ?? asset.uri, ...DEMO_SIZE });
+      // Android release builds name bundled images by resource, which can't be opened as a file,
+      // so the demo photo is written out as a real file first.
+      const file = new File(Paths.cache, 'demo-photo.jpg');
+      if (!file.exists) file.create();
+      file.write(new Uint8Array(Buffer.from(DEMO_PHOTO_BASE64, 'base64')));
+      const stored = await savePhoto({ uri: file.uri, ...DEMO_SIZE });
       setNewPhotos((p) => [...p, stored]);
       set('imageUri', stored);
       setIsDemo(true);
