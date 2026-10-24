@@ -16,8 +16,8 @@ import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } fr
 import { DragReorder } from '@/components/drag-reorder';
 import { GearThumb } from '@/components/gear-thumb';
 import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { metalById } from '@/constants/metals';
 import { lift, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
@@ -25,7 +25,7 @@ import { pickCoordinated } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { select, success } from '@/lib/haptics';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
-import { useSpinStyle } from '@/lib/preferences';
+import { useMetalId, useSpinStyle } from '@/lib/preferences';
 import { landSound, SLOW_MS, slowSound, startSpinSound, stopAllSounds, stopSound, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
@@ -88,6 +88,7 @@ function Reel({
   onToggleLock: (slotIndex: number, item: GearItem | null) => void;
 }) {
   const theme = useTheme();
+  const metal = metalById(useMetalId());
   // The pieces and their scroll position live in one state value, so a new strip
   // always arrives with a fresh position (resetting them separately could leave
   // the window scrolled past a short strip, which showed as a blank wheel).
@@ -154,7 +155,7 @@ function Reel({
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.center}>
         {slot.category}
       </ThemedText>
-      <LinearGradient colors={isLocked ? [theme.brassHi, theme.brassLo] : [theme.metalHi, theme.metalLo]} style={[styles.bezel, lift(theme.shadow, 3)]}>
+      <LinearGradient colors={isLocked ? [theme.brassHi, theme.brassLo] : [metal.hi, metal.lo, metal.hi]} style={[styles.bezel, lift(theme.shadow, 3)]}>
         <View
           style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel }]}
           accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
@@ -186,10 +187,10 @@ function Reel({
             colors={['#FFFFFF00', '#FFFFFF14', '#FFFFFF00']}
             style={[styles.shade, { top: rowHeight, height: rowHeight }]}
           />
-          <View pointerEvents="none" style={[styles.line, { top: rowHeight, backgroundColor: theme.brassHi }]} />
-          <View pointerEvents="none" style={[styles.line, { top: rowHeight * 2 - 1.5, backgroundColor: theme.brassHi }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: rowHeight * 1.5 - 7, borderLeftColor: theme.brassHi }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: rowHeight * 1.5 - 7, borderRightColor: theme.brassHi }]} />
+          <View pointerEvents="none" style={[styles.line, { top: rowHeight, backgroundColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.line, { top: rowHeight * 2 - 1.5, backgroundColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: rowHeight * 1.5 - 7, borderLeftColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: rowHeight * 1.5 - 7, borderRightColor: metal.line }]} />
           {/* Glass edge: light from the top left. */}
           <LinearGradient pointerEvents="none" colors={['#FFFFFF26', '#FFFFFF00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium }]} />
         </View>
@@ -249,7 +250,16 @@ function WheelOrder({ slots, visibleCount, disabled }: { slots: SlotConfig[]; vi
 // ---------------------------------------------------------------------------
 // The wheels
 // ---------------------------------------------------------------------------
-export function RouletteSpinner() {
+export interface SpinControl {
+  label: string;
+  caption?: string;
+  icon: 'spin' | 'sparkle';
+  busy: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}
+
+export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => void }) {
   const theme = useTheme();
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
@@ -412,6 +422,14 @@ export function RouletteSpinner() {
   const empty = items.length === 0;
   const busy = phase === 'spinning' || phase === 'choosing';
 
+  const label = phase === 'choosing' ? 'Choosing…' : phase === 'spinning' ? 'Spinning' : 'Spin';
+  const caption = allLocked ? 'All wheels locked' : spinStyle === 'coordinated' ? 'Picks a matching set' : undefined;
+  const spinRef = useRef(spin);
+  spinRef.current = spin;
+  useEffect(() => {
+    onControl({ label, caption, icon: spinStyle === 'coordinated' ? 'sparkle' : 'spin', busy, disabled: empty || busy, onPress: () => void spinRef.current() });
+  }, [label, caption, spinStyle, busy, empty, onControl]);
+
   return (
     <View style={styles.machine}>
       {slots.length > 1 ? <WheelOrder slots={slots} visibleCount={visibleCount} disabled={busy} /> : null}
@@ -446,13 +464,6 @@ export function RouletteSpinner() {
         })}
       </View>
 
-      <Button
-        big
-        icon={spinStyle === 'coordinated' ? 'sparkle' : 'spin'}
-        label={phase === 'choosing' ? 'Choosing a set…' : phase === 'spinning' ? 'Spinning…' : allLocked ? 'All wheels locked' : spinStyle === 'coordinated' ? 'Spin a matching set' : 'Spin'}
-        onPress={() => void spin()}
-        disabled={empty || busy}
-      />
       {why && phase === 'done' ? (
         <View style={[styles.why, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
           <Icon name="sparkle" size={14} color={theme.accent} />

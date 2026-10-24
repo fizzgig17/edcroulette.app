@@ -32,7 +32,7 @@ export function Screen({ title, subtitle, children, showTitle = true, action, re
       {/* The dev banner already covers the status-bar area. */}
       <SafeAreaView style={styles.flex} edges={showTitle && !IS_DEV_BUILD ? ['top'] : []}>
         <ScrollView
-          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 110 }]}
+          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 110 + (footer ? 90 : 0) }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>

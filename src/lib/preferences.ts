@@ -66,3 +66,8 @@ export function deviceId(): string {
   }
   return id;
 }
+
+// --- Metal for the Spin button and wheel trim ------------------------------------
+export const getMetalId = (): string => read('edc.metal') ?? 'damascus';
+export const setMetalId = (id: string) => write('edc.metal', id);
+export const useMetalId = () => useSyncExternalStore(subscribe, getMetalId, () => 'damascus');

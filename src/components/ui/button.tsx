@@ -48,7 +48,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         big && styles.big,
-        { backgroundColor: variant === 'primary' ? 'transparent' : bg },
+        { backgroundColor: bg },
         variant === 'primary' && !off && lift(theme.shadow, 2),
         variant === 'danger' && { borderWidth: 1, borderColor: theme.danger },
         off && styles.off,

@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
+import { Image } from 'expo-image';
 import { Alert, Modal, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { DragReorder } from '@/components/drag-reorder';
@@ -17,7 +18,8 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear, type SlotDraft } from '@/lib/gear';
 import { select } from '@/lib/haptics';
 import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
-import { setAiConsent, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
+import { METALS, metalById } from '@/constants/metals';
+import { setAiConsent, setMetalId, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 import { CATEGORIES } from '@/types/models';
@@ -176,6 +178,7 @@ export default function SettingsScreen() {
   const pref = useThemePref();
   const spinStyle = useSpinStyle();
   const sound = useSoundOn();
+  const metal = metalById(useMetalId());
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
   const [aiTest, setAiTest] = useState<'idle' | 'running' | 'ok' | string>('idle');
@@ -230,6 +233,21 @@ export default function SettingsScreen() {
             if (v) landSound();
           }}
         />
+      </Card>
+
+      <ThemedText type="heading">Metal</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">The metal for the Spin button and the trim around the wheels.</ThemedText>
+        <View style={styles.metals}>
+          {METALS.map((m) => (
+            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
+              <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === metal.id ? theme.accent : theme.border, borderWidth: m.id === metal.id ? 3 : 1 }]} />
+              <ThemedText type="small" style={m.id === metal.id ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
+                {m.label}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
       </Card>
 
       <ThemedText type="heading">AI help</ThemedText>
@@ -295,6 +313,9 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
+  metal: { width: '21%', alignItems: 'center', gap: 4 },
+  swatch: { width: 56, height: 56, borderRadius: 28 },
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   pad: { padding: Spacing.three, gap: Spacing.two },

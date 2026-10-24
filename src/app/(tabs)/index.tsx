@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
-import { RouletteSpinner } from '@/components/roulette-spinner';
+import { MetalButton } from '@/components/metal-button';
+import { RouletteSpinner, type SpinControl } from '@/components/roulette-spinner';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -11,6 +13,7 @@ import { Icon } from '@/components/ui/icon';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useGear } from '@/lib/gear';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function when(ts: number): string {
   const d = new Date(ts);
@@ -26,9 +29,20 @@ export default function SpinScreen() {
   const { width, height } = useWindowDimensions();
   // Portrait is just the wheels: adding gear happens in the Collection tab.
   const landscape = width > height;
+  const insets = useSafeAreaInsets();
+  const [control, setControl] = useState<SpinControl | null>(null);
 
   return (
-    <Screen title="EDC Roulette" tab>
+    <Screen
+      title="EDC Roulette"
+      tab
+      footer={
+        control ? (
+          <View pointerEvents="box-none" style={[styles.fab, landscape ? { right: 24, bottom: insets.bottom + 84 } : { alignSelf: 'center', bottom: insets.bottom + 84 }]}>
+            <MetalButton label={control.label} caption={control.caption} icon={control.icon} busy={control.busy} disabled={control.disabled} onPress={control.onPress} size={landscape ? 88 : 104} />
+          </View>
+        ) : null
+      }>
       {landscape && !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>
@@ -39,7 +53,7 @@ export default function SpinScreen() {
         </Card>
       ) : null}
 
-      <RouletteSpinner />
+      <RouletteSpinner onControl={setControl} />
 
       {lastSpin ? (
         <View style={styles.result}>
@@ -92,6 +106,7 @@ export default function SpinScreen() {
 }
 
 const styles = StyleSheet.create({
+  fab: { position: 'absolute' },
   result: { gap: Spacing.two },
   resultHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   pick: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
