@@ -18,7 +18,8 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { identifyPhoto, type Identified } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
-import { choosePhoto, deletePhoto, photoBase64, type PhotoSource } from '@/lib/photos';
+import { PhotoCropper } from '@/components/photo-cropper';
+import { deletePhoto, photoBase64, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
 import { CATEGORIES, FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
@@ -37,6 +38,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   const [weightText, setWeightText] = useState(item?.weightGrams != null ? String(item.weightGrams) : '');
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
   // replaces what they show when the form is filled in from the photo.
@@ -51,9 +53,16 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   // The name follows "Brand Model" until the person types their own.
   const nameIsAuto = useRef(!item || !item.name || item.name === autoName(item.brand, item.model));
 
-  const set = <K extends keyof GearDraft>(k: K, v: GearDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  // Fields that photo identify filled in and the person hasn't touched since: a new photo
+  // may replace them, but never anything the person typed.
+  const autoFields = useRef(new Set<keyof GearDraft>());
+  const set = <K extends keyof GearDraft>(k: K, v: GearDraft[K]) => {
+    autoFields.current.delete(k);
+    setDraft((d) => ({ ...d, [k]: v }));
+  };
 
   function setBrandOrModel(patch: Partial<Pick<GearDraft, 'brand' | 'model'>>) {
+    for (const k of Object.keys(patch)) autoFields.current.delete(k as keyof GearDraft);
     const next = { ...draftRef.current, ...patch };
     const name = nameIsAuto.current ? autoName(next.brand, next.model) : next.name;
     if (nameIsAuto.current && name !== draftRef.current.name) setFormKey((k) => k + 1);
@@ -94,15 +103,23 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     // A stray pair of quote marks means "nothing read", not text.
     const text = (v: string | null | undefined) => (v ?? '').replace(/["\u201C\u201D`]/g, '').trim() || null;
     const brandText = text(r.brand) ?? text(r.brandRead);
+    const auto = autoFields.current;
+    // Take the photo's answer where the field is empty or came from an earlier photo.
+    const fill = <K extends 'brand' | 'model' | 'material' | 'finish' | 'primaryColor' | 'notes'>(k: K, v: GearDraft[K]): GearDraft[K] => {
+      if (d[k] && !auto.has(k)) return d[k];
+      if (v) auto.add(k);
+      else auto.delete(k);
+      return v;
+    };
     const next: GearDraft = {
       ...d,
       category: (CATEGORIES as readonly string[]).includes(r.category) ? r.category : d.category,
-      brand: d.brand || brandText || null,
-      model: d.model || text(r.model) || null,
-      material: d.material ?? r.material,
-      finish: d.finish ?? r.finish,
-      primaryColor: d.primaryColor ?? r.color,
-      notes: d.notes ?? r.notes,
+      brand: fill('brand', brandText),
+      model: fill('model', text(r.model)),
+      material: fill('material', r.material),
+      finish: fill('finish', r.finish),
+      primaryColor: fill('primaryColor', r.color),
+      notes: fill('notes', r.notes),
     };
     if (nameIsAuto.current || !d.name.trim()) {
       nameIsAuto.current = true;
@@ -114,16 +131,26 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     setIdentify({ state: 'done', summary: bits.join(' · '), unsure: r.confidence === 'low' || (!text(r.brand) && !!text(r.brandRead)) });
   }
 
+  // Pick or take a photo, let the person frame it, then save it and identify.
   async function getPhoto(source: PhotoSource) {
     try {
-      const stored = await choosePhoto(source, () => setPreparing(true));
-      if (stored) {
-        setNewPhotos((p) => [...p, stored]);
-        set('imageUri', stored);
-        void runIdentify(stored);
-      }
+      const picked = await pickPhoto(source);
+      if (picked) setCropping(picked);
     } catch (e) {
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not get the photo.');
+    }
+  }
+
+  async function usePhoto(photo: PickedPhoto, crop: PhotoCrop) {
+    setCropping(null);
+    setPreparing(true);
+    try {
+      const stored = await savePhoto(photo, crop);
+      setNewPhotos((p) => [...p, stored]);
+      set('imageUri', stored);
+      void runIdentify(stored);
+    } catch (e) {
+      Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
     } finally {
       setPreparing(false);
     }
@@ -188,6 +215,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
+      <PhotoCropper photo={cropping} onCancel={() => setCropping(null)} onDone={(p, c) => void usePhoto(p, c)} />
 
       <View style={styles.photo}>
         <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri }} size={132} />

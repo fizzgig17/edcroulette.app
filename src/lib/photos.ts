@@ -32,25 +32,49 @@ function photosDir(): Directory {
 
 export type PhotoSource = 'camera' | 'library';
 
-/** Lets the person pick or take a photo; returns the stored name ("gear-photos/x.jpg"), or null if they cancelled. */
-export async function choosePhoto(source: PhotoSource, onPicked?: () => void): Promise<string | null> {
-  // The person frames the item in a square crop first, so the thumbnail shows what they want.
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
+export interface PickedPhoto {
+  uri: string;
+  width: number;
+  height: number;
+}
+
+/** A square cut from a picked photo, in that photo's own pixels. */
+export interface PhotoCrop {
+  originX: number;
+  originY: number;
+  size: number;
+}
+
+/** Lets the person pick or take a photo; returns it as picked (not yet saved or cropped), or null if they cancelled. */
+export async function pickPhoto(source: PhotoSource): Promise<PickedPhoto | null> {
+  // The framing is done in the app's own crop screen (PhotoCropper); iOS's built-in
+  // editor doesn't crop when picking from the library.
+  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: false, quality: 1 };
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) throw new Error('Camera access is off. You can turn it on in Settings.');
   }
   const result = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-  if (result.canceled || !result.assets?.[0]) return null;
-  onPicked?.(); // the picker is closed; shrinking and saving still takes a moment
-  return savePhoto(result.assets[0].uri, result.assets[0].width, result.assets[0].height);
+  const a = result.assets?.[0];
+  if (result.canceled || !a) return null;
+  return { uri: a.uri, width: a.width, height: a.height };
 }
 
-async function savePhoto(uri: string, width: number, height: number): Promise<string> {
-  const ctx = ImageManipulator.manipulate(uri);
-  if (Math.max(width, height) > MAX_EDGE) {
-    ctx.resize(width >= height ? { width: MAX_EDGE } : { height: MAX_EDGE });
+/** Crops (if asked), shrinks and saves a picked photo; returns the stored name ("gear-photos/x.jpg"). */
+export async function savePhoto(photo: PickedPhoto, crop?: PhotoCrop): Promise<string> {
+  const ctx = ImageManipulator.manipulate(photo.uri);
+  let edge = Math.max(photo.width, photo.height);
+  if (crop) {
+    const size = Math.max(1, Math.round(Math.min(crop.size, photo.width, photo.height)));
+    ctx.crop({
+      originX: Math.max(0, Math.min(photo.width - size, Math.round(crop.originX))),
+      originY: Math.max(0, Math.min(photo.height - size, Math.round(crop.originY))),
+      width: size,
+      height: size,
+    });
+    edge = size;
   }
+  if (edge > MAX_EDGE) ctx.resize(crop || photo.width >= photo.height ? { width: MAX_EDGE } : { height: MAX_EDGE });
   const image = await ctx.renderAsync();
   const out = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
   const name = `${Crypto.randomUUID()}.jpg`;
