@@ -92,7 +92,8 @@ function Reel({
   // The pieces and their scroll position live in one state value, so a new strip
   // always arrives with a fresh position (resetting them separately could leave
   // the window scrolled past a short strip, which showed as a blank wheel).
-  const [reel, setReel] = useState<{ strip: (GearItem | null)[]; y: Animated.Value; go: number }>(() => ({
+  const [reel, setReel] = useState<{ id: number; strip: (GearItem | null)[]; y: Animated.Value; go: number }>(() => ({
+    id: 0,
     strip: idleStrip(candidates, shown),
     y: new Animated.Value(0),
     go: 0,
@@ -102,12 +103,21 @@ function Reel({
   const animating = useRef(false);
   const stopAtRef = useRef(0);
 
+  // What the window is showing, so a refresh that changes nothing (coming back to
+  // the app, say) never rebuilds the wheel.
+  const candSig = candidates.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}`).join('|');
+  const centerRef = useRef<string | null>(shown?.id ?? null);
+  const sigRef = useRef(candSig);
+
   // Follow collection and lock changes while standing still.
   useEffect(() => {
-    if (!animating.current && lastToken.current === spinToken) {
-      setReel({ strip: idleStrip(candidates, shown), y: new Animated.Value(0), go: 0 });
-    }
-  }, [candidates, shown, spinToken]);
+    if (animating.current || lastToken.current !== spinToken) return;
+    if (centerRef.current === (shown?.id ?? null) && sigRef.current === candSig) return;
+    centerRef.current = shown?.id ?? null;
+    sigRef.current = candSig;
+    setReel((r) => ({ id: r.id + 1, strip: idleStrip(candidates, shown), y: new Animated.Value(0), go: 0 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candSig, shown?.id, spinToken]);
 
   // Run the turn once the new strip is on screen.
   useEffect(() => {
@@ -115,7 +125,7 @@ function Reel({
     const anim = Animated.timing(reel.y, {
       toValue: -(stopAtRef.current - 1) * rowHeight,
       duration: durationMs,
-      easing: Easing.out(Easing.cubic),
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     });
     anim.start(({ finished }) => {
@@ -136,11 +146,14 @@ function Reel({
 
     const s: (GearItem | null)[] = idleStrip(candidates, shown);
     for (let i = 0; i < LOOPS; i += 1) s.push(...shuffle(candidates));
-    s.push(target, neighbour(candidates, target, 1));
+    // The last three rows are exactly what the wheel shows at rest, so landing never shifts anything.
+    s.push(neighbour(candidates, target, -1), target, neighbour(candidates, target, 1));
     stopAtRef.current = s.length - 2;
+    centerRef.current = target.id;
+    sigRef.current = candSig;
     animating.current = true;
     // The strip stays where it stops; the next change swaps in a fresh one.
-    setReel((r) => ({ strip: s, y: new Animated.Value(0), go: r.go + 1 }));
+    setReel((r) => ({ id: r.id + 1, strip: s, y: new Animated.Value(0), go: r.go + 1 }));
     return undefined;
     // Only a new token starts a spin; everything else is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,7 +177,7 @@ function Reel({
         <View
           style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel }]}
           accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
-          <Animated.View style={{ transform: [{ translateY: y }] }}>
+          <Animated.View key={reel.id} style={{ transform: [{ translateY: y }] }}>
             {strip.map((item, i) => (
               <View key={i} style={[styles.row, { height: rowHeight }, wide && styles.rowWide, strip.length <= 3 && i !== 1 && styles.dim]}>
                 {item ? (
