@@ -44,9 +44,7 @@ export default function SpinScreen() {
   const landscape = width > height;
   const { setControl, topSignal } = useSpinDock();
   const [open, setOpen] = useState<GearItem | null>(null);
-  return (
-    <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal} fullWidth={landscape}>
-      {landscape && !loading && items.length === 0 ? (
+  const emptyCard = !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>
           <ThemedText themeColor="textSecondary">
@@ -55,9 +53,13 @@ export default function SpinScreen() {
           <Button label="Add your first piece" icon="add" onPress={() => router.push('/gear/new')} />
           <Button label="Or try it with sample gear" icon="sparkle" variant="secondary" onPress={() => void addSamples()} />
         </Card>
-      ) : null}
+      ) : null;
+  return (
+    <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal} fullWidth={landscape}>
 
+      {landscape ? emptyCard : null}
       <RouletteSpinner onControl={setControl} />
+      {landscape ? null : emptyCard}
 
       {lastSpin ? (
         <View style={styles.result}>
