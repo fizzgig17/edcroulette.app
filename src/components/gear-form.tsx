@@ -131,14 +131,16 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size },
       );
       setNewPhotos((p) => [...p, stored]);
-      set('imageUri', stored);
-      // The other items in the photo are blurred (the background stays sharp).
+      // The other items in the photo are blurred (the background stays sharp). This happens
+      // before the photo is shown, or the picture already on screen would stay as it was.
       try {
         const others = c.items.map((o, i) => (i === index ? null : areaOf(o))).filter((a): a is [number, number][] => !!a);
         await blurAreasInPhoto(stored, others, areaOf(it), dims, { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size });
-      } catch {
-        // The photo is still fine without it.
+      } catch (e) {
+        // The photo is still fine without it. Dev builds say why.
+        if (IS_DEV_BUILD) Alert.alert('Blur', e instanceof Error ? e.message : String(e));
       }
+      set('imageUri', stored);
     } catch {
       // Keep the whole photo; the details are already filled in.
     } finally {
