@@ -1,102 +1,209 @@
 /**
- * Spin sounds. Each row passing a wheel's payline plays a soft detent click
- * (six slightly different pitches, so fast turning doesn't repeat one sample),
- * each wheel settles with a clunk, and the last one lands a little deeper with
- * a faint ring. Made by scripts/make-sounds.py. Off with the Settings switch;
- * follows the phone's silent switch, and mixes with music or podcasts.
+ * Spin sounds. A spin's whole soundtrack (a soft detent click for every row
+ * that passes a wheel's payline, a clunk as each wheel settles, a deeper one
+ * with a faint ring for the last) is mixed into one short audio clip when the
+ * spin starts and played with a single call. Playing a sound per click
+ * stalled the screen, which showed as jerking while the wheels slowed down.
+ * Off with the Settings switch; follows the phone's silent switch, and mixes
+ * with music or podcasts.
  */
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 import { getSoundOn } from '@/lib/preferences';
 
-const TICKS = [
-  require('../../assets/sounds/tick1.wav'),
-  require('../../assets/sounds/tick2.wav'),
-  require('../../assets/sounds/tick3.wav'),
-  require('../../assets/sounds/tick4.wav'),
-  require('../../assets/sounds/tick5.wav'),
-  require('../../assets/sounds/tick6.wav'),
-];
-const CLUNK = require('../../assets/sounds/clunk.wav');
-const LAND = require('../../assets/sounds/land.wav');
+const SR = 22050;
+
+// --- The sounds themselves, synthesized once ---------------------------------
+function lowpass(x: Float32Array, cutoff: number): Float32Array {
+  const a = Math.exp((-2 * Math.PI * cutoff) / SR);
+  const y = new Float32Array(x.length);
+  let acc = 0;
+  for (let i = 0; i < x.length; i += 1) {
+    acc = (1 - a) * (x[i] as number) + a * acc;
+    y[i] = acc;
+  }
+  return y;
+}
+
+function finish(x: Float32Array, cutoff: number, fadeMs = 1.5): Float32Array {
+  const y = lowpass(x, cutoff);
+  const n = Math.floor((SR * fadeMs) / 1000);
+  for (let i = 0; i < n; i += 1) {
+    (y[i] as number) *= i / n;
+    (y[y.length - 1 - i] as number) *= i / n;
+  }
+  return y;
+}
+
+function makeTick(pitch: number): Float32Array {
+  const n = Math.floor(SR * 0.045);
+  const noise = new Float32Array(n);
+  const body = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const t = i / SR;
+    noise[i] = (Math.random() * 2 - 1) * Math.exp(-t * 900);
+    body[i] =
+      Math.sin(2 * Math.PI * 1250 * pitch * t) * Math.exp(-t * 230) * 0.7 +
+      Math.sin(2 * Math.PI * 2310 * pitch * t) * Math.exp(-t * 330) * 0.32 +
+      Math.sin(2 * Math.PI * 410 * pitch * t) * Math.exp(-t * 120) * 0.5;
+  }
+  const low = lowpass(noise, 1400); // keep the top of the noise, lose the rumble
+  const x = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) x[i] = ((noise[i] as number) - (low[i] as number)) * 0.55 + (body[i] as number);
+  return finish(x, 6500);
+}
+
+function makeClunk(depth: number, ring: number, seconds: number): Float32Array {
+  const n = Math.floor(SR * seconds);
+  const x = new Float32Array(n);
+  const knock = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) knock[i] = (Math.random() * 2 - 1) * Math.exp(-(i / SR) * 500);
+  const k1 = lowpass(knock, 2500);
+  const k2 = lowpass(knock, 300);
+  let phase = 0;
+  for (let i = 0; i < n; i += 1) {
+    const t = i / SR;
+    phase += (2 * Math.PI * 150 * depth * (1 + 0.6 * Math.exp(-t * 40))) / SR; // pitch drops as it lands
+    let v = Math.sin(phase) * Math.exp(-t * (22 / depth)) * 0.9 + ((k1[i] as number) - (k2[i] as number)) * 0.5;
+    if (ring) {
+      v += ring * 0.3 * (Math.sin(2 * Math.PI * 1480 * t) * Math.exp(-t * 14) + 0.5 * Math.sin(2 * Math.PI * 2750 * t) * Math.exp(-t * 20) + 0.25 * Math.sin(2 * Math.PI * 4120 * t) * Math.exp(-t * 30));
+    }
+    x[i] = v;
+  }
+  return finish(x, 7000, 2);
+}
+
+let kit: { ticks: Float32Array[]; clunk: Float32Array; land: Float32Array } | null = null;
+function getKit() {
+  if (!kit) {
+    kit = {
+      ticks: [0.84, 0.92, 1.0, 1.08, 1.17, 1.27].map(makeTick),
+      clunk: makeClunk(1, 0, 0.4),
+      land: makeClunk(0.8, 1, 0.65),
+    };
+  }
+  return kit;
+}
+
+// --- Mixing and playing ------------------------------------------------------
+type Hit = { at: number; sound: Float32Array; gain: number };
+
+function toWav(hits: Hit[]): Uint8Array {
+  const end = Math.max(...hits.map((h) => h.at + h.sound.length / SR));
+  const mix = new Float32Array(Math.ceil((end + 0.05) * SR));
+  for (const h of hits) {
+    const start = Math.floor(h.at * SR);
+    for (let i = 0; i < h.sound.length && start + i < mix.length; i += 1) (mix[start + i] as number) += (h.sound[i] as number) * h.gain;
+  }
+  const bytes = new Uint8Array(44 + mix.length * 2);
+  const v = new DataView(bytes.buffer);
+  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF');
+  v.setUint32(4, 36 + mix.length * 2, true);
+  str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, SR, true);
+  v.setUint32(28, SR * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, 'data');
+  v.setUint32(40, mix.length * 2, true);
+  for (let i = 0; i < mix.length; i += 1) v.setInt16(44 + i * 2, Math.round(Math.tanh((mix[i] as number) * 1.1) * 0.9 * 32767), true);
+  return bytes;
+}
 
 let ready = false;
-let tickPlayers: AudioPlayer[] = [];
-let clunk: AudioPlayer | null = null;
-let land: AudioPlayer | null = null;
-let nextTick = 0;
-let lastTickAt = 0;
+let player: AudioPlayer | null = null;
+let flip = 0;
 
-function setup() {
-  if (ready) return;
-  ready = true;
+function play(hits: Hit[]) {
+  if (!getSoundOn() || hits.length === 0) return;
   try {
-    setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
-    tickPlayers = TICKS.map((f) => {
-      const p = createAudioPlayer(f);
-      p.volume = 0.6;
-      return p;
-    });
-    clunk = createAudioPlayer(CLUNK);
-    clunk.volume = 0.85;
-    land = createAudioPlayer(LAND);
-    land.volume = 0.9;
+    if (!ready) {
+      ready = true;
+      setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
+    }
+    const bytes = toWav(hits);
+    let uri: string;
+    if (Platform.OS === 'web') {
+      uri = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
+    } else {
+      flip = (flip + 1) % 2; // alternate names so the player never reuses a cached clip
+      const file = new File(Paths.cache, `spin-sound-${flip}.wav`);
+      if (!file.exists) file.create();
+      file.write(bytes);
+      uri = file.uri;
+    }
+    try {
+      player?.remove();
+    } catch {
+      // Already gone.
+    }
+    player = createAudioPlayer({ uri });
+    player.volume = 0.9;
+    player.play();
   } catch {
     // Sound is a nicety; never break a spin over it.
   }
 }
 
-function fire(p: AudioPlayer | null | undefined, volume?: number) {
-  if (!p) return;
+/**
+ * Starts a spin's soundtrack. Each run is one wheel: how many rows it passes,
+ * how long it turns (the clip then adds `settleMs` for it to settle).
+ */
+export function startSpinSound(runs: { rows: number; durationMs: number }[], overshoot: number, settleMs: number) {
+  if (!getSoundOn() || runs.length === 0) return;
+  const { ticks, clunk, land } = getKit();
+  const hits: Hit[] = [];
+  const gain = 0.62 / Math.sqrt(runs.length);
+  let lastEnd = -1;
+  let lastIndex = 0;
+  runs.forEach((run, index) => {
+    const d = run.durationMs / 1000;
+    let prev = -1;
+    for (let k = 1; k <= run.rows; k += 1) {
+      // The wheel eases out, so rows pass further and further apart.
+      const at = d * (1 - Math.sqrt(1 - (k - 0.5) / (run.rows + overshoot)));
+      if (prev >= 0 && at - prev < 0.022) continue; // too close together to hear as separate clicks
+      prev = at;
+      hits.push({ at, sound: ticks[Math.floor(Math.random() * ticks.length)] as Float32Array, gain });
+    }
+    const end = d + settleMs / 1000;
+    if (end > lastEnd) {
+      lastEnd = end;
+      lastIndex = index;
+    }
+  });
+  runs.forEach((run, index) => {
+    const end = run.durationMs / 1000 + settleMs / 1000 - 0.05;
+    hits.push({ at: Math.max(0, end), sound: index === lastIndex ? land : clunk, gain: index === lastIndex ? 1 : 0.8 });
+  });
+  play(hits);
+}
+
+/** One deeper clunk with a faint ring (the Settings preview, and spins where nothing turns). */
+export function landSound() {
+  play([{ at: 0, sound: getKit().land, gain: 1 }]);
+}
+
+/** Builds the sounds ahead of the first spin. */
+export function warmUpSounds() {
   try {
-    if (volume !== undefined) p.volume = volume;
-    p.seekTo(0).catch(() => {});
-    p.play();
+    getKit();
   } catch {
-    // Already gone.
+    // Sound is a nicety.
   }
 }
 
-/** One detent click. Quick runs of clicks (three wheels at speed) are thinned and softened. */
-export function tickSound() {
-  if (!getSoundOn()) return;
-  setup();
-  const now = Date.now();
-  const gap = now - lastTickAt;
-  if (gap < 28) return;
-  lastTickAt = now;
-  const volume = gap < 55 ? 0.3 : gap < 100 ? 0.45 : 0.65;
-  // Hop around the pitches rather than walking up them.
-  nextTick = (nextTick + 1 + Math.floor(Math.random() * 4)) % tickPlayers.length;
-  fire(tickPlayers[nextTick], volume);
-}
-
-/** A wheel settling into place. */
-export function stopSound() {
-  if (!getSoundOn()) return;
-  setup();
-  fire(clunk);
-}
-
-/** The last wheel settling. */
-export function landSound() {
-  if (!getSoundOn()) return;
-  setup();
-  fire(land);
-}
-
-/** Loads the sounds ahead of the first spin. */
-export function warmUpSounds() {
-  setup();
-}
-
-/** Silences everything (leaving the screen, turning sound off mid-spin). */
+/** Silences everything (leaving the screen, turning sound off mid-spin, a spin cut short). */
 export function stopAllSounds() {
-  for (const p of [...tickPlayers, clunk, land]) {
-    try {
-      p?.pause();
-    } catch {
-      // Already stopped.
-    }
+  try {
+    player?.pause();
+  } catch {
+    // Already stopped.
   }
 }

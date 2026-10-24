@@ -19,7 +19,6 @@ import Animated, {
   Extrapolation,
   interpolate,
   type SharedValue,
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -39,7 +38,7 @@ import { useGear } from '@/lib/gear';
 import { select, success } from '@/lib/haptics';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
-import { landSound, stopAllSounds, stopSound, tickSound, warmUpSounds } from '@/lib/sounds';
+import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
@@ -69,8 +68,8 @@ function shuffle<T>(list: readonly T[]): T[] {
 // make them catch at the end. A tick plays each time a row passes the payline.
 // ---------------------------------------------------------------------------
 const MAX_RING = 36; // rows kept on a drum; bigger collections show a sample
-const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
-const SETTLE_MS = 240;
+export const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
+export const SETTLE_MS = 240;
 const TICK_ROWS = 14; // rows the first wheel travels; later wheels travel further
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -153,6 +152,7 @@ function Reel({
   wide,
   busy,
   onSettled,
+  onPlan,
   onToggleLock,
 }: {
   slot: SlotConfig;
@@ -171,6 +171,8 @@ function Reel({
   wide: boolean;
   busy: boolean;
   onSettled: (slotIndex: number) => void;
+  /** Tells the screen how far this wheel will turn, so the sound can follow it. */
+  onPlan: (slotIndex: number, rows: number, durationMs: number) => void;
   onToggleLock: (slotIndex: number, item: GearItem | null) => void;
 }) {
   const theme = useTheme();
@@ -179,7 +181,6 @@ function Reel({
   const [ring, setRing] = useState<GearItem[]>(() => expand(makeRing(candidates, [shown])));
   const count = Math.max(1, ring.length);
   const pos = useSharedValue(Math.max(0, ring.findIndex((g) => g.id === shown?.id)));
-  const ticking = useSharedValue(false);
   const [plan, setPlan] = useState({ id: 0, end: 0 });
 
   const animating = useRef(false);
@@ -233,6 +234,7 @@ function Reel({
     const rows = TICK_ROWS + order * 5;
     const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
     endRef.current = base + delta + extra;
+    onPlan(slot.slotIndex, delta + extra, durationMs);
     animating.current = true;
     setPlan((p) => ({ id: p.id + 1, end: endRef.current }));
     // Only a new token starts a spin; everything else is read at that moment.
@@ -248,11 +250,9 @@ function Reel({
   // The turn itself. It runs once the (possibly new) ring is on screen.
   useEffect(() => {
     if (!plan.id) return undefined;
-    ticking.value = true;
     pos.value = withSequence(
       withTiming(plan.end + OVERSHOOT, { duration: durationMs, easing: Easing.out(Easing.quad) }),
       withTiming(plan.end, { duration: SETTLE_MS, easing: Easing.inOut(Easing.quad) }, (finished) => {
-        ticking.value = false;
         if (finished) scheduleOnRN(done);
       }),
     );
@@ -267,18 +267,9 @@ function Reel({
     if (!animating.current) return;
     cancelAnimation(pos);
     pos.value = endRef.current;
-    ticking.value = false;
     animating.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapToken]);
-
-  // A tick each time a row passes the payline.
-  useAnimatedReaction(
-    () => Math.round(pos.value),
-    (cur, prev) => {
-      if (prev !== null && cur !== prev && ticking.value) scheduleOnRN(tickSound);
-    },
-  );
 
   const isLocked = !!locked;
   const canLock = !busy && (isLocked || !!shown);
@@ -396,6 +387,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const [note, setNote] = useState<string | null>(null);
   const pending = useRef(new Set<number>());
   const picksRef = useRef<SpinPick[]>([]);
+  const plans = useRef(new Map<number, { rows: number; durationMs: number }>());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -487,6 +479,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       if (!locked && chosen && list.length > 1 && index < visibleCount) moving.push(s.slotIndex);
     });
     pending.current = new Set(moving);
+    plans.current.clear();
     picksRef.current = picks;
     targetsRef.current = next;
     setTargets(next);
@@ -506,7 +499,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       setTimeout(() => {
         pending.current.clear();
         setSnap((n) => n + 1);
-        landSound();
+        stopAllSounds();
         void finish();
       }, BASE_MS + lastIndex * STAGGER_MS + 1800),
     ];
@@ -519,12 +512,19 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       if (pending.current.size === 0) {
         landSound();
         void finish();
-      } else {
-        stopSound();
       }
     },
     [finish],
   );
+
+  // Once every turning wheel has said how far it goes, play the spin's soundtrack in one go.
+  const planned = useCallback((slotIndex: number, rows: number, durationMs: number) => {
+    plans.current.set(slotIndex, { rows, durationMs });
+    if (plans.current.size === pending.current.size) {
+      const runs = [...plans.current.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
+      startSpinSound(runs, OVERSHOOT, SETTLE_MS);
+    }
+  }, []);
 
   const toggleLock = useCallback((slotIndex: number, item: GearItem | null) => void setLock(slotIndex, item?.id ?? null), [setLock]);
 
@@ -569,6 +569,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               wide={landscape}
               busy={busy}
               onSettled={settled}
+              onPlan={planned}
               onToggleLock={toggleLock}
             />
           );
