@@ -41,7 +41,9 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<string[]>([]);
-  const [choices, setChoices] = useState<{ stored: string; items: Identified[] } | null>(null);
+  // A photo with several items is added one at a time: `done` are the ones already added, `current` the one in the form.
+  const [batch, setBatch] = useState<{ stored: string; items: Identified[]; done: number[]; current: number | null } | null>(null);
+  const [picking, setPicking] = useState(false);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
@@ -78,6 +80,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     title: item ? 'Edit gear' : 'Add gear',
     headerLeft: () => <HeaderButton label="Cancel" onPress={() => cancelRef.current()} />,
   });
+  const leftAfter = batch && batch.current !== null && !item ? batch.items.length - batch.done.length - 1 : 0;
   const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
 
   async function runIdentify(stored: string) {
@@ -99,15 +102,19 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     }
     applyIdentified(r);
     // Several items in the photo: let the person pick which one they mean.
-    if (r.items && r.items.length > 1) setChoices({ stored, items: r.items });
+    if (r.items && r.items.length > 1) {
+      setBatch({ stored, items: r.items, done: [], current: null });
+      setPicking(true);
+    }
   }
 
   /** The person tapped an item: fill in its details and keep just that item in the photo. */
   async function chooseItem(index: number, dims: { width: number; height: number }) {
-    const c = choices;
-    setChoices(null);
+    const c = batch;
+    setPicking(false);
     const it = c?.items[index];
     if (!c || !it) return;
+    setBatch({ ...c, current: index });
     applyIdentified(it);
     const uri = photoUri(c.stored);
     if (!it.box || !uri) return;
@@ -212,6 +219,22 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       Alert.alert('Not saved', r.error);
       return;
     }
+    // More items left in this photo: start the next one instead of leaving.
+    if (batch && batch.current !== null && !item && batch.done.length + 1 < batch.items.length) {
+      for (const uri of newPhotos) if (uri !== clean.imageUri && uri !== batch.stored) deletePhoto(uri);
+      setNewPhotos([batch.stored]);
+      setBatch({ ...batch, done: [...batch.done, batch.current], current: null });
+      setDraft({ ...EMPTY, category: defaultCategory ?? EMPTY.category });
+      setWeightText('');
+      setIdentify({ state: 'idle' });
+      autoFields.current.clear();
+      nameIsAuto.current = true;
+      setMaterialOptions([]);
+      setFormKey((k) => k + 1);
+      success();
+      setPicking(true);
+      return;
+    }
     for (const uri of newPhotos) if (uri !== clean.imageUri) deletePhoto(uri);
     success();
     router.back();
@@ -246,7 +269,17 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
-      <ItemPicker uri={choices ? photoUri(choices.stored) : null} items={choices?.items ?? null} onCancel={() => setChoices(null)} onChoose={(i, d) => void chooseItem(i, d)} />
+      <ItemPicker
+        uri={picking && batch ? photoUri(batch.stored) : null}
+        items={picking && batch ? batch.items : null}
+        done={batch?.done ?? []}
+        onCancel={() => {
+          setPicking(false);
+          // "Done" after adding some of the items: leave the screen.
+          if (batch && batch.done.length > 0) cancel();
+        }}
+        onChoose={(i, d) => void chooseItem(i, d)}
+      />
       <PhotoCropper photo={cropping} onCancel={() => setCropping(null)} onDone={(p, c) => void usePhoto(p, c)} />
 
       <View style={styles.photo}>
@@ -267,6 +300,9 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
               : 'Start with a photo and EDC Roulette fills in the type, brand, model, material and color for you to check.'}
           </ThemedText>
         )}
+        {batch && batch.current !== null && !item && batch.items.length - batch.done.length > 1 ? (
+          <Button label="Pick a different item from the photo" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
+        ) : null}
       </View>
 
       {preparing ? (
@@ -349,7 +385,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
         <Input key={`notes-${formKey}`} defaultValue={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
       </Field>
 
-      <Button label={item ? 'Save changes' : 'Add to collection'} onPress={save} disabled={!canSave} busy={busy} />
+      <Button label={item ? 'Save changes' : leftAfter > 0 ? `Add, then next item (${leftAfter} left)` : batch && batch.done.length > 0 ? 'Add and finish' : 'Add to collection'} onPress={save} disabled={!canSave} busy={busy} />
       {item ? <Button label="Delete" variant="danger" icon="trash" onPress={remove} /> : null}
       <View style={{ height: Spacing.four, backgroundColor: theme.background }} />
     </Screen>

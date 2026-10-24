@@ -76,6 +76,8 @@ export interface Identified {
   notes: string | null;
   /** Where the item is in the photo, as fractions (0 to 1) of its width and height. */
   box?: { x: number; y: number; w: number; h: number } | null;
+  /** Points round the item's edge, as fractions (0 to 1) of the photo's width and height. */
+  outline?: [number, number][] | null;
 }
 
 /** The main answer, plus every item seen when the photo has several. */

@@ -1,12 +1,14 @@
 /**
- * When a photo has several items, lets the person tap the one they mean. The
- * others blur so it's clear which is chosen. All the items were identified in
- * one request already, so choosing costs nothing extra.
+ * When a photo has several items, lets the person tap the one they mean. Each
+ * item is outlined along its edge; once one is chosen, everything outside that
+ * outline blurs. All the items were identified in one request already, so
+ * choosing costs nothing extra. Items already added from this photo stay blurred.
  */
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { ClipPath, Defs, Image as SvgImage, Path } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -19,29 +21,71 @@ type Dims = { width: number; height: number };
 export function ItemPicker({
   uri,
   items,
+  done,
   onCancel,
   onChoose,
 }: {
   uri: string | null;
   items: Identified[] | null;
+  /** Indexes of the items already added from this photo. */
+  done: number[];
   onCancel: () => void;
   onChoose: (index: number, dims: Dims) => void;
 }) {
   return (
     <Modal visible={!!uri && !!items} animationType="slide" onRequestClose={onCancel}>
-      {uri && items ? <Picker uri={uri} items={items} onCancel={onCancel} onChoose={onChoose} /> : null}
+      {uri && items ? <Picker uri={uri} items={items} done={done} onCancel={onCancel} onChoose={onChoose} /> : null}
     </Modal>
   );
 }
 
 const label = (it: Identified) => [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category;
 
-function Picker({ uri, items, onCancel, onChoose }: { uri: string; items: Identified[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void }) {
+/** A smooth closed curve through the points (Catmull-Rom turned into Béziers), in pixels. */
+function smoothPath(points: [number, number][], W: number, H: number): string {
+  const p = points.map(([x, y]) => [x * W, y * H] as const);
+  const n = p.length;
+  let d = `M ${p[0]![0].toFixed(1)} ${p[0]![1].toFixed(1)}`;
+  for (let i = 0; i < n; i += 1) {
+    const p0 = p[(i - 1 + n) % n]!;
+    const p1 = p[i]!;
+    const p2 = p[(i + 1) % n]!;
+    const p3 = p[(i + 2) % n]!;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C ${c1[0]!.toFixed(1)} ${c1[1]!.toFixed(1)} ${c2[0]!.toFixed(1)} ${c2[1]!.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return `${d} Z`;
+}
+
+/** The item's outline, or (if it has none) a rounded rectangle round its box. */
+function outlineOf(it: Identified, W: number, H: number): string | null {
+  if (it.outline && it.outline.length >= 6) return smoothPath(it.outline, W, H);
+  if (!it.box) return null;
+  const { x, y, w, h } = it.box;
+  const r = 0.03;
+  return smoothPath(
+    [
+      [x, y + r],
+      [x + w / 2, y],
+      [x + w, y + r],
+      [x + w, y + h - r],
+      [x + w / 2, y + h],
+      [x, y + h - r],
+    ],
+    W,
+    H,
+  );
+}
+
+function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [dims, setDims] = useState<Dims | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  const remaining = items.map((_, i) => i).filter((i) => !done.includes(i));
+  // With one item left there's nothing to choose between.
+  const [selected, setSelected] = useState<number | null>(remaining.length === 1 && done.length > 0 ? (remaining[0] ?? null) : null);
 
   // The photo, as large as fits.
   const maxW = Math.min(screenW - Spacing.three * 2, 560);
@@ -50,77 +94,100 @@ function Picker({ uri, items, onCancel, onChoose }: { uri: string; items: Identi
   const W = Math.min(maxW, maxH * ratio);
   const H = W / ratio;
 
-  // A little air around each item's box.
-  const rect = (it: Identified) => {
-    if (!it.box) return null;
-    const pad = 0.03;
-    const x = Math.max(0, it.box.x - pad);
-    const y = Math.max(0, it.box.y - pad);
-    const w = Math.min(1 - x, it.box.w + pad * 2);
-    const h = Math.min(1 - y, it.box.h + pad * 2);
-    return { left: x * W, top: y * H, width: w * W, height: h * H };
-  };
-  const chosen = selected !== null ? rect(items[selected] as Identified) : null;
+  const paths = new Map<number, string>();
+  for (const i of remaining) {
+    const d = outlineOf(items[i] as Identified, W, H);
+    if (d) paths.set(i, d);
+  }
+  // What stays sharp: the chosen item; or, once something's been added from this photo, every item left.
+  const sharp = selected !== null ? [selected] : done.length > 0 ? remaining : [];
+  const blurred = sharp.length > 0 && sharp.some((i) => paths.has(i));
+
+  const title =
+    selected !== null
+      ? 'Others blurred. Use this one?'
+      : done.length > 0
+        ? `${remaining.length} more ${remaining.length === 1 ? 'item' : 'items'}. Tap the next one.`
+        : `I can see ${items.length} items. Tap the one you want.`;
 
   return (
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 20) + Spacing.two }]}>
       <View style={styles.top}>
         <Pressable onPress={onCancel} hitSlop={12} accessibilityRole="button">
           <ThemedText type="small" style={styles.light}>
-            Keep whole photo
+            {done.length > 0 ? 'Done' : 'Keep whole photo'}
           </ThemedText>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <ThemedText type="smallBold" style={[styles.light, styles.title]}>
-          {selected === null ? `I can see ${items.length} items. Tap the one you want.` : 'Others blurred. Use this one?'}
+          {title}
         </ThemedText>
         <View style={{ width: W, height: H, borderRadius: Radius.medium, overflow: 'hidden' }}>
           <Image
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="fill"
-            blurRadius={selected !== null && chosen ? 28 : 0}
+            blurRadius={blurred ? 28 : 0}
             onLoad={(e) => setDims({ width: e.source.width, height: e.source.height })}
             accessibilityIgnoresInvertColors
           />
-          {chosen ? (
-            <View style={[styles.sharp, chosen]}>
-              <Image source={{ uri }} style={{ position: 'absolute', left: -chosen.left, top: -chosen.top, width: W, height: H }} contentFit="fill" accessibilityIgnoresInvertColors />
-            </View>
+          {dims ? (
+            <Svg width={W} height={H} style={StyleSheet.absoluteFill}>
+              {blurred ? (
+                <>
+                  <Defs>
+                    <ClipPath id="sharp">
+                      {sharp.map((i) => (paths.has(i) ? <Path key={i} d={paths.get(i)!} /> : null))}
+                    </ClipPath>
+                  </Defs>
+                  <SvgImage href={{ uri }} x={0} y={0} width={W} height={H} preserveAspectRatio="none" clipPath="url(#sharp)" />
+                </>
+              ) : null}
+              {remaining.map((i) => {
+                const d = paths.get(i);
+                if (!d) return null;
+                const on = selected === i;
+                return (
+                  <Path
+                    key={i}
+                    d={d}
+                    fill="rgba(255,255,255,0.01)"
+                    stroke={on ? theme.accent : '#FFFFFFD9'}
+                    strokeWidth={on ? 3.5 : 2.5}
+                    strokeLinejoin="round"
+                    onPress={() => setSelected(i)}
+                  />
+                );
+              })}
+            </Svg>
           ) : null}
-          {items.map((it, i) => {
-            const r = rect(it);
-            if (!r) return null;
+          {/* Number badges at the top-left of each item. */}
+          {remaining.map((i) => {
+            const it = items[i] as Identified;
+            const top = it.outline && it.outline.length ? Math.min(...it.outline.map((p) => p[1])) : (it.box?.y ?? 0);
+            const left = it.outline && it.outline.length ? Math.min(...it.outline.map((p) => p[0])) : (it.box?.x ?? 0);
             const on = selected === i;
             return (
-              <Pressable
-                key={i}
-                onPress={() => setSelected(i)}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={`Item ${i + 1}: ${label(it)}`}
-                style={[styles.box, r, { borderColor: on ? theme.accent : '#FFFFFFCC', borderWidth: on ? 3 : 2 }]}>
-                <View style={[styles.badge, { backgroundColor: on ? theme.accent : '#000000AA' }]}>
-                  <ThemedText type="smallBold" style={{ color: on ? theme.onAccent : '#FFFFFF', fontSize: 13 }}>
-                    {i + 1}
-                  </ThemedText>
-                </View>
-              </Pressable>
+              <View key={i} pointerEvents="none" style={[styles.badge, { left: Math.max(4, left * W), top: Math.max(4, top * H), backgroundColor: on ? theme.accent : '#000000AA' }]}>
+                <ThemedText type="smallBold" style={{ color: on ? theme.onAccent : '#FFFFFF', fontSize: 13 }}>
+                  {i + 1}
+                </ThemedText>
+              </View>
             );
           })}
         </View>
 
         {/* The same choice as chips, for any item whose outline couldn't be placed. */}
         <View style={styles.chips}>
-          {items.map((it, i) => (
+          {remaining.map((i) => (
             <Pressable
               key={i}
               onPress={() => setSelected(i)}
               accessibilityRole="button"
               style={[styles.chip, { backgroundColor: selected === i ? theme.accent : '#FFFFFF22' }]}>
               <ThemedText type="smallBold" numberOfLines={1} style={{ color: selected === i ? theme.onAccent : '#FFFFFF', fontSize: 14 }}>
-                {i + 1} · {label(it)}
+                {i + 1} · {label(items[i] as Identified)}
               </ThemedText>
             </Pressable>
           ))}
@@ -139,9 +206,7 @@ const styles = StyleSheet.create({
   light: { color: '#FFFFFF', fontSize: 16 },
   title: { fontSize: 16, textAlign: 'center' },
   body: { alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingBottom: Spacing.three },
-  sharp: { position: 'absolute', overflow: 'hidden', borderRadius: Radius.small },
-  box: { position: 'absolute', borderRadius: Radius.small },
-  badge: { position: 'absolute', top: 4, left: 4, minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  badge: { position: 'absolute', minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
   chip: { paddingHorizontal: Spacing.three, paddingVertical: 8, borderRadius: Radius.pill, maxWidth: '100%' },
   footer: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },

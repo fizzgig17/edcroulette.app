@@ -35,7 +35,7 @@ Always answer by calling the report_item tool, once, with one entry in "items" f
 Rules:
 - If the photo has nudity, sexual content, graphic violence, or anything not suitable for all ages, set unsafe to true, leave everything else empty, and do not describe it.
 - If there is no everyday-carry item in the photo, report one item with category "Other" and brand and model empty.
-- "box" is where each item is in the picture, as fractions of the picture: [left, top, width, height], each between 0 and 1. Make it fit the whole item snugly. Do not list the same item twice, and do not list parts of one item as separate items.
+- "outline" traces the item's silhouette as 10 to 24 points going round it (each [x, y] as fractions 0 to 1 of the picture), hugging its edge so that nothing of a neighbouring item is inside. "box" is where each item is in the picture, as fractions of the picture: [left, top, width, height], each between 0 and 1. Make it fit the whole item snugly. Do not list the same item twice, and do not list parts of one item as separate items.
 - Only say what you can see. A brand or model counts only if it is printed, engraved or unmistakable from the shape. Otherwise leave it empty. A wrong brand is worse than a blank one.
 - "confidence" is how sure you are of the brand and model together: high, medium or low.
 - "color" is the main color of the item itself as a hex code like #3A3F45 (not the background, not the hand).
@@ -61,6 +61,13 @@ const ITEM = {
     color: { type: 'string', description: 'Main color as #RRGGBB, or empty.' },
     notes: { type: 'string' },
     box: { type: 'array', items: { type: 'number' }, minItems: 4, maxItems: 4, description: '[left, top, width, height] as fractions (0 to 1) of the picture.' },
+    outline: {
+      type: 'array',
+      items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+      minItems: 8,
+      maxItems: 24,
+      description: "Points [x, y] (fractions 0 to 1 of the picture) going round the item's edge in order.",
+    },
   },
   required: ['category', 'confidence', 'box'],
 };
@@ -211,6 +218,10 @@ Deno.serve(async (req) => {
     const left = frac(b[0] ?? 0);
     const top = frac(b[1] ?? 0);
     const box = b.length === 4 ? { x: left, y: top, w: Math.min(frac(b[2] ?? 1), 1 - left), h: Math.min(frac(b[3] ?? 1), 1 - top) } : null;
+    const outline = (Array.isArray(raw.outline) ? raw.outline : [])
+      .map((p: unknown) => (Array.isArray(p) ? [frac(Number(p[0])), frac(Number(p[1]))] : null))
+      .filter((p: number[] | null): p is number[] => !!p)
+      .slice(0, 24);
     return {
       category,
       brand,
@@ -224,6 +235,7 @@ Deno.serve(async (req) => {
       color: /^#[0-9a-fA-F]{6}$/.test(colorText) ? colorText.toUpperCase() : null,
       notes: clean(raw.notes, 200) || null,
       box: box && box.w > 0.02 && box.h > 0.02 ? box : null,
+      outline: outline.length >= 6 ? outline : null,
     };
   }
 
