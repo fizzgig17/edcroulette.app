@@ -6,7 +6,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
@@ -19,7 +20,7 @@ import { useMetalId } from '@/lib/preferences';
 const GLYPH_SHADOW = { textShadowColor: '#000C', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } } as const;
 
 /** The metal disc itself. `lit` brightens it (the selected tab). */
-export function MetalDisc({ size, lit = true, ring, children }: { size: number; lit?: boolean; ring?: string; children?: ReactNode }) {
+export function MetalDisc({ size, lit = true, ring, turning, children }: { size: number; lit?: boolean; ring?: string; turning?: boolean; children?: ReactNode }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
   const rim = Math.max(3, Math.round(size * 0.07));
@@ -33,18 +34,36 @@ export function MetalDisc({ size, lit = true, ring, children }: { size: number; 
         {lit ? null : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: 0.38 }]} />}
         <View style={styles.center}>{children}</View>
       </View>
+      {turning ? <TurningRing size={size - rim * 2 - 8} offset={rim + 4} /> : null}
       {ring ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: size / 2, borderWidth: 2.5, borderColor: ring }]} /> : null}
     </View>
   );
 }
 
+/** A bright arc that circles just inside the edge of the disc while something is happening. */
+function TurningRing({ size, offset }: { size: number; offset: number }) {
+  const turn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(turn, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [turn]);
+  const spin = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: offset, left: offset, width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: 'transparent', borderTopColor: '#FFFFFF', borderRightColor: '#FFFFFF66', transform: [{ rotate: spin }] }}
+    />
+  );
+}
+
 /** The glyph and label on a disc. */
-export function DiscLabel({ icon, label, size, busy }: { icon: IconName; label?: string; size: number; busy?: boolean }) {
+export function DiscLabel({ icon, label, size }: { icon?: IconName; label?: string; size: number }) {
   return (
     <>
-      {busy ? <ActivityIndicator color="#FFFFFF" /> : <Icon name={icon} size={size * (label ? 0.3 : 0.42)} color="#FFFFFF" />}
+      {icon ? <Icon name={icon} size={size * (label ? 0.26 : 0.42)} color="#FFFFFF" /> : null}
       {label ? (
-        <ThemedText type="smallBold" style={[styles.label, { fontSize: Math.max(11, size * 0.15) }]}>
+        <ThemedText type="smallBold" style={[styles.label, { fontSize: Math.max(10, size * 0.14) }]}>
           {label}
         </ThemedText>
       ) : null}
@@ -64,5 +83,5 @@ export function MetalGlyph({ icon, size, lit }: { icon: IconName; size: number; 
 const styles = StyleSheet.create({
   face: { position: 'absolute', overflow: 'hidden' },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  label: { color: '#FFFFFF', ...GLYPH_SHADOW },
+  label: { color: '#FFFFFF', letterSpacing: 1.6, textTransform: 'uppercase', ...GLYPH_SHADOW },
 });

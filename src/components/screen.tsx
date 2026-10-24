@@ -12,6 +12,8 @@ type ScreenProps = {
   title: string;
   subtitle?: string;
   children?: ReactNode;
+  /** Keeps the status-bar spacing but leaves out the big title (the Spin tab). */
+  hideTitle?: boolean;
   /** Set false for screens that show a native header instead. */
   showTitle?: boolean;
   /** Shown at the right end of the title row. */
@@ -25,7 +27,7 @@ type ScreenProps = {
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, action, readable, tab, footer }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer }: ScreenProps) {
   const insets = useSafeAreaInsets();
   return (
     <ThemedView style={styles.container}>
@@ -36,7 +38,7 @@ export function Screen({ title, subtitle, children, showTitle = true, action, re
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>
-          {showTitle && (
+          {showTitle && !hideTitle && (
             <View style={styles.titleRow}>
               <ThemedText type="subtitle" accessibilityRole="header" style={styles.flex}>
                 {title}

@@ -80,3 +80,8 @@ export const getCollectionView = (): CollectionView => {
 };
 export const setCollectionView = (v: CollectionView) => write('edc.collectionView', v);
 export const useCollectionView = () => useSyncExternalStore(subscribe, getCollectionView, () => 'list' as CollectionView);
+
+// --- Whether the app icon follows the chosen metal ---------------------------------------------
+export const getIconFollowsMetal = () => read('edc.iconFollows') !== '0';
+export const setIconFollowsMetal = (on: boolean) => write('edc.iconFollows', on ? '1' : '0');
+export const useIconFollowsMetal = () => useSyncExternalStore(subscribe, getIconFollowsMetal, () => true);

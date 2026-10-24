@@ -60,8 +60,8 @@ function SpinDock() {
       accessibilityLabel={control?.label ?? 'Spin'}
       accessibilityState={{ disabled: off, busy: !!control?.busy }}
       style={({ pressed }) => [off && { opacity: 0.55 }, pressed && { transform: [{ scale: 0.96 }] }]}>
-      <MetalDisc size={84}>
-        <DiscLabel icon={control?.icon ?? 'spin'} label={control?.label ?? 'Spin'} size={84} busy={control?.busy && control.label === 'Choosing…'} />
+      <MetalDisc size={84} turning={!!control?.busy}>
+        <DiscLabel icon={control?.icon === 'sparkle' ? 'sparkle' : undefined} label="Spin" size={84} />
       </MetalDisc>
     </Pressable>
   );

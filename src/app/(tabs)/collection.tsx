@@ -19,11 +19,12 @@ import { CATEGORIES, type GearItem } from '@/types/models';
 type Source = 'all' | 'mine' | 'samples';
 type Sort = 'category' | 'name' | 'brand' | 'newest' | 'lightest';
 const SORTS: Record<Sort, string> = { category: 'Category', name: 'Name', brand: 'Brand', newest: 'Newest', lightest: 'Lightest' };
-const VIEWS: Record<CollectionView, { label: string; icon: IconName; next: CollectionView }> = {
-  list: { label: 'List', icon: 'list', next: 'grid' },
-  grid: { label: 'Pictures', icon: 'collection', next: 'compact' },
-  compact: { label: 'Compact', icon: 'filter', next: 'list' },
-};
+const VIEWS: { id: CollectionView; label: string; icon: IconName }[] = [
+  { id: 'list', label: 'List', icon: 'list' },
+  { id: 'grid', label: 'Pictures', icon: 'viewGrid' },
+  { id: 'compact', label: 'Compact', icon: 'viewCompact' },
+];
+const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
 const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => !!v && v.trim() !== ''))].sort((a, b) => a.localeCompare(b));
 
@@ -35,10 +36,10 @@ export default function CollectionScreen() {
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
 
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
-  const [material, setMaterial] = useState<string | null>(null);
-  const [finish, setFinish] = useState<string | null>(null);
-  const [brand, setBrand] = useState<string | null>(null);
+  const [cats, setCats] = useState<string[]>([]);
+  const [mats, setMats] = useState<string[]>([]);
+  const [fins, setFins] = useState<string[]>([]);
+  const [brands_, setBrands] = useState<string[]>([]);
   const [source, setSource] = useState<Source>('all');
   const [lockedOnly, setLockedOnly] = useState(false);
   const [sort, setSort] = useState<Sort>('category');
@@ -52,10 +53,10 @@ export default function CollectionScreen() {
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = items.filter((g) => {
-      if (category && g.category !== category) return false;
-      if (material && g.material !== material) return false;
-      if (finish && g.finish !== finish) return false;
-      if (brand && g.brand !== brand) return false;
+      if (cats.length && !cats.includes(g.category)) return false;
+      if (mats.length && !(g.material && mats.includes(g.material))) return false;
+      if (fins.length && !(g.finish && fins.includes(g.finish))) return false;
+      if (brands_.length && !(g.brand && brands_.includes(g.brand))) return false;
       if (source === 'mine' && g.isSample) return false;
       if (source === 'samples' && !g.isSample) return false;
       if (lockedOnly && !lockedIds.has(g.id)) return false;
@@ -73,16 +74,16 @@ export default function CollectionScreen() {
     else if (sort === 'lightest') list.sort(by((g) => g.weightGrams ?? 99999));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, query, category, material, finish, brand, source, lockedOnly, sort, slots]);
+  }, [items, query, cats, mats, fins, brands_, source, lockedOnly, sort, slots]);
 
-  const activeCount = [material, finish, brand].filter(Boolean).length + (source !== 'all' ? 1 : 0) + (lockedOnly ? 1 : 0) + (sort !== 'category' ? 1 : 0);
-  const filtering = activeCount > 0 || !!category || query.trim() !== '';
+  const activeCount = mats.length + fins.length + brands_.length + (source !== 'all' ? 1 : 0) + (lockedOnly ? 1 : 0) + (sort !== 'category' ? 1 : 0);
+  const filtering = activeCount > 0 || cats.length > 0 || query.trim() !== '';
   function clearAll() {
     setQuery('');
-    setCategory(null);
-    setMaterial(null);
-    setFinish(null);
-    setBrand(null);
+    setCats([]);
+    setMats([]);
+    setFins([]);
+    setBrands([]);
     setSource('all');
     setLockedOnly(false);
     setSort('category');
@@ -98,7 +99,6 @@ export default function CollectionScreen() {
 
   const open = (g: GearItem) => router.push({ pathname: '/gear/[id]', params: { id: g.id } });
   const detail = (g: GearItem) => [g.isSample ? 'Sample' : null, g.brand, g.material, g.finish, g.weightGrams != null ? `${g.weightGrams} g` : null].filter(Boolean).join(' · ') || 'No details yet';
-  const next = VIEWS[view];
 
   return (
     <Screen
@@ -127,37 +127,51 @@ export default function CollectionScreen() {
         </Card>
       ) : (
         <>
+          <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <Icon name="search" size={16} color={theme.textSecondary} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search name, brand, material"
+              placeholderTextColor={theme.textSecondary}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+              style={[styles.searchInput, { color: theme.text }]}
+            />
+          </View>
+
           <View style={styles.tools}>
-            <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <Icon name="search" size={16} color={theme.textSecondary} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search name, brand, material"
-                placeholderTextColor={theme.textSecondary}
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-                returnKeyType="search"
-                style={[styles.searchInput, { color: theme.text }]}
-              />
+            <Pressable
+              onPress={() => setSheet(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Filters${activeCount ? `, ${activeCount} on` : ''}`}
+              style={[styles.filterBtn, { backgroundColor: activeCount ? theme.accent : 'transparent', borderColor: activeCount ? theme.accent : theme.border }]}>
+              <Icon name="filter" size={16} color={activeCount ? theme.onAccent : theme.text} />
+              <ThemedText type="smallBold" style={{ color: activeCount ? theme.onAccent : theme.text }}>
+                {activeCount ? `Filter · ${activeCount}` : 'Filter'}
+              </ThemedText>
+            </Pressable>
+            <View style={styles.flex} />
+            <View style={[styles.segment, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]} accessibilityRole="radiogroup">
+              {VIEWS.map((v) => (
+                <Pressable
+                  key={v.id}
+                  onPress={() => setCollectionView(v.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: view === v.id }}
+                  accessibilityLabel={`${v.label} view`}
+                  style={[styles.segBtn, view === v.id && { backgroundColor: theme.surface }]}>
+                  <Icon name={v.icon} size={17} color={view === v.id ? theme.accent : theme.textSecondary} />
+                </Pressable>
+              ))}
             </View>
-            <Pressable onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel={`Filters${activeCount ? `, ${activeCount} on` : ''}`} style={[styles.tool, { backgroundColor: activeCount ? theme.accent : theme.backgroundElement }]}>
-              <Icon name="filter" size={18} color={activeCount ? theme.onAccent : theme.text} />
-              {activeCount ? (
-                <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
-                  {activeCount}
-                </ThemedText>
-              ) : null}
-            </Pressable>
-            <Pressable onPress={() => setCollectionView(next.next)} accessibilityRole="button" accessibilityLabel={`View: ${next.label}. Tap to change.`} style={[styles.tool, { backgroundColor: theme.backgroundElement }]}>
-              <Icon name={next.icon} size={18} color={theme.text} />
-            </Pressable>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            <Chip label="All" selected={category === null} onPress={() => setCategory(null)} />
+            <Chip label="All" selected={cats.length === 0} onPress={() => setCats([])} />
             {categories.map((c) => (
-              <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(category === c ? null : c)} />
+              <Chip key={c} label={c} selected={cats.includes(c)} onPress={() => setCats(toggle(cats, c))} />
             ))}
           </ScrollView>
 
@@ -243,38 +257,38 @@ export default function CollectionScreen() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              <FilterRow label="Show">
-                {(['all', 'mine', 'samples'] as const).map((s) => (
-                  <Chip key={s} label={{ all: 'Everything', mine: 'Mine', samples: 'Samples' }[s]} selected={source === s} onPress={() => setSource(s)} />
+              <Section title="Show">
+                {(['all', 'mine', 'samples'] as const).map((k) => (
+                  <Chip key={k} label={{ all: 'Everything', mine: 'Mine', samples: 'Samples' }[k]} selected={source === k} onPress={() => setSource(k)} />
                 ))}
                 <Chip label="Locked in a wheel" selected={lockedOnly} onPress={() => setLockedOnly(!lockedOnly)} />
-              </FilterRow>
+              </Section>
               {materials.length > 0 ? (
-                <FilterRow label="Material">
+                <Section title="Material" count={mats.length} onClear={() => setMats([])} scroll>
                   {materials.map((m) => (
-                    <Chip key={m} label={m} selected={material === m} onPress={() => setMaterial(material === m ? null : m)} />
+                    <Chip key={m} label={m} selected={mats.includes(m)} onPress={() => setMats(toggle(mats, m))} />
                   ))}
-                </FilterRow>
+                </Section>
               ) : null}
               {finishes.length > 0 ? (
-                <FilterRow label="Finish">
+                <Section title="Finish" count={fins.length} onClear={() => setFins([])} scroll>
                   {finishes.map((m) => (
-                    <Chip key={m} label={m} selected={finish === m} onPress={() => setFinish(finish === m ? null : m)} />
+                    <Chip key={m} label={m} selected={fins.includes(m)} onPress={() => setFins(toggle(fins, m))} />
                   ))}
-                </FilterRow>
+                </Section>
               ) : null}
               {brands.length > 0 ? (
-                <FilterRow label="Brand">
+                <Section title="Brand" count={brands_.length} onClear={() => setBrands([])} scroll>
                   {brands.map((m) => (
-                    <Chip key={m} label={m} selected={brand === m} onPress={() => setBrand(brand === m ? null : m)} />
+                    <Chip key={m} label={m} selected={brands_.includes(m)} onPress={() => setBrands(toggle(brands_, m))} />
                   ))}
-                </FilterRow>
+                </Section>
               ) : null}
-              <FilterRow label="Sort by">
+              <Section title="Sort by" scroll>
                 {(Object.keys(SORTS) as Sort[]).map((k) => (
                   <Chip key={k} label={SORTS[k]} selected={sort === k} onPress={() => setSort(k)} />
                 ))}
-              </FilterRow>
+              </Section>
             </ScrollView>
             <Button label={`Show ${shown.length} piece${shown.length === 1 ? '' : 's'}`} onPress={() => setSheet(false)} />
           </Pressable>
@@ -284,13 +298,27 @@ export default function CollectionScreen() {
   );
 }
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ title, count = 0, onClear, scroll, children }: { title: string; count?: number; onClear?: () => void; scroll?: boolean; children: React.ReactNode }) {
+  const theme = useTheme();
   return (
-    <View style={styles.filterRow}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <View style={styles.wrap}>{children}</View>
+    <View style={[styles.section, { borderColor: theme.border }]}>
+      <View style={styles.sectionHead}>
+        <ThemedText type="smallBold">{title}</ThemedText>
+        {count > 0 && onClear ? (
+          <Pressable onPress={onClear} accessibilityRole="button" hitSlop={8}>
+            <ThemedText type="small" style={{ color: theme.accent }}>
+              {count} selected · Clear
+            </ThemedText>
+          </Pressable>
+        ) : null}
+      </View>
+      {scroll ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionChips}>
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={styles.wrap}>{children}</View>
+      )}
     </View>
   );
 }
@@ -299,9 +327,14 @@ const styles = StyleSheet.create({
   add: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   small: { fontSize: 12, lineHeight: 16 },
   tools: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 38, paddingHorizontal: 14, borderRadius: Radius.pill, borderWidth: 1 },
+  segment: { flexDirection: 'row', padding: 3, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, gap: 2 },
+  segBtn: { width: 40, height: 32, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  section: { gap: Spacing.two, paddingBottom: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionChips: { flexDirection: 'row', gap: Spacing.two, paddingRight: Spacing.three },
   search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, minHeight: 44, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 8 },
-  tool: { minWidth: 44, height: 44, borderRadius: 22, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   chips: { flexDirection: 'row', gap: Spacing.two, paddingRight: Spacing.three },
   found: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   group: { gap: Spacing.two },
@@ -317,6 +350,5 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '82%', borderTopLeftRadius: Radius.large, borderTopRightRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.three, gap: Spacing.three },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sheetBody: { gap: Spacing.three, paddingBottom: Spacing.two },
-  filterRow: { gap: Spacing.two },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });

@@ -4,11 +4,11 @@
     "slug": "edc-roulette",
     "version": "1.0",
     "orientation": "default",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icons/damascus.png",
     "scheme": "edcroulette",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/icons/damascus.png",
       "bundleIdentifier": "app.edcroulette.ios",
       "supportsTablet": false,
       "usesAppleSignIn": true,
@@ -63,6 +63,39 @@
             "enableSceneSupport": true
           }
         }
+      ],
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "Mokume",
+            "ios": "./assets/images/icons/mokume.png"
+          },
+          {
+            "name": "Timascus",
+            "ios": "./assets/images/icons/timascus.png"
+          },
+          {
+            "name": "Titanium",
+            "ios": "./assets/images/icons/titanium.png"
+          },
+          {
+            "name": "Zirconium",
+            "ios": "./assets/images/icons/zirconium.png"
+          },
+          {
+            "name": "Copper",
+            "ios": "./assets/images/icons/copper.png"
+          },
+          {
+            "name": "Brass",
+            "ios": "./assets/images/icons/brass.png"
+          },
+          {
+            "name": "Steel",
+            "ios": "./assets/images/icons/steel.png"
+          }
+        ]
       ],
       "./plugins/with-xcode-cloud"
     ],

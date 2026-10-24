@@ -7,7 +7,7 @@ import type { AndroidSymbol, SFSymbol } from 'expo-symbols';
 const icon = (ios: SFSymbol, material: AndroidSymbol) => ({ ios, android: material, web: material });
 
 export const Icons = {
-  spin: icon('shuffle', 'shuffle'),
+  spin: icon('arrow.triangle.2.circlepath', 'autorenew'),
   collection: icon('square.grid.2x2', 'grid_view'),
   settings: icon('gearshape', 'settings'),
   lock: icon('lock.fill', 'lock'),
@@ -26,6 +26,9 @@ export const Icons = {
   minus: icon('minus', 'remove'),
   filter: icon('line.3.horizontal.decrease', 'filter_list'),
   list: icon('list.bullet', 'view_list'),
+  viewGrid: icon('square.grid.2x2', 'grid_view'),
+  viewCompact: icon('list.dash', 'view_headline'),
+  swap: icon('chevron.up.chevron.down', 'unfold_more'),
   search: icon('magnifyingglass', 'search'),
   sound: icon('speaker.wave.2.fill', 'volume_up'),
 } as const;

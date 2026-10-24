@@ -30,9 +30,7 @@ export default function SpinScreen() {
   const { setControl } = useSpinDock();
 
   return (
-    <Screen
-      title="EDC Roulette"
-      tab>
+    <Screen title="EDC Roulette" tab hideTitle>
       {landscape && !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>

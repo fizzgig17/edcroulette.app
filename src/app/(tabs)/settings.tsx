@@ -17,8 +17,9 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear, type SlotDraft } from '@/lib/gear';
 import { select } from '@/lib/haptics';
 import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
+import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
-import { setAiConsent, setMetalId, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
+import { setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 import { CATEGORIES } from '@/types/models';
@@ -87,19 +88,19 @@ function WheelsEditor() {
               accessibilityRole="button"
               accessibilityLabel={`${s.category}. Change what this wheel spins.`}
               style={({ pressed }) => [styles.wheelName, pressed && { opacity: 0.6 }]}>
-              <ThemedText type="smallBold" style={styles.wheelTitle}>
-                {s.category}
-              </ThemedText>
-              {i >= PORTRAIT_WHEELS ? (
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Sideways
+              <View style={styles.flex}>
+                <ThemedText type="smallBold" style={styles.wheelTitle}>
+                  {s.category}
                 </ThemedText>
-              ) : null}
-              <View style={styles.flex} />
-              <ThemedText type="small" style={{ color: theme.accent }}>
-                Change
-              </ThemedText>
-              <Icon name="chevron" size={12} color={theme.accent} />
+                {i >= PORTRAIT_WHEELS ? (
+                  <ThemedText type="caption" themeColor="textSecondary" style={styles.sub}>
+                    Sideways only
+                  </ThemedText>
+                ) : null}
+              </View>
+              <View style={[styles.swap, { backgroundColor: theme.accentSoft }]}>
+                <Icon name="swap" size={15} color={theme.accent} />
+              </View>
             </Pressable>
             <SmallIcon icon="trash" label={`Remove ${s.category} wheel`} onPress={() => removeAt(i)} disabled={slots.length <= MIN_SLOTS} />
           </View>
@@ -178,6 +179,19 @@ export default function SettingsScreen() {
   const spinStyle = useSpinStyle();
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
+  const [appIcon, setAppIcon] = useState<string | null>(() => (supportsAlternateIcons ? getAppIconName() : null));
+  async function chooseIcon(id: string) {
+    select();
+    try {
+      const name = id === 'damascus' ? null : id.charAt(0).toUpperCase() + id.slice(1);
+      await setAlternateAppIcon(name);
+      setAppIcon(name);
+    } catch {
+      Alert.alert('App icon', 'The icon could not be changed just now.');
+    }
+  }
+  const follows = useIconFollowsMetal();
+  const iconId = appIcon ? appIcon.toLowerCase() : 'damascus';
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
   const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
@@ -233,7 +247,7 @@ export default function SettingsScreen() {
         <ThemedText themeColor="textSecondary">The metal for the Spin button and the trim around the wheels.</ThemedText>
         <View style={styles.metals}>
           {METALS.map((m) => (
-            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
+            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); if (supportsAlternateIcons && follows && m.id !== iconId) void chooseIcon(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
               <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === metal.id ? theme.accent : theme.border, borderWidth: m.id === metal.id ? 3 : 1 }]} />
               <ThemedText type="small" style={m.id === metal.id ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
                 {m.label}
@@ -241,7 +255,34 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
+        {supportsAlternateIcons ? (
+          <View style={styles.followRow}>
+            <ThemedText type="small" style={styles.flex}>
+              Use this metal for the app icon too
+            </ThemedText>
+            <Switch value={follows} onValueChange={(v) => { select(); setIconFollowsMetal(v); if (v && metal.id !== iconId) void chooseIcon(metal.id); }} trackColor={{ true: theme.accent }} accessibilityLabel="Use this metal for the app icon too" />
+          </View>
+        ) : null}
       </Card>
+
+      {supportsAlternateIcons && !follows ? (
+        <>
+          <ThemedText type="heading">App icon</ThemedText>
+          <Card>
+            <ThemedText themeColor="textSecondary">Pick the home screen icon separately. iOS shows a short notice each time it changes.</ThemedText>
+            <View style={styles.metals}>
+              {METALS.map((m) => (
+                <Pressable key={m.id} onPress={() => void chooseIcon(m.id)} accessibilityRole="button" accessibilityState={{ selected: m.id === iconId }} accessibilityLabel={`${m.label} icon`} style={styles.metal}>
+                  <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === iconId ? theme.accent : theme.border, borderWidth: m.id === iconId ? 3 : 1 }]} />
+                  <ThemedText type="small" style={m.id === iconId ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
+                    {m.label}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
+        </>
+      ) : null}
 
       <ThemedText type="heading">AI help</ThemedText>
       <Card padded={false}>
@@ -297,6 +338,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   metal: { width: '21%', alignItems: 'center', gap: 4 },
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   swatch: { width: 56, height: 56, borderRadius: 28 },
   flex: { flex: 1 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
@@ -307,6 +349,8 @@ const styles = StyleSheet.create({
   gripArea: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.two },
   wheelName: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, alignSelf: 'stretch' },
   wheelTitle: { fontSize: 16 },
+  sub: { fontSize: 10, lineHeight: 12, letterSpacing: 0.6 },
+  swap: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   scrim: { flex: 1, backgroundColor: '#000A', justifyContent: 'flex-end', padding: Spacing.three },
   sheet: { borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.three, gap: Spacing.three },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },

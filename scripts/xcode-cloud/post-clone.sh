@@ -52,8 +52,13 @@ node -e '
     // the Xcode Cloud workflow points at.
     ios.infoPlist = { ...(ios.infoPlist || {}), CFBundleDisplayName: "EDC Roulette Dev" };
     // The same icon with a red DEV band, so the dev app is easy to tell apart.
-    app.expo.icon = "./assets/images/icon-dev.png";
-    ios.icon = "./assets/images/icon-dev.png";
+    // Every metal has a DEV version (assets/images/icons/dev/), including the alternates.
+    const dev = (v) => (typeof v === "string" ? v.replace("/assets/images/icons/", "/assets/images/icons/dev/") : v);
+    app.expo.icon = dev(app.expo.icon);
+    ios.icon = dev(ios.icon);
+    app.expo.plugins = app.expo.plugins.map((p) =>
+      Array.isArray(p) && p[0] === "expo-alternate-app-icons" ? [p[0], p[1].map((i) => ({ ...i, ios: dev(i.ios) }))] : p,
+    );
   }
   fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
   console.log(`Version ${app.expo.version} (${ios.buildNumber || "unset"})`);

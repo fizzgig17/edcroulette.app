@@ -16,3 +16,4 @@ expo-env.d.ts
 !/ios/ci_scripts/
 /android
 dist-dev/
+scripts/.metals-512/
