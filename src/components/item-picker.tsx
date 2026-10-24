@@ -58,7 +58,7 @@ function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: 
 
   const title =
     selected !== null
-      ? 'Others blurred. Use this one?'
+      ? 'Other items blurred. Use this one?'
       : done.length > 0
         ? `${remaining.length} more ${remaining.length === 1 ? 'item' : 'items'}. Tap the next one.`
         : `I can see ${items.length} items. Tap the one you want.`;
@@ -84,7 +84,7 @@ function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: 
           remaining={remaining}
           selected={selected}
           onSelect={setSelected}
-          sharpWhenNothingChosen={done.length > 0}
+          added={done}
           onLoad={setDims}
         />
 
@@ -105,6 +105,7 @@ function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: 
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) + Spacing.two }]}>
         <Button label="Use this item" icon="check" big disabled={selected === null || !dims} onPress={() => selected !== null && dims && onChoose(selected, dims)} />
+        {done.length > 0 ? <Button label="Done" variant="secondary" onPress={onCancel} style={styles.doneButton} /> : null}
       </View>
     </View>
   );
@@ -118,5 +119,6 @@ const styles = StyleSheet.create({
   body: { alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingBottom: Spacing.three },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
   chip: { paddingHorizontal: Spacing.three, paddingVertical: 8, borderRadius: Radius.pill, maxWidth: '100%' },
-  footer: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
+  footer: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two, gap: Spacing.two },
+  doneButton: { alignSelf: 'stretch' },
 });

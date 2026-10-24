@@ -21,7 +21,8 @@ export function PhotoDemo() {
   const { width: screenW } = useWindowDimensions();
   const [selected, setSelected] = useState<number | null>(null);
   const [done, setDone] = useState<number[]>([]);
-  const remaining = DEMO_ITEMS.map((_, i) => i).filter((i) => !done.includes(i));
+  const [finished, setFinished] = useState(false);
+  const remaining = finished ? [] : DEMO_ITEMS.map((_, i) => i).filter((i) => !done.includes(i));
   const W = Math.min(560, screenW - Spacing.three * 2 - Spacing.four);
   const H = (W * DEMO_SIZE.height) / DEMO_SIZE.width;
   const item = selected !== null ? DEMO_ITEMS[selected] : null;
@@ -29,6 +30,13 @@ export function PhotoDemo() {
   const next = () => {
     if (selected === null) return;
     setDone((d) => [...d, selected]);
+    setSelected(null);
+  };
+
+  const finish = () => {
+    if (selected === null) return;
+    setDone((d) => [...d, selected]);
+    setFinished(true);
     setSelected(null);
   };
 
@@ -41,14 +49,14 @@ export function PhotoDemo() {
       <View style={styles.center}>
         {remaining.length > 0 ? (
           <>
-            <OutlinedPhoto uri={photoUri} width={W} height={H} items={DEMO_ITEMS} remaining={remaining} selected={selected} onSelect={setSelected} sharpWhenNothingChosen={done.length > 0} />
+            <OutlinedPhoto uri={photoUri} width={W} height={H} items={DEMO_ITEMS} remaining={remaining} selected={selected} onSelect={setSelected} added={done} />
             <ThemedText type="smallBold" themeColor="textSecondary">
-              {selected !== null ? 'Others blurred. Here is what it read:' : done.length > 0 ? `${remaining.length} more. Tap the next one.` : `3 items found. Tap the one you want.`}
+              {selected !== null ? 'The other items are blurred. Here is what it read:' : done.length > 0 ? `${remaining.length} more. Tap the next one.` : `3 items found. Tap the one you want.`}
             </ThemedText>
           </>
         ) : (
           <ThemedText type="smallBold" style={{ color: theme.accent }}>
-            All three added to the collection.
+            {`Done. ${done.length} ${done.length === 1 ? 'item' : 'items'} added to the collection.`}
           </ThemedText>
         )}
       </View>
@@ -68,12 +76,13 @@ export function PhotoDemo() {
             </View>
           ) : null}
           {item.notes ? <ThemedText themeColor="textSecondary">{item.notes}</ThemedText> : null}
-          <Button label={remaining.length > 1 ? 'Add, then next item' : 'Add and finish'} icon="check" onPress={next} />
+          <Button label={remaining.length > 1 ? `Add, then next item (${remaining.length - 1} left)` : 'Add and finish'} icon="check" onPress={next} />
+          {remaining.length > 1 ? <Button label="Add and finish" variant="secondary" onPress={finish} /> : null}
         </View>
       ) : null}
 
       {done.length > 0 ? (
-        <Button label="Start over" variant="secondary" onPress={() => { setDone([]); setSelected(null); }} />
+        <Button label="Start over" variant="secondary" onPress={() => { setDone([]); setFinished(false); setSelected(null); }} />
       ) : null}
     </Card>
   );

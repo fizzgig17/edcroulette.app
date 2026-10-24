@@ -226,7 +226,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     }
   }
 
-  async function save() {
+  async function save(finishNow = false) {
     const weight = weightText.trim() ? Number(weightText.replace(',', '.')) : null;
     if (weight != null && (!Number.isFinite(weight) || weight < 0)) {
       Alert.alert('Weight', 'Enter the weight in grams, like 85 or 85.5.');
@@ -252,7 +252,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       return;
     }
     // More items left in this photo: start the next one instead of leaving.
-    if (batch && batch.current !== null && !item && batch.done.length + 1 < batch.items.length) {
+    if (!finishNow && batch && batch.current !== null && !item && batch.done.length + 1 < batch.items.length) {
       for (const uri of newPhotos) if (uri !== clean.imageUri && uri !== batch.stored) deletePhoto(uri);
       setNewPhotos([batch.stored]);
       setBatch({ ...batch, done: [...batch.done, batch.current], current: null });
@@ -423,7 +423,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         <Input key={`notes-${formKey}`} defaultValue={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
       </Field>
 
-      <Button label={item ? 'Save changes' : leftAfter > 0 ? `Add, then next item (${leftAfter} left)` : batch && batch.done.length > 0 ? 'Add and finish' : 'Add to collection'} onPress={save} disabled={!canSave} busy={busy} />
+      <Button label={item ? 'Save changes' : leftAfter > 0 ? `Add, then next item (${leftAfter} left)` : batch && batch.done.length > 0 ? 'Add and finish' : 'Add to collection'} onPress={() => void save()} disabled={!canSave} busy={busy} />
+      {leftAfter > 0 ? <Button label="Add and finish" variant="secondary" onPress={() => void save(true)} disabled={!canSave || busy} /> : null}
       {item ? <Button label="Delete" variant="danger" icon="trash" onPress={remove} /> : null}
       <View style={{ height: Spacing.four, backgroundColor: theme.background }} />
     </Screen>

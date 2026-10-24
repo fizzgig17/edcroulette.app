@@ -45,14 +45,19 @@ export function BrandPicker({
   const typed = text.trim();
   const exact = useMemo(() => brands.find((b) => brandKey(b.name) === brandKey(typed)) ?? null, [brands, typed]);
   const matches = useMemo(() => (typed.length >= 2 && !exact ? matchBrands(typed, brands, 4, category) : []), [typed, exact, brands, category]);
-  const popular = useMemo(() => brands.filter((b) => b.categories[0] === category || b.categories.includes(category)).slice(0, 8), [brands, category]);
+  // Only brands that make this kind of item.
+  const popular = useMemo(() => brands.filter((b) => b.categories.includes(category)).slice(0, 14), [brands, category]);
+  const onList = popular.some((b) => brandKey(b.name) === brandKey(typed));
+  const [other, setOther] = useState(false);
+  const custom = typed && !onList ? typed : null;
 
   function choose(name: string) {
     select();
     setText(name);
     setFieldKey((k) => k + 1000);
     setSent(null);
-    onChange(name);
+    setOther(false);
+    onChange(name || null);
   }
 
   async function suggest() {
@@ -70,32 +75,35 @@ export function BrandPicker({
     }
   }
 
-  const notOnList = typed.length >= 2 && !exact && matches.length === 0;
+  const notOnList = other && typed.length >= 2 && !exact && matches.length === 0;
 
   return (
     <View style={styles.wrap}>
-      <Input
-        key={fieldKey}
-        defaultValue={text}
-        onChangeText={(t) => {
-          setText(t);
-          setSent(null);
-          onChange(t.trim() ? t : null);
-        }}
-        placeholder="e.g. Spyderco"
-        maxLength={60}
-        autoCapitalize="words"
-        autoCorrect={false}
-        returnKeyType="done"
-      />
-      {typed.length === 0 && popular.length > 0 ? (
-        <View style={styles.chips}>
-          {popular.map((b) => (
-            <Chip key={b.name} label={b.name} selected={false} onPress={() => choose(b.name)} />
-          ))}
-        </View>
+      <View style={styles.chips} accessibilityRole="radiogroup">
+        {popular.map((b) => (
+          <Chip small key={b.name} label={b.name} selected={brandKey(b.name) === brandKey(typed)} onPress={() => (onList && brandKey(b.name) === brandKey(typed) ? choose('') : choose(b.name))} />
+        ))}
+        {custom && !other ? <Chip small label={custom} selected onPress={() => choose('')} /> : null}
+        <Chip small label="+ Other" selected={other} onPress={() => setOther((o) => !o)} />
+      </View>
+      {other ? (
+        <Input
+          key={fieldKey}
+          autoFocus
+          defaultValue={custom ?? ''}
+          onChangeText={(t) => {
+            setText(t);
+            setSent(null);
+            onChange(t.trim() ? t : null);
+          }}
+          placeholder="Type a brand"
+          maxLength={60}
+          autoCapitalize="words"
+          autoCorrect={false}
+          returnKeyType="done"
+        />
       ) : null}
-      {matches.length > 0 ? (
+      {other && matches.length > 0 ? (
         <View style={styles.chips}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
             Did you mean

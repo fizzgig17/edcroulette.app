@@ -35,7 +35,7 @@ Always answer by calling the report_item tool, once, with one entry in "items" f
 Rules:
 - If the photo has nudity, sexual content, graphic violence, or anything not suitable for all ages, set unsafe to true, leave everything else empty, and do not describe it.
 - If there is no everyday-carry item in the photo, report one item with category "Other" and brand and model empty.
-- "outline" traces the item's silhouette as 10 to 24 points going round it (each [x, y] as fractions 0 to 1 of the picture), hugging its edge so that nothing of a neighbouring item is inside. "box" is where each item is in the picture, as fractions of the picture: [left, top, width, height], each between 0 and 1. Make it fit the whole item snugly. Do not list the same item twice, and do not list parts of one item as separate items.
+- "outline" traces the item's silhouette as 16 to 40 points going round it, evenly spaced, in order (each [x, y] as fractions 0 to 1 of the picture), hugging its edge so that nothing of a neighbouring item is inside. "box" is where each item is in the picture, as fractions of the picture: [left, top, width, height], each between 0 and 1. Make it fit the whole item snugly. Do not list the same item twice, and do not list parts of one item as separate items.
 - Only say what you can see. A brand or model counts only if it is printed, engraved or unmistakable from the shape. Otherwise leave it empty. A wrong brand is worse than a blank one.
 - "confidence" is how sure you are of the brand and model together: high, medium or low.
 - "color" is the main color of the item itself as a hex code like #3A3F45 (not the background, not the hand).
@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
     const outline = (Array.isArray(raw.outline) ? raw.outline : [])
       .map((p: unknown) => (Array.isArray(p) ? [frac(Number(p[0])), frac(Number(p[1]))] : null))
       .filter((p: number[] | null): p is number[] => !!p)
-      .slice(0, 24);
+      .slice(0, 48);
     return {
       category,
       brand,
