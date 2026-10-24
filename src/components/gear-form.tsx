@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Asset } from 'expo-asset';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
+import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
@@ -131,6 +132,13 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       );
       setNewPhotos((p) => [...p, stored]);
       set('imageUri', stored);
+      // The other items in the photo are blurred (the background stays sharp).
+      try {
+        const others = c.items.map((o, i) => (i === index ? null : areaOf(o))).filter((a): a is [number, number][] => !!a);
+        await blurAreasInPhoto(stored, others, areaOf(it), dims, { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size });
+      } catch {
+        // The photo is still fine without it.
+      }
     } catch {
       // Keep the whole photo; the details are already filled in.
     } finally {
