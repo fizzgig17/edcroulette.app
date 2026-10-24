@@ -4,12 +4,13 @@
  */
 import { Image } from 'expo-image';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import type { PhotoCrop, PickedPhoto } from '@/lib/photos';
 
 const MAX_ZOOM = 5;
@@ -23,7 +24,7 @@ export function PhotoCropper({ photo, onCancel, onDone }: { photo: PickedPhoto |
 }
 
 function Cropper({ photo, onCancel, onDone }: { photo: PickedPhoto; onCancel: () => void; onDone: (photo: PickedPhoto, crop: PhotoCrop) => void }) {
-  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const view = Math.min(width - Spacing.three * 2, 420);
   // The photo starts just big enough to fill the square.
@@ -83,11 +84,7 @@ function Cropper({ photo, onCancel, onDone }: { photo: PickedPhoto; onCancel: ()
         <ThemedText type="smallBold" style={{ color: '#FFFFFF', fontSize: 17 }}>
           Frame your photo
         </ThemedText>
-        <Pressable onPress={done} hitSlop={12} accessibilityRole="button">
-          <ThemedText type="smallBold" style={{ color: theme.accent, fontSize: 17 }}>
-            Use photo
-          </ThemedText>
-        </Pressable>
+        <View style={styles.spacer} />
       </View>
       <View style={styles.stage}>
         <GestureDetector gesture={gesture}>
@@ -102,6 +99,9 @@ function Cropper({ photo, onCancel, onDone }: { photo: PickedPhoto; onCancel: ()
           Drag to move, pinch to zoom. The square is what gets saved.
         </ThemedText>
       </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) + Spacing.two }]}>
+        <Button label="Use photo" icon="check" big onPress={done} />
+      </View>
     </View>
   );
 }
@@ -113,5 +113,7 @@ const styles = StyleSheet.create({
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three },
   frame: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: Radius.large },
   edge: { borderRadius: Radius.large, borderWidth: 2, borderColor: '#FFFFFF66' },
+  spacer: { width: 50 },
+  footer: { paddingHorizontal: Spacing.three, paddingTop: Spacing.three },
   hint: { color: '#FFFFFFAA', textAlign: 'center', paddingHorizontal: Spacing.four },
 });
