@@ -74,9 +74,12 @@ export interface Identified {
   finish: string | null;
   color: string | null;
   notes: string | null;
+  /** Where the item is in the photo, as fractions (0 to 1) of its width and height. */
+  box?: { x: number; y: number; w: number; h: number } | null;
 }
 
-export type IdentifyResult = ({ ok: true } & Identified) | { ok: false; code: string; error: string; detail?: string };
+/** The main answer, plus every item seen when the photo has several. */
+export type IdentifyResult = ({ ok: true } & Identified & { items?: Identified[] }) | { ok: false; code: string; error: string; detail?: string };
 
 /** Asks the AI service what an item is, from a small base64 JPEG. */
 export async function identifyPhoto(base64: string): Promise<IdentifyResult> {

@@ -18,8 +18,9 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { identifyPhoto, type Identified } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
+import { ItemPicker } from '@/components/item-picker';
 import { PhotoCropper } from '@/components/photo-cropper';
-import { deletePhoto, photoBase64, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
+import { deletePhoto, photoBase64, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
 import { CATEGORIES, FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
@@ -39,6 +40,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [materialOptions, setMaterialOptions] = useState<string[]>([]);
+  const [choices, setChoices] = useState<{ stored: string; items: Identified[] } | null>(null);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
@@ -97,6 +99,34 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       return;
     }
     applyIdentified(r);
+    // Several items in the photo: let the person pick which one they mean.
+    if (r.items && r.items.length > 1) setChoices({ stored, items: r.items });
+  }
+
+  /** The person tapped an item: fill in its details and keep just that item in the photo. */
+  async function chooseItem(index: number, dims: { width: number; height: number }) {
+    const c = choices;
+    setChoices(null);
+    const it = c?.items[index];
+    if (!c || !it) return;
+    applyIdentified(it);
+    const uri = photoUri(c.stored);
+    if (!it.box || !uri) return;
+    setPreparing(true);
+    try {
+      const { x, y, w, h } = it.box;
+      const size = Math.min(Math.min(dims.width, dims.height), Math.max(w * dims.width, h * dims.height) * 1.15);
+      const stored = await savePhoto(
+        { uri, width: dims.width, height: dims.height },
+        { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size },
+      );
+      setNewPhotos((p) => [...p, stored]);
+      set('imageUri', stored);
+    } catch {
+      // Keep the whole photo; the details are already filled in.
+    } finally {
+      setPreparing(false);
+    }
   }
 
   function applyIdentified(r: Identified) {
@@ -217,6 +247,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
+      <ItemPicker uri={choices ? photoUri(choices.stored) : null} items={choices?.items ?? null} onCancel={() => setChoices(null)} onChoose={(i, d) => void chooseItem(i, d)} />
       <PhotoCropper photo={cropping} onCancel={() => setCropping(null)} onDone={(p, c) => void usePhoto(p, c)} />
 
       <View style={styles.photo}>

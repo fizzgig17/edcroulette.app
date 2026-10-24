@@ -30,11 +30,12 @@ const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus
 const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated'];
 
 const SYSTEM = `You help people catalog their everyday-carry (EDC) gear from a photo: pocket knives, flashlights, pens, multi-tools, watches, wallets and keychain items.
-Always answer by calling the report_item tool, once.
+Always answer by calling the report_item tool, once, with one entry in "items" for each separate everyday-carry item you can clearly see (at most three, the most prominent first).
 
 Rules:
 - If the photo has nudity, sexual content, graphic violence, or anything not suitable for all ages, set unsafe to true, leave everything else empty, and do not describe it.
-- If there is no everyday-carry item in the photo, set category to "Other" and leave brand and model empty.
+- If there is no everyday-carry item in the photo, report one item with category "Other" and brand and model empty.
+- "box" is where each item is in the picture, as fractions of the picture: [left, top, width, height], each between 0 and 1. Make it fit the whole item snugly. Do not list the same item twice, and do not list parts of one item as separate items.
 - Only say what you can see. A brand or model counts only if it is printed, engraved or unmistakable from the shape. Otherwise leave it empty. A wrong brand is worse than a blank one.
 - "confidence" is how sure you are of the brand and model together: high, medium or low.
 - "color" is the main color of the item itself as a hex code like #3A3F45 (not the background, not the hand).
@@ -43,28 +44,37 @@ Rules:
 - Never identify or describe any person in the photo.
 - Keep notes to one short plain sentence about what you can see (for example "Blue anodized aluminum body with a pocket clip"), or leave it empty.`;
 
+const ITEM = {
+  type: 'object',
+  properties: {
+    category: { type: 'string', enum: CATEGORIES },
+    brand: { type: 'string', description: 'The brand as written on the item, or empty.' },
+    model: { type: 'string', description: 'The model name, or empty.' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    materials: {
+      type: 'array',
+      items: { type: 'string', enum: MATERIALS },
+      maxItems: 3,
+      description: 'Up to three materials the body could be made of, most likely first. Include other materials that would look the same in a photo.',
+    },
+    finish: { type: 'string', description: `One of: ${FINISHES.join(', ')}; or empty.` },
+    color: { type: 'string', description: 'Main color as #RRGGBB, or empty.' },
+    notes: { type: 'string' },
+    box: { type: 'array', items: { type: 'number' }, minItems: 4, maxItems: 4, description: '[left, top, width, height] as fractions (0 to 1) of the picture.' },
+  },
+  required: ['category', 'confidence', 'box'],
+};
+
 const TOOL = {
   name: 'report_item',
-  description: 'Report what the item in the photo is.',
+  description: 'Report the everyday-carry items in the photo.',
   input_schema: {
     type: 'object',
     properties: {
-      category: { type: 'string', enum: CATEGORIES },
-      brand: { type: 'string', description: 'The brand as written on the item, or empty.' },
-      model: { type: 'string', description: 'The model name, or empty.' },
-      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-      materials: {
-        type: 'array',
-        items: { type: 'string', enum: MATERIALS },
-        maxItems: 3,
-        description: 'Up to three materials the body could be made of, most likely first. Include other materials that would look the same in a photo.',
-      },
-      finish: { type: 'string', description: `One of: ${FINISHES.join(', ')}; or empty.` },
-      color: { type: 'string', description: 'Main color as #RRGGBB, or empty.' },
-      notes: { type: 'string' },
+      items: { type: 'array', items: ITEM, minItems: 1, maxItems: 3 },
       unsafe: { type: 'boolean' },
     },
-    required: ['category', 'confidence'],
+    required: ['items'],
   },
 };
 
@@ -179,34 +189,48 @@ Deno.serve(async (req) => {
   if (!out) return json({ ok: false, code: 'error', error: 'Could not read the photo. Try again.' }, 502);
   if (out.unsafe === true) return json({ ok: false, code: 'unsafe', error: 'That photo can’t be used here.' });
 
-  const category = pick(out.category, CATEGORIES) ?? 'Other';
-  const brandText = clean(out.brand, 60);
-  const model = clean(out.model, 60);
-  const confident = out.confidence === 'high' || out.confidence === 'medium';
+  // Turn one reported item into the app's answer (matching its brand against the catalog).
+  async function describe(raw: Record<string, unknown>) {
+    const category = pick(raw.category, CATEGORIES) ?? 'Other';
+    const brandText = clean(raw.brand, 60);
+    const model = clean(raw.model, 60);
+    const confident = raw.confidence === 'high' || raw.confidence === 'medium';
 
-  // Match what the model read against the brand catalog (fixes spelling and aliases).
-  let brand: string | null = null;
-  let brandCandidates: { name: string; score: number }[] = [];
-  if (brandText) {
-    const { data: matches } = await db.rpc('match_brands', { q: brandText, max_results: 4 });
-    brandCandidates = ((matches ?? []) as { name: string; score: number }[]).map((m) => ({ name: m.name, score: Math.round(m.score * 100) / 100 }));
-    if (brandCandidates[0] && brandCandidates[0].score >= 0.8 && confident) brand = brandCandidates[0].name;
+    let brand: string | null = null;
+    let brandCandidates: { name: string; score: number }[] = [];
+    if (brandText) {
+      const { data: matches } = await db.rpc('match_brands', { q: brandText, max_results: 4 });
+      brandCandidates = ((matches ?? []) as { name: string; score: number }[]).map((m) => ({ name: m.name, score: Math.round(m.score * 100) / 100 }));
+      if (brandCandidates[0] && brandCandidates[0].score >= 0.8 && confident) brand = brandCandidates[0].name;
+    }
+
+    const materialOptions = [...new Set((Array.isArray(raw.materials) ? raw.materials : []).map((m: unknown) => pick(m, MATERIALS)).filter((m: string | null): m is string => !!m))].slice(0, 3);
+    const colorText = clean(raw.color, 7);
+    const b = Array.isArray(raw.box) ? raw.box.map(Number) : [];
+    const frac = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+    const left = frac(b[0] ?? 0);
+    const top = frac(b[1] ?? 0);
+    const box = b.length === 4 ? { x: left, y: top, w: Math.min(frac(b[2] ?? 1), 1 - left), h: Math.min(frac(b[3] ?? 1), 1 - top) } : null;
+    return {
+      category,
+      brand,
+      brandRead: brandText || null, // what the model read, even if not in the catalog
+      brandCandidates,
+      model: model || null,
+      confidence: ['high', 'medium', 'low'].includes(raw.confidence as string) ? raw.confidence : 'low',
+      material: materialOptions[0] ?? null,
+      materialOptions,
+      finish: pick(raw.finish, FINISHES),
+      color: /^#[0-9a-fA-F]{6}$/.test(colorText) ? colorText.toUpperCase() : null,
+      notes: clean(raw.notes, 200) || null,
+      box: box && box.w > 0.02 && box.h > 0.02 ? box : null,
+    };
   }
 
-  const materialOptions = [...new Set((Array.isArray(out.materials) ? out.materials : []).map((m: unknown) => pick(m, MATERIALS)).filter((m: string | null): m is string => !!m))].slice(0, 3);
-  const color = /^#[0-9a-fA-F]{6}$/.test(clean(out.color, 7)) ? clean(out.color, 7).toUpperCase() : null;
-  return json({
-    ok: true,
-    category,
-    brand,
-    brandRead: brandText || null, // what the model read, even if not in the catalog
-    brandCandidates,
-    model: model || null,
-    confidence: ['high', 'medium', 'low'].includes(out.confidence) ? out.confidence : 'low',
-    material: materialOptions[0] ?? null,
-    materialOptions,
-    finish: pick(out.finish, FINISHES),
-    color,
-    notes: clean(out.notes, 200) || null,
-  });
+  const rawItems = (Array.isArray(out.items) ? out.items : []).filter((i: unknown) => i && typeof i === 'object').slice(0, 3) as Record<string, unknown>[];
+  if (rawItems.length === 0) return json({ ok: false, code: 'error', error: 'Could not read the photo. Try again.' }, 502);
+  const items = [];
+  for (const raw of rawItems) items.push(await describe(raw));
+  // The first item is the main answer (older app versions read only this); `items` lets newer ones offer a choice.
+  return json({ ok: true, ...items[0], items });
 });
