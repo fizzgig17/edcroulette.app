@@ -47,7 +47,8 @@ function makeTick(pitch: number): Float32Array {
     body[i] =
       Math.sin(2 * Math.PI * 1250 * pitch * t) * Math.exp(-t * 230) * 0.7 +
       Math.sin(2 * Math.PI * 2310 * pitch * t) * Math.exp(-t * 330) * 0.32 +
-      Math.sin(2 * Math.PI * 410 * pitch * t) * Math.exp(-t * 120) * 0.5;
+      Math.sin(2 * Math.PI * 410 * pitch * t) * Math.exp(-t * 120) * 0.5 +
+      Math.sin(2 * Math.PI * 3100 * pitch * t) * Math.exp(-t * 500) * 0.12;
   }
   const low = lowpass(noise, 1400); // keep the top of the noise, lose the rumble
   const x = new Float32Array(n);
@@ -55,24 +56,24 @@ function makeTick(pitch: number): Float32Array {
   return finish(x, 6500);
 }
 
-function makeClunk(depth: number, ring: number, seconds: number): Float32Array {
+/** A soft wooden thock: a mid body that phone speakers can reproduce, a little low weight, no ring. */
+function makeClunk(depth: number, tail: number, seconds: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const x = new Float32Array(n);
   const knock = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) knock[i] = (Math.random() * 2 - 1) * Math.exp(-(i / SR) * 500);
-  const k1 = lowpass(knock, 2500);
-  const k2 = lowpass(knock, 300);
+  for (let i = 0; i < n; i += 1) knock[i] = (Math.random() * 2 - 1) * Math.exp(-(i / SR) * 420);
+  const k1 = lowpass(knock, 3200);
+  const k2 = lowpass(knock, 400);
   let phase = 0;
   for (let i = 0; i < n; i += 1) {
     const t = i / SR;
-    phase += (2 * Math.PI * 150 * depth * (1 + 0.6 * Math.exp(-t * 40))) / SR; // pitch drops as it lands
-    let v = Math.sin(phase) * Math.exp(-t * (22 / depth)) * 0.9 + ((k1[i] as number) - (k2[i] as number)) * 0.5;
-    if (ring) {
-      v += ring * 0.3 * (Math.sin(2 * Math.PI * 1480 * t) * Math.exp(-t * 14) + 0.5 * Math.sin(2 * Math.PI * 2750 * t) * Math.exp(-t * 20) + 0.25 * Math.sin(2 * Math.PI * 4120 * t) * Math.exp(-t * 30));
-    }
-    x[i] = v;
+    phase += (2 * Math.PI * 240 * depth * (1 + 0.5 * Math.exp(-t * 45))) / SR; // pitch drops as it lands
+    const body = Math.sin(phase) * Math.exp(-t * (30 / depth));
+    const wood = Math.sin(2 * Math.PI * 560 * depth * t) * Math.exp(-t * 70) * 0.5;
+    const low = tail * Math.sin(2 * Math.PI * 130 * t) * Math.exp(-t * 16) * 0.5;
+    x[i] = body * 0.8 + wood + low + ((k1[i] as number) - (k2[i] as number)) * 0.45;
   }
-  return finish(x, 7000, 2);
+  return finish(x, 5200, 2);
 }
 
 let kit: { ticks: Float32Array[]; clunk: Float32Array; land: Float32Array } | null = null;
@@ -80,8 +81,8 @@ function getKit() {
   if (!kit) {
     kit = {
       ticks: [0.84, 0.92, 1.0, 1.08, 1.17, 1.27].map(makeTick),
-      clunk: makeClunk(1, 0, 0.4),
-      land: makeClunk(0.8, 1, 0.65),
+      clunk: makeClunk(1.15, 0, 0.3),
+      land: makeClunk(0.9, 1, 0.5),
     };
   }
   return kit;
@@ -112,7 +113,10 @@ function toWav(hits: Hit[]): Uint8Array {
   v.setUint16(34, 16, true);
   str(36, 'data');
   v.setUint32(40, mix.length * 2, true);
-  for (let i = 0; i < mix.length; i += 1) v.setInt16(44 + i * 2, Math.round(Math.tanh((mix[i] as number) * 1.1) * 0.9 * 32767), true);
+  let peak = 1e-6;
+  for (let i = 0; i < mix.length; i += 1) peak = Math.max(peak, Math.abs(mix[i] as number));
+  const scale = (0.92 * 32767) / peak;
+  for (let i = 0; i < mix.length; i += 1) v.setInt16(44 + i * 2, Math.round((mix[i] as number) * scale), true);
   return bytes;
 }
 
@@ -159,7 +163,7 @@ export function startSpinSound(runs: { rows: number; durationMs: number }[], ove
   if (!getSoundOn() || runs.length === 0) return;
   const { ticks, clunk, land } = getKit();
   const hits: Hit[] = [];
-  const gain = 0.62 / Math.sqrt(runs.length);
+  const gain = 0.8;
   let lastEnd = -1;
   let lastIndex = 0;
   runs.forEach((run, index) => {
@@ -180,7 +184,7 @@ export function startSpinSound(runs: { rows: number; durationMs: number }[], ove
   });
   runs.forEach((run, index) => {
     const end = run.durationMs / 1000 + settleMs / 1000 - 0.05;
-    hits.push({ at: Math.max(0, end), sound: index === lastIndex ? land : clunk, gain: index === lastIndex ? 1 : 0.8 });
+    hits.push({ at: Math.max(0, end), sound: index === lastIndex ? land : clunk, gain: index === lastIndex ? 1.15 : 0.9 });
   });
   play(hits);
 }
