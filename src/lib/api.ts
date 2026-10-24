@@ -69,6 +69,8 @@ export interface Identified {
   model: string | null;
   confidence: 'high' | 'medium' | 'low';
   material: string | null;
+  /** The likely materials, best guess first (a photo can't prove one). */
+  materialOptions?: string[];
   finish: string | null;
   color: string | null;
   notes: string | null;

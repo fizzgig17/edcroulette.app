@@ -8,7 +8,7 @@ import { GearThumb } from '@/components/gear-thumb';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { ChipGroup } from '@/components/ui/chip';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Card, Field, Input } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
@@ -38,6 +38,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   const [weightText, setWeightText] = useState(item?.weightGrams != null ? String(item.weightGrams) : '');
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [materialOptions, setMaterialOptions] = useState<string[]>([]);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
@@ -104,6 +105,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     const text = (v: string | null | undefined) => (v ?? '').replace(/["\u201C\u201D`]/g, '').trim() || null;
     const brandText = text(r.brand) ?? text(r.brandRead);
     const auto = autoFields.current;
+    setMaterialOptions(r.materialOptions && r.materialOptions.length > 1 ? r.materialOptions : []);
     // Take the photo's answer where the field is empty or came from an earlier photo.
     const fill = <K extends 'brand' | 'model' | 'material' | 'finish' | 'primaryColor' | 'notes'>(k: K, v: GearDraft[K]): GearDraft[K] => {
       if (d[k] && !auto.has(k)) return d[k];
@@ -302,6 +304,27 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
         />
       </Field>
       <Field label="Material">
+        {materialOptions.length > 1 ? (
+          <View style={styles.suggest}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              From your photo, could be
+            </ThemedText>
+            <View style={styles.suggestRow}>
+              {materialOptions.map((m) => (
+                <Chip
+                  key={m}
+                  small
+                  label={m}
+                  selected={draft.material === m}
+                  onPress={() => {
+                    set('material', m);
+                    setMaterialKey((k) => k + 1);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
         <ChipGroup options={MATERIALS} value={(MATERIALS as readonly string[]).includes(draft.material ?? '') ? (draft.material as (typeof MATERIALS)[number]) : null} onChange={(v) => {
             set('material', v);
             setMaterialKey((k) => k + 1);
@@ -346,6 +369,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center' },
   photo: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
+  suggest: { gap: Spacing.one },
+  suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   photoButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   banner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },

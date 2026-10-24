@@ -38,7 +38,8 @@ Rules:
 - Only say what you can see. A brand or model counts only if it is printed, engraved or unmistakable from the shape. Otherwise leave it empty. A wrong brand is worse than a blank one.
 - "confidence" is how sure you are of the brand and model together: high, medium or low.
 - "color" is the main color of the item itself as a hex code like #3A3F45 (not the background, not the hand).
-- Material and finish: pick from the lists if one fits, otherwise leave empty. Do not guess steel types or alloys.
+- Finish: pick from the list if one fits, otherwise leave empty.
+- Materials: a photo can't prove what something is made of, so give your best guess first, then up to two other materials from the list that would look the same. A dark or black body could be anodized aluminum, black zirconium, or a coated titanium or steel: include Zirconium among the possibilities when a pen, light or tool looks black or dark grey and sleek. Warm gold or orange metal could be Brass or Copper. Do not guess steel types or alloys; leave materials empty if nothing fits.
 - Never identify or describe any person in the photo.
 - Keep notes to one short plain sentence about what you can see (for example "Blue anodized aluminum body with a pocket clip"), or leave it empty.`;
 
@@ -52,7 +53,12 @@ const TOOL = {
       brand: { type: 'string', description: 'The brand as written on the item, or empty.' },
       model: { type: 'string', description: 'The model name, or empty.' },
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-      material: { type: 'string', description: `One of: ${MATERIALS.join(', ')}; or empty.` },
+      materials: {
+        type: 'array',
+        items: { type: 'string', enum: MATERIALS },
+        maxItems: 3,
+        description: 'Up to three materials the body could be made of, most likely first. Include other materials that would look the same in a photo.',
+      },
       finish: { type: 'string', description: `One of: ${FINISHES.join(', ')}; or empty.` },
       color: { type: 'string', description: 'Main color as #RRGGBB, or empty.' },
       notes: { type: 'string' },
@@ -174,6 +180,7 @@ Deno.serve(async (req) => {
     if (brandCandidates[0] && brandCandidates[0].score >= 0.8 && confident) brand = brandCandidates[0].name;
   }
 
+  const materialOptions = [...new Set((Array.isArray(out.materials) ? out.materials : []).map((m: unknown) => pick(m, MATERIALS)).filter((m: string | null): m is string => !!m))].slice(0, 3);
   const color = /^#[0-9a-fA-F]{6}$/.test(clean(out.color, 7)) ? clean(out.color, 7).toUpperCase() : null;
   return json({
     ok: true,
@@ -183,7 +190,8 @@ Deno.serve(async (req) => {
     brandCandidates,
     model: model || null,
     confidence: ['high', 'medium', 'low'].includes(out.confidence) ? out.confidence : 'low',
-    material: pick(out.material, MATERIALS),
+    material: materialOptions[0] ?? null,
+    materialOptions,
     finish: pick(out.finish, FINISHES),
     color,
     notes: clean(out.notes, 200) || null,
