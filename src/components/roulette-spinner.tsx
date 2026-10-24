@@ -316,15 +316,14 @@ function Reel({
       <Pressable
         onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
         disabled={!canLock}
+        hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={isLocked ? `Unlock ${slot.category}` : `Lock ${shown?.name ?? slot.category}`}
-        style={({ pressed }) => [styles.lock, { backgroundColor: isLocked ? theme.accent : theme.surface, borderColor: isLocked ? theme.accent : theme.border }, !canLock && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}>
-        <Icon name={isLocked ? 'lock' : 'unlock'} size={14} color={isLocked ? theme.onAccent : theme.text} />
-        {wide ? null : (
-          <ThemedText type="smallBold" style={{ color: isLocked ? theme.onAccent : theme.text, fontSize: 12 }}>
-            {isLocked ? 'Locked' : 'Lock'}
-          </ThemedText>
-        )}
+        style={({ pressed }) => [styles.lock, !canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
+        <Icon name={isLocked ? 'lock' : 'unlock'} size={20} color={isLocked ? theme.accent : theme.text} />
+        <ThemedText type="smallBold" style={{ color: isLocked ? theme.accent : theme.textSecondary, fontSize: 11, lineHeight: 13 }}>
+          {isLocked ? 'Locked' : 'Lock'}
+        </ThemedText>
       </Pressable>
     </View>
   );
@@ -615,7 +614,7 @@ const styles = StyleSheet.create({
   nameWide: { flex: 1 },
   dim: { opacity: 0.45, transform: [{ scale: 0.86 }] },
   shade: { position: 'absolute', left: 0, right: 0 },
-  lock: { flexDirection: 'row', gap: Spacing.one, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
+  lock: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 2 },
   center: { textAlign: 'center' },
   tiny: { fontSize: 10, lineHeight: 12, letterSpacing: 0.6 },
   order: { marginBottom: -Spacing.one },

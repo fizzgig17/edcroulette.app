@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
@@ -10,7 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { GearItem } from '@/types/models';
 import { useTheme } from '@/hooks/use-theme';
 import { useGear } from '@/lib/gear';
@@ -24,6 +23,19 @@ function when(ts: number): string {
   return sameDay ? `Today at ${time}` : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`;
 }
 
+/**
+ * Lays the picks out in as few rows as fit: sideways up to three across (four is
+ * two and two, five is three and two), upright two across. A short last row
+ * stretches to fill the width.
+ */
+function rowsOf<T>(picks: T[], landscape: boolean): T[][] {
+  const n = picks.length;
+  const cols = landscape ? (n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3) : Math.min(2, Math.max(1, n));
+  const rows: T[][] = [];
+  for (let i = 0; i < n; i += cols) rows.push(picks.slice(i, i + cols));
+  return rows;
+}
+
 export default function SpinScreen() {
   const theme = useTheme();
   const { items, lastSpin, itemById, loading } = useGear();
@@ -32,12 +44,6 @@ export default function SpinScreen() {
   const landscape = width > height;
   const { setControl, topSignal } = useSpinDock();
   const [open, setOpen] = useState<GearItem | null>(null);
-  // Two blocks across in portrait, three sideways.
-  const cols = landscape ? 3 : 2;
-  const insets = useSafeAreaInsets();
-  const room = landscape ? width - Math.max(insets.left, 0) - Math.max(insets.right, 0) : Math.min(width, MaxContentWidth);
-  const blockWidth = Math.floor((room - Spacing.three * 2 - Spacing.two * (cols - 1)) / cols);
-
   return (
     <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal} fullWidth={landscape}>
       {landscape && !loading && items.length === 0 ? (
@@ -61,7 +67,9 @@ export default function SpinScreen() {
             </ThemedText>
           </View>
           <View style={styles.grid}>
-            {lastSpin.picks.map((p) => {
+            {rowsOf(lastSpin.picks, landscape).map((row, r) => (
+              <View key={r} style={styles.gridRow}>
+                {row.map((p) => {
               const g = itemById(p.itemId);
               return (
                 <Pressable
@@ -70,7 +78,7 @@ export default function SpinScreen() {
                   onPress={() => setOpen(g)}
                   accessibilityRole="button"
                   accessibilityLabel={g ? `${p.category}: ${g.name}. Show details` : p.category}
-                  style={({ pressed }) => [styles.block, { width: blockWidth, backgroundColor: theme.surface, borderColor: theme.border }, pressed && { opacity: 0.75 }]}>
+                  style={({ pressed }) => [styles.block, { backgroundColor: theme.surface, borderColor: theme.border }, pressed && { opacity: 0.75 }]}>
                   <View style={styles.blockTop}>
                     <GearThumb item={g} size={40} />
                     <View style={styles.flex}>
@@ -96,6 +104,8 @@ export default function SpinScreen() {
                 </Pressable>
               );
             })}
+              </View>
+            ))}
           </View>
         </View>
       ) : null}
@@ -169,8 +179,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1, gap: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, padding: Spacing.two, gap: 6 },
+  grid: { gap: Spacing.two },
+  gridRow: { flexDirection: 'row', gap: Spacing.two },
+  block: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, padding: Spacing.two, gap: 6 },
   blockTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   blockName: { fontSize: 14, lineHeight: 18 },
   blockDetail: { fontSize: 11, lineHeight: 14, flexShrink: 1 },
