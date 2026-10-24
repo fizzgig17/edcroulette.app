@@ -14,6 +14,6 @@ Built like Belay Buddy: Expo + Expo Router, `develop` → dev, `master` → prod
 
 ## Backend
 
-EDC Roulette shares Belay Buddy's Supabase projects (belaybuddy-dev /
-belaybuddy-prod). Everything it owns lives in the `edc` schema, the `edc-gear`
+EDC Roulette shares Belay Buddy's Supabase projects (fizzgig-apps-dev /
+fizzgig-apps-prod). Everything it owns lives in the `edc` schema, the `edc-gear`
 storage bucket and `edc-` Edge Functions. See `supabase/edc/README.md`.

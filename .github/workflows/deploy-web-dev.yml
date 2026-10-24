@@ -1,0 +1,113 @@
+# Builds the website (the Expo web version of the app) from `develop` and
+# deploys it to https://dev.edcroulette.app on Spaceship.
+#
+# Unlike hcri.io, the server can't just `git pull`: the site has to be built
+# first, and this repo is private. So the build runs here, the result is
+# uploaded over SSH as one archive, and then synced into the site folder.
+#
+# Repository secrets (Settings > Secrets and variables > Actions). The first
+# five are the same values as in the hcri.io and belaybuddy.app repos (same server):
+#   SPACESHIP_HOST, SPACESHIP_PORT, SPACESHIP_USER,
+#   SPACESHIP_SSH_KEY, SPACESHIP_SSH_PASSPHRASE
+#   SPACESHIP_DEV_PATH   absolute path of dev.edcroulette.app's document root,
+#                        e.g. /home/youruser/dev.edcroulette.app
+name: Deploy website (dev)
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-dev
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          HOST: ${{ secrets.SPACESHIP_HOST }}
+          USER: ${{ secrets.SPACESHIP_USER }}
+          KEY: ${{ secrets.SPACESHIP_SSH_KEY }}
+          DEST: ${{ secrets.SPACESHIP_DEV_PATH }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing SPACESHIP_HOST"
+          [ -n "$USER" ] || missing="$missing SPACESHIP_USER"
+          [ -n "$KEY" ] || missing="$missing SPACESHIP_SSH_KEY"
+          [ -n "$DEST" ] || missing="$missing SPACESHIP_DEV_PATH"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets:$missing"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Uses the dev Supabase project from .env. --clear stops Metro reusing
+      # cached EXPO_PUBLIC_* values.
+      - name: Build website
+        run: |
+          CI=1 npx expo export --clear --platform web --output-dir dist
+
+      - name: Dev-only server rules
+        run: |
+          cat >> dist/.htaccess <<'EOF'
+
+          # dev.edcroulette.app only: keep the dev site out of search results.
+          <IfModule mod_headers.c>
+              Header always set X-Robots-Tag "noindex, nofollow"
+          </IfModule>
+          EOF
+          printf 'User-agent: *\nDisallow: /\n' > dist/robots.txt
+          echo "${GITHUB_SHA::7}" > dist/version.txt
+
+      - name: Package
+        run: tar -czf site.tar.gz -C dist .
+
+      - name: Upload
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SPACESHIP_HOST }}
+          port: ${{ secrets.SPACESHIP_PORT }}
+          username: ${{ secrets.SPACESHIP_USER }}
+          key: ${{ secrets.SPACESHIP_SSH_KEY }}
+          passphrase: ${{ secrets.SPACESHIP_SSH_PASSPHRASE }}
+          source: site.tar.gz
+          target: edcroulette-deploy/dev
+
+      - name: Install on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SPACESHIP_HOST }}
+          port: ${{ secrets.SPACESHIP_PORT }}
+          username: ${{ secrets.SPACESHIP_USER }}
+          key: ${{ secrets.SPACESHIP_SSH_KEY }}
+          passphrase: ${{ secrets.SPACESHIP_SSH_PASSPHRASE }}
+          script: |
+            set -e
+            DEST="${{ secrets.SPACESHIP_DEV_PATH }}"
+            WORK="$HOME/edcroulette-deploy/dev"
+            [ -d "$DEST" ] || { echo "Site folder $DEST doesn't exist. Create dev.edcroulette.app in cPanel first."; exit 1; }
+            rm -rf "$WORK/site" && mkdir -p "$WORK/site"
+            tar -xzf "$WORK/site.tar.gz" -C "$WORK/site"
+            # Replace the site's files, keeping cPanel's own folders.
+            if command -v rsync >/dev/null; then
+              rsync -a --delete --exclude .well-known --exclude cgi-bin --exclude downloads "$WORK/site/" "$DEST/"
+            else
+              find "$DEST" -mindepth 1 -maxdepth 1 ! -name .well-known ! -name cgi-bin ! -name downloads -exec rm -rf {} +
+              cp -a "$WORK/site/." "$DEST/"
+            fi
+            rm -rf "$WORK/site" "$WORK/site.tar.gz"
+            echo "Deployed $(cat "$DEST/version.txt") to $DEST"

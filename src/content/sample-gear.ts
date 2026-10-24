@@ -1,0 +1,121 @@
+/**
+ * A starter collection for trying the app: about ten pieces for each category.
+ * Loaded from Settings ("Load sample gear"), marked as samples, not counted
+ * against the free item limit, and removed in one tap.
+ */
+import type { GearDraft } from '@/types/models';
+
+type S = [name: string, brand: string, model: string, material: string | null, finish: string | null, color: string, grams: number | null];
+
+const make = (category: string, rows: S[]): GearDraft[] =>
+  rows.map(([name, brand, model, material, finish, primaryColor, weightGrams]) => ({
+    name,
+    brand,
+    model,
+    category,
+    material,
+    finish,
+    primaryColor,
+    weightGrams,
+    notes: null,
+    imageUri: `sample:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+  }));
+
+export const SAMPLE_GEAR: GearDraft[] = [
+  ...make('Knife', [
+    ['Spyderco Para 3', 'Spyderco', 'Para 3', 'G10', 'Satin', '#2E3338', 77],
+    ['Benchmade Bugout', 'Benchmade', 'Bugout 535', 'Carbon fiber', 'Satin', '#3B4046', 52],
+    ['Kershaw Leek', 'Kershaw', 'Leek', 'Aluminum', 'Anodized', '#8A8F96', 87],
+    ['CRKT Pilar', 'CRKT', 'Pilar', 'Steel', 'Stonewashed', '#6D737A', 64],
+    ['Civivi Elementum', 'Civivi', 'Elementum', 'G10', 'Stonewashed', '#2F5D50', 85],
+    ['Sebenza 31', 'Chris Reeve Knives', 'Small Sebenza 31', 'Titanium', 'Stonewashed', '#9AA0A6', 91],
+    ['ZT 0562', 'Zero Tolerance', '0562', 'Titanium', 'Blasted', '#4A4F55', 121],
+    ['Victorinox Classic', 'Victorinox', 'Classic SD', 'Steel', 'Polished', '#C0392B', 21],
+    ['Opinel No. 8', 'Opinel', 'No. 8', 'Wood', 'Raw', '#B88A55', 45],
+    ['Buck 110', 'Buck Knives', '110 Folding Hunter', 'Brass', 'Polished', '#7B4A2A', 220],
+  ]),
+  ...make('Flashlight', [
+    ['Olight Baton 3 Pro Max', 'Olight', 'Baton 3 Pro Max', 'Aluminum', 'Anodized', '#1F2329', 80],
+    ['Fenix E-LITE', 'Fenix', 'E-LITE', 'Aluminum', 'Anodized', '#2B2E33', 26],
+    ['Streamlight MicroStream', 'Streamlight', 'MicroStream', 'Aluminum', 'Anodized', '#1B1D21', 28],
+    ['SureFire E2D Defender', 'SureFire', 'E2D Defender', 'Aluminum', 'Anodized', '#25282C', 163],
+    ['Maglite Mini', 'Maglite', 'Mini Maglite', 'Aluminum', 'Anodized', '#C0392B', 57],
+    ['Nitecore TIP SE', 'Nitecore', 'TIP SE', 'Aluminum', 'Anodized', '#3A3F45', 17],
+    ['Wurkkos TS10', 'Wurkkos', 'TS10', 'Aluminum', 'Anodized', '#4F7CAC', 27],
+    ['Sofirn SC31 Pro', 'Sofirn', 'SC31 Pro', 'Aluminum', 'Anodized', '#2F3338', 56],
+    ['Emisar D4V2', 'Emisar', 'D4V2', 'Aluminum', 'Anodized', '#7A5C99', 120],
+    ['Modlite PLHv2', 'Modlite', 'PLHv2', 'Aluminum', 'Coated', '#3C3F34', 116],
+  ]),
+  ...make('Pen', [
+    ['Tactile Turn Shaker', 'Tactile Turn', 'Shaker', 'Titanium', 'Stonewashed', '#8E949B', 38],
+    ['Fisher Bullet Space Pen', 'Fisher Space Pen', 'Bullet', 'Brass', 'Raw', '#B58A3C', 20],
+    ['Pilot G2', 'Pilot', 'G2', null, null, '#1E2A52', 14],
+    ['Lamy Safari', 'Lamy', 'Safari', null, 'Coated', '#E3B505', 18],
+    ['Kaweco Liliput', 'Kaweco', 'Liliput', 'Brass', 'Patina', '#8C6B3F', 17],
+    ['Parker Jotter', 'Parker', 'Jotter', 'Steel', 'Satin', '#A7ADB4', 24],
+    ['Zebra F-701', 'Zebra', 'F-701', 'Steel', 'Satin', '#9CA2A9', 21],
+    ['Karas Ink', 'Karas Pen Co', 'Ink', 'Aluminum', 'Anodized', '#C75B39', 40],
+    ['Big Idea Ti Click', 'Big Idea Design', 'Ti Click', 'Titanium', 'Blasted', '#6C7279', 36],
+    ['Rotring 600', 'Rotring', '600', 'Aluminum', 'Anodized', '#2A2D31', 43],
+  ]),
+  ...make('Multi-tool', [
+    ['Leatherman Wave+', 'Leatherman', 'Wave+', 'Steel', 'Satin', '#A9AFB6', 241],
+    ['Leatherman Skeletool CX', 'Leatherman', 'Skeletool CX', 'Steel', 'Satin', '#2B2E33', 142],
+    ['Leatherman Squirt PS4', 'Leatherman', 'Squirt PS4', 'Steel', 'Satin', '#9EA4AB', 57],
+    ['Leatherman Charge+ TTi', 'Leatherman', 'Charge+ TTi', 'Titanium', 'Stonewashed', '#8A9097', 232],
+    ['Gerber Suspension-NXT', 'Gerber', 'Suspension-NXT', 'Steel', 'Satin', '#7A8088', 198],
+    ['Gerber Dime', 'Gerber', 'Dime', 'Steel', 'Satin', '#6D737A', 74],
+    ['SOG PowerAssist', 'SOG', 'PowerAssist', 'Steel', 'Coated', '#3A3F45', 255],
+    ['Victorinox SwissTool Spirit', 'Victorinox', 'SwissTool Spirit', 'Steel', 'Polished', '#B8BEC5', 295],
+    ['Nextool Flagship Pro', 'Nextool', 'Flagship Pro', 'Steel', 'Blasted', '#4C5259', 215],
+    ['Leatherman Free P2', 'Leatherman', 'Free P2', 'Steel', 'Satin', '#8E949B', 228],
+  ]),
+  ...make('Watch', [
+    ['Casio F-91W', 'Casio', 'F-91W', null, null, '#1E1F22', 21],
+    ['G-Shock DW-5600', 'G-Shock', 'DW-5600', null, 'Coated', '#2A2C30', 53],
+    ['Seiko 5 SNK809', 'Seiko', '5 SNK809', 'Steel', 'Satin', '#233B5C', 75],
+    ['Timex Weekender', 'Timex', 'Weekender', 'Steel', 'Satin', '#C8B28A', 45],
+    ['Garmin Instinct 2', 'Garmin', 'Instinct 2', null, 'Coated', '#3F4A3C', 52],
+    ['Orient Bambino', 'Orient', 'Bambino', 'Steel', 'Polished', '#E8E2D0', 60],
+    ['Hamilton Khaki Field', 'Hamilton', 'Khaki Field Mechanical', 'Steel', 'Satin', '#44503C', 80],
+    ['Tissot PRX', 'Tissot', 'PRX', 'Steel', 'Satin', '#1F4E5F', 100],
+    ['Marathon GSAR', 'Marathon', 'GSAR', 'Steel', 'Blasted', '#1B1C1E', 115],
+    ['Luminox Navy SEAL', 'Luminox', 'Navy SEAL', null, 'Coated', '#222428', 95],
+  ]),
+  ...make('Wallet', [
+    ['Ridge Wallet', 'Ridge', 'Ridge Wallet', 'Titanium', 'Stonewashed', '#8C9299', 80],
+    ['Ridge Carbon', 'Ridge', 'Ridge Carbon Fiber', 'Carbon fiber', 'Satin', '#26292D', 55],
+    ['Bellroy Note Sleeve', 'Bellroy', 'Note Sleeve', null, null, '#8A5A3B', 70],
+    ['Bellroy Slim Sleeve', 'Bellroy', 'Slim Sleeve', null, null, '#2C3440', 40],
+    ['Trayvax Contour', 'Trayvax', 'Contour', null, null, '#6B4423', 55],
+    ['Ekster Parliament', 'Ekster', 'Parliament', null, null, '#1F2226', 75],
+    ['Secrid Miniwallet', 'Secrid', 'Miniwallet', 'Aluminum', 'Anodized', '#B33A3A', 60],
+    ['Dango T01', 'Dango', 'T01 Tactical', 'Aluminum', 'Anodized', '#34383D', 110],
+    ['Saddleback Bifold', 'Saddleback Leather', 'Bifold', null, 'Patina', '#7A4A24', 130],
+    ['Ridge Aluminum', 'Ridge', 'Ridge Aluminum', 'Aluminum', 'Anodized', '#3E5C76', 70],
+  ]),
+  ...make('Keychain', [
+    ['KeyBar', 'KeyBar', 'KeyBar', 'Aluminum', 'Anodized', '#4A4F55', 28],
+    ['KeySmart Pro', 'KeySmart', 'Pro', 'Aluminum', 'Anodized', '#1F2226', 35],
+    ['Orbitkey Active', 'Orbitkey', 'Active', null, 'Coated', '#E4572E', 38],
+    ['Nite Ize S-Biner', 'Nite Ize', 'S-Biner', 'Aluminum', 'Anodized', '#D4A017', 14],
+    ['Ti2 Design Clip', 'Ti2 Design', 'Key Clip', 'Titanium', 'Blasted', '#7C8289', 12],
+    ['Big Idea Ti Key Hook', 'Big Idea Design', 'Ti Key Hook', 'Titanium', 'Stonewashed', '#8B9198', 10],
+    ['Tool Logic Credit Card', 'Tool Logic', 'Credit Card Tool', 'Steel', 'Satin', '#9CA2A9', 28],
+    ['Nitecore TUP', 'Nitecore', 'TUP', 'Steel', 'Coated', '#2B2E33', 56],
+    ['Copper Bottle Opener', 'Dango', 'Copper Opener', 'Copper', 'Patina', '#B87333', 30],
+    ['Brass Key Ring', 'Saddleback Leather', 'Brass Ring', 'Brass', 'Polished', '#C9A24B', 18],
+  ]),
+  ...make('Pry bar', [
+    ['Gerber Gator Crate Opener', 'Gerber', 'Gator Crate Opener', 'Steel', 'Coated', '#B33A3A', 150],
+    ['Vaughan Mini Bar', 'Vaughan', 'Mini Bar', 'Steel', 'Polished', '#9CA2A9', 60],
+    ['Fenix Pry Bar', 'Fenix', 'Flat Pry Bar', 'Steel', 'Coated', '#2B2E33', 70],
+    ['Nitecore Pry Bar', 'Nitecore', 'Pry Bar', 'Titanium', 'Stonewashed', '#8B9198', 35],
+    ['Ti2 Design Pry Bar', 'Ti2 Design', 'Pry Bar', 'Titanium', 'Blasted', '#7C8289', 28],
+    ['Big Idea Ti Pry', 'Big Idea Design', 'Ti Pry Bar', 'Titanium', 'Stonewashed', '#8B9198', 30],
+    ['Copper Pocket Pry', 'Dango', 'Copper Pry', 'Copper', 'Patina', '#B87333', 60],
+    ['Brass Mini Pry', 'Saddleback Leather', 'Brass Pry', 'Brass', 'Polished', '#C9A24B', 55],
+    ['Flat Bar Keychain Pry', 'KeyBar', 'Pry Tool', 'Aluminum', 'Anodized', '#4A4F55', 22],
+    ['Steel Nail Puller', 'Stanley', 'Mini Nail Puller', 'Steel', 'Raw', '#6D737A', 110],
+  ]),
+];

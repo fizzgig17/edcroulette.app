@@ -1,0 +1,182 @@
+# Sets up EDC Roulette inside Belay Buddy's Supabase projects:
+#   push to develop -> fizzgig-apps-dev
+#   push to master  -> fizzgig-apps-prod
+#
+# EDC Roulette shares those projects (Supabase's free plan allows two projects
+# per person, and Belay Buddy's dev and prod already use them). Everything EDC
+# owns lives in the `edc` schema, so it never collides with Belay Buddy.
+#
+# What it does, each step safe to run again:
+#   1. Applies supabase/edc/migrations/*.sql in order, each once, recording them
+#      in edc.schema_migrations. (Not `supabase db push`: that keeps one history
+#      per database, and Belay Buddy's repo already owns it.)
+#   2. Exposes the `edc` schema to the Data API, keeping the schemas already there.
+#   3. Adds EDC's iOS bundle id to Sign in with Apple and the edcroulette://
+#      redirect to the allowed sign-in redirects, keeping Belay Buddy's.
+#
+# Repository secrets — the same values as in belaybuddy.app (GitHub can't copy
+# secrets between repos):
+#   SUPABASE_ACCESS_TOKEN, DEV_PROJECT_ID, DEV_DB_PASSWORD, PROD_PROJECT_ID, PROD_DB_PASSWORD
+# Also for photo identify (optional; without it the app just hides nothing and
+# says identify isn't set up): ANTHROPIC_API_KEY.
+name: Supabase (EDC schema)
+
+on:
+  push:
+    branches: [develop, master]
+    paths:
+      - 'supabase/edc/**'
+      - 'supabase/functions/**'
+      - '.github/workflows/supabase-edc.yml'
+  workflow_dispatch:
+
+# Shares the database with Belay Buddy's migrations; never run two at once here.
+concurrency:
+  group: supabase-edc-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    if: github.ref_name == 'develop' || github.ref_name == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DEV_DB_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
+      DEV_PROJECT_ID: ${{ secrets.DEV_PROJECT_ID }}
+      PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+      PROD_PROJECT_ID: ${{ secrets.PROD_PROJECT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      TARGET: ${{ github.ref_name == 'master' && 'fizzgig-apps-prod' || 'fizzgig-apps-dev' }}
+      # Same session pooler hosts as Belay Buddy (GitHub runners are IPv4-only).
+      DEV_POOLER_HOST: aws-0-us-east-1.pooler.supabase.com
+      PROD_POOLER_HOST: aws-0-us-east-1.pooler.supabase.com
+      APP_BUNDLE_ID: app.edcroulette.ios
+      APP_REDIRECT: edcroulette://**
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick ${{ env.TARGET }} settings
+        run: |
+          # Picked in the shell (not with a GitHub `a && b || c` expression) so a
+          # missing prod secret can never fall back to dev.
+          if [ "$TARGET" = fizzgig-apps-prod ]; then
+            PROJECT_ID="$PROD_PROJECT_ID"; DB_PASSWORD="$PROD_DB_PASSWORD"; POOLER_HOST="$PROD_POOLER_HOST"
+          else
+            PROJECT_ID="$DEV_PROJECT_ID"; DB_PASSWORD="$DEV_DB_PASSWORD"; POOLER_HOST="$DEV_POOLER_HOST"
+          fi
+          token=$(printf '%s' "$SUPABASE_ACCESS_TOKEN" | tr -d '[:space:]')
+          echo "::add-mask::$token"
+          missing=""
+          [ -n "$token" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "$PROJECT_ID" ] || missing="$missing project id"
+          [ -n "$DB_PASSWORD" ] || missing="$missing db password"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets for $TARGET:$missing (copy them from the belaybuddy.app repo; see the top of this file)"
+            exit 1
+          fi
+          password=$(jq -rn --arg p "$DB_PASSWORD" '$p | @uri')
+          echo "::add-mask::$password"
+          {
+            echo "SUPABASE_ACCESS_TOKEN=$token"
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "DB_URL=postgresql://postgres.$PROJECT_ID:$password@$POOLER_HOST:5432/postgres"
+          } >> "$GITHUB_ENV"
+
+      - name: Apply EDC migrations to ${{ env.TARGET }}
+        run: |
+          set -euo pipefail
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          create schema if not exists edc;
+          create table if not exists edc.schema_migrations (
+            version text primary key,
+            applied_at timestamptz not null default now()
+          );
+          revoke all on table edc.schema_migrations from anon, authenticated;
+          SQL
+          applied=0
+          for f in $(ls supabase/edc/migrations/*.sql | sort); do
+            v=$(basename "$f" .sql)
+            # (A here-doc, because psql -c doesn't expand :'v'.)
+            done_already=$(psql "$DB_URL" -At -v v="$v" <<'SQL'
+          select 1 from edc.schema_migrations where version = :'v';
+          SQL
+            )
+            if [ "$done_already" = "1" ]; then
+              echo "= $v (already applied)"
+              continue
+            fi
+            echo "+ $v"
+            # One transaction per file: the file and its record land together or not at all.
+            { cat "$f"; printf "\ninsert into edc.schema_migrations (version) values ('%s');\n" "$v"; } \
+              | psql "$DB_URL" -v ON_ERROR_STOP=1 -q --single-transaction
+            applied=$((applied + 1))
+          done
+          echo "::notice::EDC migrations on $TARGET: $applied applied, now at $(psql "$DB_URL" -At -c 'select max(version) from edc.schema_migrations')"
+
+      - name: Expose the edc schema to the Data API
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o current.json -w '%{http_code}' "https://api.supabase.com/v1/projects/$PROJECT_ID/postgrest" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          [ "$code" -lt 300 ] || { echo "::error::Reading the Data API settings failed: HTTP $code $(head -c 300 current.json)"; exit 1; }
+          current=$(jq -r '.db_schema // "public,graphql_public"' current.json)
+          echo "Exposed schemas now: $current"
+          if printf '%s' "$current" | tr ',' '\n' | tr -d ' ' | grep -qx edc; then
+            echo "edc is already exposed."
+            exit 0
+          fi
+          jq -n --arg s "$current,edc" '{db_schema: $s}' > body.json
+          code=$(curl -sS -o response.json -w '%{http_code}' -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_ID/postgrest" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @body.json)
+          [ "$code" -lt 300 ] || { echo "::error::Exposing edc failed: HTTP $code $(head -c 300 response.json)"; exit 1; }
+          echo "::notice::Data API schemas on $TARGET: $(jq -r .db_schema response.json)"
+
+      - name: Allow EDC Roulette's Apple sign-in and redirect
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o auth.json -w '%{http_code}' "https://api.supabase.com/v1/projects/$PROJECT_ID/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          [ "$code" -lt 300 ] || { echo "::error::Reading auth settings failed: HTTP $code"; exit 1; }
+          # Add to the existing lists; Belay Buddy's entries stay first and untouched.
+          jq --arg bundle "$APP_BUNDLE_ID" --arg redirect "$APP_REDIRECT" '
+            def list(s): (s // "") | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0));
+            def add(xs; x): if (xs | index(x)) then xs else xs + [x] end;
+            {
+              external_apple_enabled: true,
+              external_apple_client_id: (add(list(.external_apple_client_id); $bundle) | join(",")),
+              uri_allow_list: (add(list(.uri_allow_list); $redirect) | join(","))
+            }' auth.json > body.json
+          echo "Apple client ids: $(jq -r .external_apple_client_id body.json)"
+          echo "Allowed redirects: $(jq -r .uri_allow_list body.json)"
+          code=$(curl -sS -o response.json -w '%{http_code}' -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_ID/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @body.json)
+          [ "$code" -lt 300 ] || { echo "::error::Updating auth settings failed: HTTP $code $(head -c 300 response.json)"; exit 1; }
+          echo "::notice::Sign in with Apple on $TARGET now accepts: $(jq -r .external_apple_client_id body.json)"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Photo identify and coordinated spins (supabase/functions/edc-identify, edc-pair). It is open to anyone
+      # (no account yet), so no JWT check; it limits use itself, per device,
+      # per network address and per day.
+      - name: Deploy the edc-identify and edc-pair functions
+        run: |
+          set -o pipefail
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            key=$(printf '%s' "$ANTHROPIC_API_KEY" | tr -d '[:space:]')
+            echo "::add-mask::$key"
+            supabase secrets set "ANTHROPIC_API_KEY=$key" --project-ref "$PROJECT_ID" 2>&1 | tail -n 3
+          else
+            echo "::warning::ANTHROPIC_API_KEY is not set in this repo's secrets; photo identify will say it is not set up yet."
+          fi
+          if ! supabase functions deploy edc-identify --project-ref "$PROJECT_ID" --no-verify-jwt --use-api 2>&1 | tee "$RUNNER_TEMP/deploy-identify.log"; then
+            echo "::error::Deploying edc-identify failed: $(tail -n 5 "$RUNNER_TEMP/deploy-identify.log" | tr '\n' ' ' | head -c 600)"
+            exit 1
+          fi
+          if ! supabase functions deploy edc-pair --project-ref "$PROJECT_ID" --no-verify-jwt --use-api 2>&1 | tee "$RUNNER_TEMP/deploy-pair.log"; then
+            echo "::error::Deploying edc-pair failed: $(tail -n 5 "$RUNNER_TEMP/deploy-pair.log" | tr '\n' ' ' | head -c 600)"
+            exit 1
+          fi
+          echo "::notice::edc-identify and edc-pair deployed to $TARGET"

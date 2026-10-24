@@ -1,0 +1,52 @@
+# Apache config for the EDC Roulette website (static Expo web export).
+# Expo copies everything in public/ into the export, so this lands in the
+# site root. The deploy workflow appends dev-only rules (noindex) for
+# dev.edcroulette.app.
+
+<IfModule mod_headers.c>
+    # Hashed bundles under /_expo/static never change: cache them for a year.
+    <If "%{REQUEST_URI} =~ m#^/_expo/static/#">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </If>
+    # Pages must always be revalidated so a deploy shows up immediately.
+    <FilesMatch "\.html$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+    Header always set Strict-Transport-Security "max-age=31536000"
+</IfModule>
+
+# iOS fetches this to decide which links open the app (universal links).
+<Files "apple-app-site-association">
+    ForceType application/json
+</Files>
+
+AddType application/manifest+json .webmanifest
+
+ErrorDocument 404 /+not-found.html
+
+DirectorySlash Off
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force HTTPS (.app domains are HTTPS-only in browsers anyway).
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    # Real files are served as-is.
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Clean URLs: /privacy -> privacy.html
+    RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+    RewriteRule ^(.+?)/?$ $1.html [L]
+    RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
+    RewriteRule ^(.+?)/?$ $1/index.html [L]
+</IfModule>

@@ -1,0 +1,144 @@
+{
+  "expo": {
+    "name": "EDC Roulette",
+    "slug": "edc-roulette",
+    "version": "1.0",
+    "orientation": "default",
+    "icon": "./assets/images/icons/mixed.png",
+    "scheme": "edcroulette",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/icons/mixed.png",
+      "bundleIdentifier": "app.edcroulette.ios",
+      "supportsTablet": true,
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "EDC Roulette uses the camera to take photos of your gear for your collection.",
+        "NSPhotoLibraryUsageDescription": "EDC Roulette lets you pick photos of your gear from your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.edcroulette.android",
+      "adaptiveIcon": {
+        "backgroundColor": "#121419",
+        "foregroundImage": "./assets/images/android-foreground.png",
+        "monochromeImage": "./assets/images/android-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "./plugins/with-foldables.js",
+      [
+        "expo-router",
+        {
+          "origin": "https://edcroulette.app"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#16191E",
+          "image": "./assets/images/splash.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EDC Roulette lets you pick photos of your gear from your library.",
+          "cameraPermission": "EDC Roulette uses the camera to take photos of your gear for your collection.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "Damascus",
+            "ios": "./assets/images/icons/damascus.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/damascus.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Mokume",
+            "ios": "./assets/images/icons/mokume.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/mokume.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Timascus",
+            "ios": "./assets/images/icons/timascus.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/timascus.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Titanium",
+            "ios": "./assets/images/icons/titanium.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/titanium.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Zirconium",
+            "ios": "./assets/images/icons/zirconium.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/zirconium.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Copper",
+            "ios": "./assets/images/icons/copper.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/copper.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Brass",
+            "ios": "./assets/images/icons/brass.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/brass.png",
+              "backgroundColor": "#121419"
+            }
+          },
+          {
+            "name": "Steel",
+            "ios": "./assets/images/icons/steel.png",
+            "android": {
+              "foregroundImage": "./assets/images/icons/android/steel.png",
+              "backgroundColor": "#121419"
+            }
+          }
+        ]
+      ],
+      "./plugins/with-xcode-cloud"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
