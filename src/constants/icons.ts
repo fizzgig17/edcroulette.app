@@ -24,6 +24,9 @@ export const Icons = {
   grip: icon('line.3.horizontal', 'drag_handle'),
   sparkle: icon('sparkles', 'auto_awesome'),
   minus: icon('minus', 'remove'),
+  filter: icon('line.3.horizontal.decrease', 'filter_list'),
+  list: icon('list.bullet', 'view_list'),
+  search: icon('magnifyingglass', 'search'),
   sound: icon('speaker.wave.2.fill', 'volume_up'),
 } as const;
 

@@ -13,7 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { DragReorder } from '@/components/drag-reorder';
 import { GearThumb } from '@/components/gear-thumb';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
@@ -213,41 +212,6 @@ function Reel({
 }
 
 // ---------------------------------------------------------------------------
-// The order strip: drag a wheel's grip to move it
-// ---------------------------------------------------------------------------
-function WheelOrder({ slots, visibleCount, disabled }: { slots: SlotConfig[]; visibleCount: number; disabled: boolean }) {
-  const theme = useTheme();
-  const { saveSlots } = useGear();
-  return (
-    <View style={[styles.order, disabled && { opacity: 0.5 }]} pointerEvents={disabled ? 'none' : 'auto'}>
-      <DragReorder
-        items={slots}
-        keyOf={(s) => String(s.slotIndex)}
-        direction="row"
-        itemSize={44}
-        gap={6}
-        onReorder={(next) => void saveSlots(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
-        renderItem={(s, i, grip) => {
-          const onScreen = i < visibleCount;
-          return (
-            <View
-              {...grip}
-              accessibilityRole="adjustable"
-              accessibilityLabel={`Wheel ${i + 1}, ${s.category}. Drag to reorder.`}
-              style={[styles.chip, { backgroundColor: onScreen ? theme.backgroundElement : 'transparent', borderColor: onScreen ? theme.border : theme.textSecondary, borderStyle: onScreen ? 'solid' : 'dashed' }]}>
-              <Icon name="grip" size={12} color={theme.textSecondary} />
-              <ThemedText type="small" numberOfLines={1} style={[styles.chipText, { color: onScreen ? theme.text : theme.textSecondary }]}>
-                {slots.length > 4 ? String(i + 1) : s.category}
-              </ThemedText>
-            </View>
-          );
-        }}
-      />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // The wheels
 // ---------------------------------------------------------------------------
 export interface SpinControl {
@@ -296,6 +260,9 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const [phase, setPhase] = useState<Phase>('idle');
   const [token, setToken] = useState(0);
   const [targets, setTargets] = useState<Record<number, GearItem | null>>({});
+  // What each wheel is showing at rest. It changes only when that wheel lands, so a spin never flashes its result first.
+  const [landed, setLanded] = useState<Record<number, GearItem | null>>({});
+  const targetsRef = useRef<Record<number, GearItem | null>>({});
   const [why, setWhy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const pending = useRef(new Set<number>());
@@ -312,11 +279,15 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
   // Wheels reordered or changed: the old stopping places no longer line up.
   const slotSig = slots.map((s) => s.category).join('|');
-  useEffect(() => setTargets({}), [slotSig]);
+  useEffect(() => {
+    setTargets({});
+    setLanded({});
+  }, [slotSig]);
 
   const finish = useCallback(async () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
+    setLanded((prev) => ({ ...prev, ...targetsRef.current }));
     setPhase('done');
     success();
     await recordSpin(picksRef.current);
@@ -387,6 +358,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     });
     pending.current = new Set(moving);
     picksRef.current = picks;
+    targetsRef.current = next;
     setTargets(next);
     if (moving.length === 0) {
       landSound();
@@ -405,6 +377,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
   const settled = useCallback(
     (slotIndex: number) => {
+      setLanded((prev) => ({ ...prev, [slotIndex]: targetsRef.current[slotIndex] ?? null }));
       pending.current.delete(slotIndex);
       if (pending.current.size === 0) {
         landSound();
@@ -432,10 +405,9 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
   return (
     <View style={styles.machine}>
-      {slots.length > 1 ? <WheelOrder slots={slots} visibleCount={visibleCount} disabled={busy} /> : null}
       {hiddenCount > 0 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-          {hiddenCount === 1 ? 'The last wheel picks' : `The last ${hiddenCount} wheels pick`} without turning in portrait. Turn your phone sideways to see them all.
+        <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
+          {hiddenCount === 1 ? '1 more wheel' : `${hiddenCount} more wheels`} when sideways
         </ThemedText>
       ) : null}
 
@@ -443,7 +415,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         {slots.slice(0, visibleCount).map((s, i) => {
           const locked = lockedBySlot.get(s.slotIndex) ?? null;
           const list = candidates.get(s.slotIndex) ?? [];
-          const shown = locked ?? targets[s.slotIndex] ?? restingFromLastSpin.get(s.slotIndex) ?? list[0] ?? null;
+          const shown = locked ?? landed[s.slotIndex] ?? restingFromLastSpin.get(s.slotIndex) ?? list[0] ?? null;
           return (
             <Reel
               key={s.slotIndex}
@@ -467,18 +439,18 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       {why && phase === 'done' ? (
         <View style={[styles.why, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
           <Icon name="sparkle" size={14} color={theme.accent} />
-          <ThemedText type="small" style={styles.flex}>
+          <ThemedText type="small" style={[styles.flex, { fontSize: 12, lineHeight: 16 }]}>
             {why}
           </ThemedText>
         </View>
       ) : null}
       {note && !busy ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+        <ThemedText type="small" themeColor="textSecondary" style={[styles.center, { fontSize: 12, lineHeight: 16 }]}>
           {note}
         </ThemedText>
       ) : null}
       {empty ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+        <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
           Add some gear in the Collection tab to start spinning.
         </ThemedText>
       ) : null}
@@ -504,6 +476,7 @@ const styles = StyleSheet.create({
   shade: { position: 'absolute', left: 0, right: 0 },
   lock: { flexDirection: 'row', gap: Spacing.one, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.pill },
   center: { textAlign: 'center' },
+  tiny: { fontSize: 10, lineHeight: 12, letterSpacing: 0.6 },
   order: { marginBottom: -Spacing.one },
   chip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.two, borderRadius: Radius.pill, borderWidth: 1 },
   chipText: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700' },

@@ -71,3 +71,12 @@ export function deviceId(): string {
 export const getMetalId = (): string => read('edc.metal') ?? 'damascus';
 export const setMetalId = (id: string) => write('edc.metal', id);
 export const useMetalId = () => useSyncExternalStore(subscribe, getMetalId, () => 'damascus');
+
+// --- How the collection is shown -----------------------------------------------------------
+export type CollectionView = 'list' | 'grid' | 'compact';
+export const getCollectionView = (): CollectionView => {
+  const v = read('edc.collectionView');
+  return v === 'grid' || v === 'compact' ? v : 'list';
+};
+export const setCollectionView = (v: CollectionView) => write('edc.collectionView', v);
+export const useCollectionView = () => useSyncExternalStore(subscribe, getCollectionView, () => 'list' as CollectionView);

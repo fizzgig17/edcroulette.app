@@ -139,6 +139,8 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       weightGrams: weight,
     };
     setBusy(true);
+    // A sample piece keeps its drawing when edited (older samples find it by name).
+    if (item?.isSample && !clean.imageUri && !item.imageUri) clean.imageUri = `sample:${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
     const r = item ? await updateItem(item.id, clean) : await addItem(clean);
     setBusy(false);
     if (!r.ok) {
@@ -181,7 +183,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       <Stack.Screen options={headerOptions.current} />
 
       <View style={styles.photo}>
-        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor }} size={132} />
+        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri }} size={132} />
         <View style={styles.photoButtons}>
           <Button label="Take photo" icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} style={styles.flex} />
           <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} style={styles.flex} />

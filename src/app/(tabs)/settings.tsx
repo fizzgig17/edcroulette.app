@@ -13,7 +13,6 @@ import { Card } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { checkAi } from '@/lib/api';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear, type SlotDraft } from '@/lib/gear';
 import { select } from '@/lib/haptics';
@@ -181,12 +180,6 @@ export default function SettingsScreen() {
   const metal = metalById(useMetalId());
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
-  const [aiTest, setAiTest] = useState<'idle' | 'running' | 'ok' | string>('idle');
-  async function runAiCheck() {
-    setAiTest('running');
-    const r = await checkAi();
-    setAiTest(r.ok ? 'ok' : r.error);
-  }
   const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
 
   function erase() {
@@ -290,17 +283,6 @@ export default function SettingsScreen() {
         <LinkRow first label="Privacy policy" href="/privacy" />
         <LinkRow label="Terms of use" href="/terms" />
         <LinkRow label="Help and support" href="/support" />
-      </Card>
-
-      <ThemedText type="heading">AI check</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">Tests whether the AI side is reachable and set up. It sends a made-up pair of pens, nothing of yours.</ThemedText>
-        <Button label={aiTest === 'running' ? 'Checking…' : 'Check AI connection'} variant="secondary" icon="sparkle" onPress={() => void runAiCheck()} disabled={aiTest === 'running'} />
-        {aiTest !== 'idle' && aiTest !== 'running' ? (
-          <ThemedText type="smallBold" style={{ color: aiTest === 'ok' ? theme.accent : theme.danger }}>
-            {aiTest === 'ok' ? 'AI is working. Coordinated spins and photo identify are ready.' : aiTest}
-          </ThemedText>
-        ) : null}
       </Card>
 
       <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
