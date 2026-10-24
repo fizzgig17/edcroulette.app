@@ -20,8 +20,8 @@ const json = (body: unknown, status = 200) =>
 
 const MODEL = Deno.env.get('EDC_AI_MODEL') ?? 'claude-sonnet-5-5';
 const FALLBACK_MODEL = Deno.env.get('EDC_AI_FALLBACK_MODEL') ?? 'claude-haiku-5-5';
-const DEVICE_LIMIT = Number(Deno.env.get('EDC_AI_DEVICE_DAILY') ?? '25');
-const IP_LIMIT = Number(Deno.env.get('EDC_AI_IP_DAILY') ?? '60');
+const DEVICE_LIMIT = Number(Deno.env.get('EDC_AI_DEVICE_DAILY') ?? '60');
+const IP_LIMIT = Number(Deno.env.get('EDC_AI_IP_DAILY') ?? '150');
 const GLOBAL_LIMIT = Number(Deno.env.get('EDC_AI_GLOBAL_DAILY') ?? '3000');
 const MAX_IMAGE_CHARS = 2_000_000; // base64 characters, about 1.5 MB
 
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
     console.error('quota error', quotaError.message);
     return json({ ok: false, code: 'error', error: 'Could not check your limit. Try again.' }, 500);
   }
-  if (!allowed) return json({ ok: false, code: 'limit', error: "You've used today's photo identifies. You can still fill in the details yourself." }, 429);
+  if (!allowed) return json({ ok: false, code: 'limit', error: "You've used today's photo identifies." }, 429);
 
   const ask = (model: string) =>
     fetch('https://api.anthropic.com/v1/messages', {
