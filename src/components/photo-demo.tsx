@@ -4,7 +4,8 @@
  * app shows them. The answers are built in; nothing is sent anywhere.
  */
 import { useState } from 'react';
-import { Image as NativeImage, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Asset } from 'expo-asset';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { OutlinedPhoto } from '@/components/outlined-photo';
 import { ThemedText } from '@/components/themed-text';
@@ -14,7 +15,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { DEMO_ITEMS, DEMO_PHOTO, DEMO_SIZE } from '@/content/demo-photo';
 import { useTheme } from '@/hooks/use-theme';
 
-const photoUri: string = NativeImage.resolveAssetSource(DEMO_PHOTO).uri;
+const photoUri: string = Asset.fromModule(DEMO_PHOTO).uri;
 
 export function PhotoDemo() {
   const theme = useTheme();
