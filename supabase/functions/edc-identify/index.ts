@@ -72,7 +72,8 @@ const pick = (value: unknown, list: string[]): string | null => {
   const v = value.trim().toLowerCase();
   return list.find((x) => x.toLowerCase() === v) ?? null;
 };
-const clean = (value: unknown, max: number): string => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+// The model sometimes answers "empty" with a pair of quote marks; those are not text.
+const clean = (value: unknown, max: number): string => (typeof value === 'string' ? value.replace(/[\u0022\u201C\u201D\u2018\u2019`]/g, '').trim().slice(0, max) : '');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });

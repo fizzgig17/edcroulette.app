@@ -90,12 +90,14 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
 
   function applyIdentified(r: Identified) {
     const d = draftRef.current;
-    const brandText = r.brand ?? r.brandRead;
+    // A stray pair of quote marks means "nothing read", not text.
+    const text = (v: string | null | undefined) => (v ?? '').replace(/["\u201C\u201D`]/g, '').trim() || null;
+    const brandText = text(r.brand) ?? text(r.brandRead);
     const next: GearDraft = {
       ...d,
       category: (CATEGORIES as readonly string[]).includes(r.category) ? r.category : d.category,
       brand: d.brand || brandText || null,
-      model: d.model || r.model || null,
+      model: d.model || text(r.model) || null,
       material: d.material ?? r.material,
       finish: d.finish ?? r.finish,
       primaryColor: d.primaryColor ?? r.color,
@@ -108,7 +110,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     setDraft(next);
     setFormKey((k) => k + 1);
     const bits = [next.category, autoName(next.brand, next.model), next.material, next.finish].filter(Boolean);
-    setIdentify({ state: 'done', summary: bits.join(' · '), unsure: r.confidence === 'low' || (!r.brand && !!r.brandRead) });
+    setIdentify({ state: 'done', summary: bits.join(' · '), unsure: r.confidence === 'low' || (!text(r.brand) && !!text(r.brandRead)) });
   }
 
   async function getPhoto(source: PhotoSource) {
