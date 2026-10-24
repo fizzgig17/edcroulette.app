@@ -49,7 +49,16 @@ export interface PhotoCrop {
 export async function pickPhoto(source: PhotoSource): Promise<PickedPhoto | null> {
   // The framing is done in the app's own crop screen (PhotoCropper); iOS's built-in
   // editor doesn't crop when picking from the library.
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: false, quality: 1 };
+  // Current: hand back the photo as the phone stores it. Asking iOS to convert it first (to JPEG,
+  // at full size) is what made the picker sit there for seconds after you chose; the framing
+  // step below decodes any format itself.
+  const options: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: false,
+    quality: 1,
+    exif: false,
+    preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+  };
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) throw new Error('Camera access is off. You can turn it on in Settings.');
