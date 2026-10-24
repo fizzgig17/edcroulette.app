@@ -69,35 +69,67 @@
         [
           {
             "name": "Damascus",
-            "ios": "./assets/images/icons/damascus.png"
+            "ios": "./assets/images/icons/damascus.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Mokume",
-            "ios": "./assets/images/icons/mokume.png"
+            "ios": "./assets/images/icons/mokume.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Timascus",
-            "ios": "./assets/images/icons/timascus.png"
+            "ios": "./assets/images/icons/timascus.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Titanium",
-            "ios": "./assets/images/icons/titanium.png"
+            "ios": "./assets/images/icons/titanium.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Zirconium",
-            "ios": "./assets/images/icons/zirconium.png"
+            "ios": "./assets/images/icons/zirconium.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Copper",
-            "ios": "./assets/images/icons/copper.png"
+            "ios": "./assets/images/icons/copper.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Brass",
-            "ios": "./assets/images/icons/brass.png"
+            "ios": "./assets/images/icons/brass.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           },
           {
             "name": "Steel",
-            "ios": "./assets/images/icons/steel.png"
+            "ios": "./assets/images/icons/steel.png",
+            "android": {
+              "foregroundImage": "./assets/images/android-foreground.png",
+              "backgroundColor": "#16191E"
+            }
           }
         ]
       ],
