@@ -72,6 +72,8 @@ export default function Landing() {
           ))}
         </View>
 
+        <PhotoDemo />
+
         <View style={styles.grid}>
           {FEATURES.map((f) => (
             <View key={f.title} style={styles.cell}>
@@ -82,8 +84,6 @@ export default function Landing() {
             </View>
           ))}
         </View>
-
-        <PhotoDemo />
 
         <Card>
           <ThemedText type="heading">Premium is on the way</ThemedText>
