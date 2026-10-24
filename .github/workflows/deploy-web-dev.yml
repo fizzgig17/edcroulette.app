@@ -104,9 +104,9 @@ jobs:
             tar -xzf "$WORK/site.tar.gz" -C "$WORK/site"
             # Replace the site's files, keeping cPanel's own folders.
             if command -v rsync >/dev/null; then
-              rsync -a --delete --exclude .well-known --exclude cgi-bin "$WORK/site/" "$DEST/"
+              rsync -a --delete --exclude .well-known --exclude cgi-bin --exclude downloads "$WORK/site/" "$DEST/"
             else
-              find "$DEST" -mindepth 1 -maxdepth 1 ! -name .well-known ! -name cgi-bin -exec rm -rf {} +
+              find "$DEST" -mindepth 1 -maxdepth 1 ! -name .well-known ! -name cgi-bin ! -name downloads -exec rm -rf {} +
               cp -a "$WORK/site/." "$DEST/"
             fi
             rm -rf "$WORK/site" "$WORK/site.tar.gz"

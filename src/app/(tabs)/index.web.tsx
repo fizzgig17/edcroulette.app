@@ -1,11 +1,14 @@
 import Head from 'expo-router/head';
 import { Image } from 'expo-image';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { PhotoDemo } from '@/components/photo-demo';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/field';
+import { IS_DEV_BUILD } from '@/lib/env';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -21,6 +24,29 @@ const FEATURES = [
   { title: 'Lock the keepers', body: 'Already know you are carrying that knife? Lock it and spin the rest.' },
   { title: 'Private by default', body: 'The free version keeps everything on your phone. No account needed.' },
 ];
+
+/** Dev site only: the newest Android test build, put there by the Android build. */
+function AndroidDownload() {
+  const [built, setBuilt] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/downloads/latest.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { version?: string; built?: string } | null) => {
+        if (j?.version) setBuilt(`Version ${j.version}${j.built ? `, built ${new Date(j.built).toLocaleString()}` : ''}`);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <Card>
+      <ThemedText type="heading">Android test build</ThemedText>
+      <ThemedText themeColor="textSecondary">
+        The newest Android build of the dev app (test data, not the real app). Open this page on your Android phone and install it; Android will ask to allow installs from your browser the first time.
+      </ThemedText>
+      {built ? <ThemedText type="small" themeColor="textSecondary">{built}</ThemedText> : null}
+      <Button label="Download the APK" onPress={() => void Linking.openURL('/downloads/edc-roulette-dev.apk')} />
+    </Card>
+  );
+}
 
 export default function Landing() {
   const theme = useTheme();
@@ -73,6 +99,8 @@ export default function Landing() {
         </View>
 
         <PhotoDemo />
+
+        {IS_DEV_BUILD ? <AndroidDownload /> : null}
 
         <View style={styles.grid}>
           {FEATURES.map((f) => (

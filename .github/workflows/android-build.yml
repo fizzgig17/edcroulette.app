@@ -137,6 +137,49 @@ jobs:
           path: out/
           retention-days: 30
 
+      # develop builds: put the APK on the dev website so it can be downloaded with one tap
+      # (https://dev.edcroulette.app/downloads/edc-roulette-dev.apk). Needs the same server
+      # secrets as the website deploy; without them this step is skipped.
+      - name: Check website upload secrets
+        id: site
+        env:
+          HOST: ${{ secrets.SPACESHIP_HOST }}
+          DEST: ${{ secrets.SPACESHIP_DEV_PATH }}
+        run: |
+          if [ "$GITHUB_REF_NAME" = "develop" ] && [ -n "$HOST" ] && [ -n "$DEST" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Send the APK to the website
+        if: steps.site.outputs.go == 'true'
+        continue-on-error: true
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SPACESHIP_HOST }}
+          port: ${{ secrets.SPACESHIP_PORT }}
+          username: ${{ secrets.SPACESHIP_USER }}
+          key: ${{ secrets.SPACESHIP_SSH_KEY }}
+          passphrase: ${{ secrets.SPACESHIP_SSH_PASSPHRASE }}
+          source: out/*.apk
+          target: edcroulette-deploy/apk
+          strip_components: 1
+          overwrite: true
+      - name: Publish the APK on the website
+        if: steps.site.outputs.go == 'true'
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SPACESHIP_HOST }}
+          port: ${{ secrets.SPACESHIP_PORT }}
+          username: ${{ secrets.SPACESHIP_USER }}
+          key: ${{ secrets.SPACESHIP_SSH_KEY }}
+          passphrase: ${{ secrets.SPACESHIP_SSH_PASSPHRASE }}
+          script: |
+            set -e
+            DEST="${{ secrets.SPACESHIP_DEV_PATH }}/downloads"
+            mkdir -p "$DEST"
+            cp "$HOME"/edcroulette-deploy/apk/*.apk "$DEST/edc-roulette-dev.apk"
+            rm -f "$HOME"/edcroulette-deploy/apk/*.apk
+            printf '{"version":"%s","built":"%s"}\n' "${{ env.ANDROID_VERSION }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/latest.json"
+            echo "Published $DEST/edc-roulette-dev.apk"
+
       - name: Decide whether to upload to Google Play
         id: play
         run: |
