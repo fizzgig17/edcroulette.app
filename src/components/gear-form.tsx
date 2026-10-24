@@ -186,7 +186,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
           <Button label="Take photo" icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} style={styles.flex} />
           <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} style={styles.flex} />
         </View>
-        {draft.imageUri ? (
+        {draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
           <View style={styles.photoButtons}>
             <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!)} disabled={identify.state === 'working'} style={styles.flex} />
             <Button label="Remove photo" icon="close" variant="ghost" onPress={() => set('imageUri', null)} style={styles.flex} />

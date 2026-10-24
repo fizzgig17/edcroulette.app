@@ -18,7 +18,7 @@ const make = (category: string, rows: S[]): GearDraft[] =>
     primaryColor,
     weightGrams,
     notes: null,
-    imageUri: null,
+    imageUri: `sample:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
   }));
 
 export const SAMPLE_GEAR: GearDraft[] = [
