@@ -5,7 +5,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { select } from '@/lib/haptics';
 
-export function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+export function Chip({ label, selected, onPress, small }: { label: string; selected: boolean; onPress: () => void; small?: boolean }) {
   const theme = useTheme();
   return (
     <Pressable
@@ -17,10 +17,11 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
       accessibilityState={{ selected }}
       style={({ pressed }) => [
         styles.chip,
+        small && styles.chipSmall,
         { backgroundColor: selected ? theme.accent : theme.backgroundElement, borderColor: selected ? theme.accent : theme.border },
         pressed && { opacity: 0.75 },
       ]}>
-      <ThemedText type="smallBold" style={{ color: selected ? theme.onAccent : theme.text }}>
+      <ThemedText type="smallBold" style={{ color: selected ? theme.onAccent : theme.text, fontSize: small ? 13 : 14 }}>
         {label}
       </ThemedText>
     </Pressable>
@@ -60,6 +61,7 @@ export function ChipGroup<T extends string>({
 
 const styles = StyleSheet.create({
   chip: { paddingHorizontal: Spacing.three, paddingVertical: 7, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
+  chipSmall: { paddingHorizontal: 12, paddingVertical: 5 },
   row: { flexDirection: 'row', gap: Spacing.two },
   wrap: { flexWrap: 'wrap' },
 });

@@ -168,12 +168,12 @@ export default function CollectionScreen() {
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            <Chip label="All" selected={cats.length === 0} onPress={() => setCats([])} />
+          <View style={styles.catWrap}>
+            <Chip small label="All" selected={cats.length === 0} onPress={() => setCats([])} />
             {categories.map((c) => (
-              <Chip key={c} label={c} selected={cats.includes(c)} onPress={() => setCats(toggle(cats, c))} />
+              <Chip small key={c} label={c} selected={cats.includes(c)} onPress={() => setCats(toggle(cats, c))} />
             ))}
-          </ScrollView>
+          </View>
 
           {filtering ? (
             <View style={styles.found}>
@@ -259,34 +259,34 @@ export default function CollectionScreen() {
             <ScrollView contentContainerStyle={styles.sheetBody} showsVerticalScrollIndicator={false}>
               <Section title="Show">
                 {(['all', 'mine', 'samples'] as const).map((k) => (
-                  <Chip key={k} label={{ all: 'Everything', mine: 'Mine', samples: 'Samples' }[k]} selected={source === k} onPress={() => setSource(k)} />
+                  <Chip small key={k} label={{ all: 'Everything', mine: 'Mine', samples: 'Samples' }[k]} selected={source === k} onPress={() => setSource(k)} />
                 ))}
-                <Chip label="Locked in a wheel" selected={lockedOnly} onPress={() => setLockedOnly(!lockedOnly)} />
+                <Chip small label="Locked in a wheel" selected={lockedOnly} onPress={() => setLockedOnly(!lockedOnly)} />
               </Section>
               {materials.length > 0 ? (
-                <Section title="Material" count={mats.length} onClear={() => setMats([])} scroll>
+                <Section title="Material" count={mats.length} onClear={() => setMats([])}>
                   {materials.map((m) => (
-                    <Chip key={m} label={m} selected={mats.includes(m)} onPress={() => setMats(toggle(mats, m))} />
+                    <Chip small key={m} label={m} selected={mats.includes(m)} onPress={() => setMats(toggle(mats, m))} />
                   ))}
                 </Section>
               ) : null}
               {finishes.length > 0 ? (
-                <Section title="Finish" count={fins.length} onClear={() => setFins([])} scroll>
+                <Section title="Finish" count={fins.length} onClear={() => setFins([])}>
                   {finishes.map((m) => (
-                    <Chip key={m} label={m} selected={fins.includes(m)} onPress={() => setFins(toggle(fins, m))} />
+                    <Chip small key={m} label={m} selected={fins.includes(m)} onPress={() => setFins(toggle(fins, m))} />
                   ))}
                 </Section>
               ) : null}
               {brands.length > 0 ? (
-                <Section title="Brand" count={brands_.length} onClear={() => setBrands([])} scroll>
+                <Section title="Brand" count={brands_.length} onClear={() => setBrands([])} limit={9}>
                   {brands.map((m) => (
-                    <Chip key={m} label={m} selected={brands_.includes(m)} onPress={() => setBrands(toggle(brands_, m))} />
+                    <Chip small key={m} label={m} selected={brands_.includes(m)} onPress={() => setBrands(toggle(brands_, m))} />
                   ))}
                 </Section>
               ) : null}
-              <Section title="Sort by" scroll>
+              <Section title="Sort by">
                 {(Object.keys(SORTS) as Sort[]).map((k) => (
-                  <Chip key={k} label={SORTS[k]} selected={sort === k} onPress={() => setSort(k)} />
+                  <Chip small key={k} label={SORTS[k]} selected={sort === k} onPress={() => setSort(k)} />
                 ))}
               </Section>
             </ScrollView>
@@ -298,27 +298,33 @@ export default function CollectionScreen() {
   );
 }
 
-function Section({ title, count = 0, onClear, scroll, children }: { title: string; count?: number; onClear?: () => void; scroll?: boolean; children: React.ReactNode }) {
+function Section({ title, count = 0, onClear, limit, children }: { title: string; count?: number; onClear?: () => void; limit?: number; children: React.ReactNode[] | React.ReactNode }) {
   const theme = useTheme();
+  const [all, setAll] = useState(false);
+  const kids = Array.isArray(children) ? children.flat() : [children];
+  const more = limit !== undefined && kids.length > limit;
   return (
-    <View style={[styles.section, { borderColor: theme.border }]}>
+    <View style={[styles.section, { backgroundColor: theme.background, borderColor: theme.border }]}>
       <View style={styles.sectionHead}>
-        <ThemedText type="smallBold">{title}</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {title}
+        </ThemedText>
         {count > 0 && onClear ? (
           <Pressable onPress={onClear} accessibilityRole="button" hitSlop={8}>
             <ThemedText type="small" style={{ color: theme.accent }}>
-              {count} selected · Clear
+              Clear {count}
             </ThemedText>
           </Pressable>
         ) : null}
       </View>
-      {scroll ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionChips}>
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={styles.wrap}>{children}</View>
-      )}
+      <View style={styles.wrap}>{more && !all ? kids.slice(0, limit) : kids}</View>
+      {more ? (
+        <Pressable onPress={() => setAll(!all)} accessibilityRole="button" hitSlop={8}>
+          <ThemedText type="small" style={{ color: theme.accent }}>
+            {all ? 'Show fewer' : `Show all ${kids.length}`}
+          </ThemedText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -330,7 +336,8 @@ const styles = StyleSheet.create({
   filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 38, paddingHorizontal: 14, borderRadius: Radius.pill, borderWidth: 1 },
   segment: { flexDirection: 'row', padding: 3, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, gap: 2 },
   segBtn: { width: 40, height: 32, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  section: { gap: Spacing.two, paddingBottom: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth },
+  section: { gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
+  catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionChips: { flexDirection: 'row', gap: Spacing.two, paddingRight: Spacing.three },
   search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, minHeight: 44, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
@@ -349,6 +356,6 @@ const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: '#000A', justifyContent: 'flex-end' },
   sheet: { maxHeight: '82%', borderTopLeftRadius: Radius.large, borderTopRightRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.three, gap: Spacing.three },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sheetBody: { gap: Spacing.three, paddingBottom: Spacing.two },
+  sheetBody: { gap: Spacing.two, paddingBottom: Spacing.two },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });
