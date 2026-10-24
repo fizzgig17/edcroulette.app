@@ -9,7 +9,7 @@ import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
-import { Card } from '@/components/ui/field';
+import { Card, Input } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,7 +19,7 @@ import { select } from '@/lib/haptics';
 import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
-import { setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, type SpinStyle } from '@/lib/preferences';
+import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 import { CATEGORIES } from '@/types/models';
@@ -181,6 +181,9 @@ export default function SettingsScreen() {
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
   const [holding, setHolding] = useState(false);
+  const notes = useTrainingNotes();
+  const [noteText, setNoteText] = useState('');
+  const [noteKey, setNoteKey] = useState(0);
   const [appIcon, setAppIcon] = useState<string | null>(() => (supportsAlternateIcons ? getAppIconName() : null));
   async function chooseIcon(id: string) {
     select();
@@ -306,6 +309,53 @@ export default function SettingsScreen() {
         />
       </Card>
 
+      <ThemedText type="heading">Teach the photo check</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">
+          Tell it what it should know about your gear, like “My black pens are usually zirconium” or “Anything with a green handle is Micarta”. It uses these as hints each time it looks at a photo, only when AI help is on.
+        </ThemedText>
+        {notes.map((n, i) => (
+          <View key={`${i}:${n}`} style={styles.note}>
+            <ThemedText type="small" style={styles.flexText}>
+              {n}
+            </ThemedText>
+            <Pressable onPress={() => removeTrainingNote(i)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove note: ${n}`}>
+              <Icon name="trash" size={18} color={theme.danger} />
+            </Pressable>
+          </View>
+        ))}
+        {notes.length < MAX_TRAINING_NOTES ? (
+          <>
+            <Input
+              key={`note-${noteKey}`}
+              placeholder="Add a note"
+              defaultValue=""
+              onChangeText={setNoteText}
+              maxLength={MAX_TRAINING_NOTE_CHARS}
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+            />
+            <Button
+              label="Add note"
+              icon="add"
+              variant="secondary"
+              disabled={!noteText.trim()}
+              onPress={() => {
+                if (addTrainingNote(noteText)) {
+                  setNoteText('');
+                  setNoteKey((k) => k + 1);
+                }
+              }}
+            />
+          </>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            That’s the most notes (up to {MAX_TRAINING_NOTES}). Remove one to add another.
+          </ThemedText>
+        )}
+      </Card>
+
       <ThemedText type="heading">Sample gear</ThemedText>
       <Card>
         <ThemedText themeColor="textSecondary">
@@ -347,6 +397,8 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.one },
+  flexText: { flex: 1 },
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   metal: { width: '21%', alignItems: 'center', gap: 4 },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },

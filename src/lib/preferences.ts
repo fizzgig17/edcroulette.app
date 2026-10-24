@@ -85,3 +85,34 @@ export const useCollectionView = () => useSyncExternalStore(subscribe, getCollec
 export const getIconFollowsMetal = () => read('edc.iconFollows') !== '0';
 export const setIconFollowsMetal = (on: boolean) => write('edc.iconFollows', on ? '1' : '0');
 export const useIconFollowsMetal = () => useSyncExternalStore(subscribe, getIconFollowsMetal, () => true);
+
+// --- Notes that teach the photo check about the person's gear ---------------------------------
+// Short statements ("My black pens are usually zirconium") sent along with photos being identified.
+export const MAX_TRAINING_NOTES = 10;
+export const MAX_TRAINING_NOTE_CHARS = 200;
+let notesRaw: string | null | undefined;
+let notesParsed: string[] = [];
+export const getTrainingNotes = (): string[] => {
+  const raw = read('edc.trainingNotes');
+  if (raw !== notesRaw) {
+    notesRaw = raw;
+    try {
+      const v = raw ? JSON.parse(raw) : [];
+      notesParsed = Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string').slice(0, MAX_TRAINING_NOTES) : [];
+    } catch {
+      notesParsed = [];
+    }
+  }
+  return notesParsed;
+};
+const saveNotes = (list: string[]) => write('edc.trainingNotes', list.length ? JSON.stringify(list) : null);
+/** Adds a note; false if it's empty, a repeat, or the list is full. */
+export function addTrainingNote(text: string): boolean {
+  const note = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TRAINING_NOTE_CHARS);
+  const list = getTrainingNotes();
+  if (!note || list.length >= MAX_TRAINING_NOTES || list.some((n) => n.toLowerCase() === note.toLowerCase())) return false;
+  saveNotes([...list, note]);
+  return true;
+}
+export const removeTrainingNote = (index: number) => saveNotes(getTrainingNotes().filter((_, i) => i !== index));
+export const useTrainingNotes = () => useSyncExternalStore(subscribe, getTrainingNotes, () => [] as string[]);

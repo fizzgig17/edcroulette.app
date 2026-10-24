@@ -4,7 +4,7 @@
  * coordinated set. All are optional; the app works without a connection.
  * Plain fetch against Supabase's REST and Functions endpoints (no sign-in yet).
  */
-import { deviceId } from '@/lib/preferences';
+import { deviceId, getTrainingNotes } from '@/lib/preferences';
 
 const URL_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -82,7 +82,7 @@ export type IdentifyResult = ({ ok: true } & Identified) | { ok: false; code: st
 export async function identifyPhoto(base64: string): Promise<IdentifyResult> {
   if (!backendConfigured) return { ok: false, code: 'offline', error: 'Not connected right now.' };
   try {
-    const r = await timed(`${URL_BASE}/functions/v1/edc-identify`, { method: 'POST', headers: headers(), body: JSON.stringify({ image: base64, device: deviceId() }) }, 45000);
+    const r = await timed(`${URL_BASE}/functions/v1/edc-identify`, { method: 'POST', headers: headers(), body: JSON.stringify({ image: base64, device: deviceId(), notes: getTrainingNotes() }) }, 45000);
     const body = (await r.json().catch(() => null)) as IdentifyResult | null;
     if (body && typeof body === 'object' && 'ok' in body) return body;
     return { ok: false, code: 'error', error: 'Photo identify could not run.', detail: `The server answered ${r.status} without a result.` };
