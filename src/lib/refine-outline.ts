@@ -73,7 +73,9 @@ export function refineAreas(data: ArrayLike<number>, W: number, H: number, rough
   return polys.map((poly, idx) => {
     if (!poly) return null;
     const core = scaled(poly, 0.6);
-    const near = scaled(poly, 1.3);
+    const near = scaled(poly, 1.25);
+    const ringIn = scaled(poly, 1.1);
+    const ringOut = scaled(poly, 1.7);
     const others = polys.filter((p, i) => p && i !== idx) as Pt[][];
     const otherZones = others.map((p) => scaled(p, 1.12));
     const otherCores = others.map((p) => scaled(p, 0.95));
@@ -81,10 +83,10 @@ export function refineAreas(data: ArrayLike<number>, W: number, H: number, rough
     const bgS: number[][] = [];
     const xs = poly.map((p) => p[0]);
     const ys = poly.map((p) => p[1]);
-    const x0 = Math.max(0, Math.floor(Math.min(...scaled(poly, 1.5).map((p) => p[0]))));
-    const x1 = Math.min(W - 1, Math.ceil(Math.max(...scaled(poly, 1.5).map((p) => p[0]))));
-    const y0 = Math.max(0, Math.floor(Math.min(...scaled(poly, 1.5).map((p) => p[1]))));
-    const y1 = Math.min(H - 1, Math.ceil(Math.max(...scaled(poly, 1.5).map((p) => p[1]))));
+    const x0 = Math.max(0, Math.floor(Math.min(...scaled(poly, 1.7).map((p) => p[0]))));
+    const x1 = Math.min(W - 1, Math.ceil(Math.max(...scaled(poly, 1.7).map((p) => p[0]))));
+    const y0 = Math.max(0, Math.floor(Math.min(...scaled(poly, 1.7).map((p) => p[1]))));
+    const y1 = Math.min(H - 1, Math.ceil(Math.max(...scaled(poly, 1.7).map((p) => p[1]))));
     void xs; void ys;
     const nearFlag = new Uint8Array(W * H);
     for (let y = y0; y <= y1; y += 1) {
@@ -92,7 +94,7 @@ export function refineAreas(data: ArrayLike<number>, W: number, H: number, rough
         const o = (y * W + x) * 4;
         const px = [data[o]!, data[o + 1]!, data[o + 2]!];
         if (inside(core, x + 0.5, y + 0.5)) itemS.push(px);
-        else if (!inside(near, x + 0.5, y + 0.5) && !otherZones.some((z) => inside(z, x + 0.5, y + 0.5))) bgS.push(px);
+        else if (!inside(ringIn, x + 0.5, y + 0.5) && inside(ringOut, x + 0.5, y + 0.5) && !otherZones.some((z) => inside(z, x + 0.5, y + 0.5))) bgS.push(px);
         if (inside(near, x + 0.5, y + 0.5) && !otherCores.some((z) => inside(z, x + 0.5, y + 0.5))) nearFlag[y * W + x] = 1;
       }
     }

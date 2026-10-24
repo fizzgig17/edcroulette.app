@@ -70,7 +70,7 @@ export async function pickPhoto(source: PhotoSource): Promise<PickedPhoto | null
 }
 
 /** Crops (if asked), shrinks and saves a picked photo; returns the stored name ("gear-photos/x.jpg"). */
-export async function savePhoto(photo: PickedPhoto, crop?: PhotoCrop): Promise<string> {
+export async function savePhoto(photo: PickedPhoto, crop?: PhotoCrop, maxEdge: number = MAX_EDGE): Promise<string> {
   const ctx = ImageManipulator.manipulate(photo.uri);
   let edge = Math.max(photo.width, photo.height);
   if (crop) {
@@ -83,7 +83,7 @@ export async function savePhoto(photo: PickedPhoto, crop?: PhotoCrop): Promise<s
     });
     edge = size;
   }
-  if (edge > MAX_EDGE) ctx.resize(crop || photo.width >= photo.height ? { width: MAX_EDGE } : { height: MAX_EDGE });
+  if (edge > maxEdge) ctx.resize(crop || photo.width >= photo.height ? { width: maxEdge } : { height: maxEdge });
   const image = await ctx.renderAsync();
   const out = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
   const name = `${Crypto.randomUUID()}.jpg`;

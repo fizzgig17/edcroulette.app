@@ -4,7 +4,7 @@
  * outline blurs. All the items were identified in one request already, so
  * choosing costs nothing extra. Items already added from this photo stay blurred.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ export function ItemPicker({
   done,
   onCancel,
   onChoose,
+  onPreview,
 }: {
   uri: string | null;
   items: Identified[] | null;
@@ -30,17 +31,19 @@ export function ItemPicker({
   done: number[];
   onCancel: () => void;
   onChoose: (index: number, dims: Dims) => void;
+  /** Called when an item is selected, so its photo can be prepared while the person looks at it. */
+  onPreview?: (index: number, dims: Dims) => void;
 }) {
   return (
     <Modal visible={!!uri && !!items} animationType="slide" onRequestClose={onCancel}>
-      {uri && items ? <Picker uri={uri} items={items} done={done} onCancel={onCancel} onChoose={onChoose} /> : null}
+      {uri && items ? <Picker uri={uri} items={items} done={done} onCancel={onCancel} onChoose={onChoose} onPreview={onPreview} /> : null}
     </Modal>
   );
 }
 
 const label = (it: Identified) => [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category;
 
-function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void }) {
+function Picker({ uri, items, done, onCancel, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -48,6 +51,13 @@ function Picker({ uri, items, done, onCancel, onChoose }: { uri: string; items: 
   const remaining = items.map((_, i) => i).filter((i) => !done.includes(i));
   // With one item left there's nothing to choose between.
   const [selected, setSelected] = useState<number | null>(remaining.length === 1 && done.length > 0 ? (remaining[0] ?? null) : null);
+
+  // Start preparing the chosen item's photo straight away (a moment later, so the highlight draws first).
+  useEffect(() => {
+    if (selected === null || !dims || !onPreview) return;
+    const id = setTimeout(() => onPreview(selected, dims), 250);
+    return () => clearTimeout(id);
+  }, [selected, dims, onPreview]);
 
   // The photo, as large as fits.
   const maxW = Math.min(screenW - Spacing.three * 2, 560);

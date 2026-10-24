@@ -120,6 +120,36 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     }
   }
 
+  /** The photo of just one item from a multi-item photo: cropped, with the others blurred. Made once, then kept. */
+  const crops = useRef(new Map<number, Promise<string | null>>());
+  function cropFor(index: number, dims: { width: number; height: number }): Promise<string | null> {
+    const c = batch;
+    const it = c?.items[index];
+    const uri = c ? photoUri(c.stored) : null;
+    if (!c || !it || !it.box || !uri) return Promise.resolve(null);
+    const cached = crops.current.get(index);
+    if (cached) return cached;
+    const job = (async () => {
+      const { x, y, w, h } = it.box!;
+      const size = Math.min(Math.min(dims.width, dims.height), Math.max(w * dims.width, h * dims.height) * 1.15);
+      const crop = { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size };
+      const stored = await savePhoto({ uri, width: dims.width, height: dims.height }, crop, 720);
+      setNewPhotos((p) => [...p, stored]);
+      // The other items are blurred (the background stays sharp), before the photo is shown,
+      // or a copy already on screen would stay as it was.
+      try {
+        const others = c.items.map((o, i) => (i === index ? null : areaOf(o))).filter((a): a is [number, number][] => !!a);
+        await blurAreasInPhoto(stored, others, areaOf(it), dims, crop);
+      } catch (e) {
+        // The photo is still fine without it. Dev builds say why.
+        if (IS_DEV_BUILD) Alert.alert('Blur', e instanceof Error ? e.message : String(e));
+      }
+      return stored;
+    })().catch(() => null);
+    crops.current.set(index, job);
+    return job;
+  }
+
   /** The person tapped an item: fill in its details and keep just that item in the photo. */
   async function chooseItem(index: number, dims: { width: number; height: number }) {
     const c = batch;
@@ -128,29 +158,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     if (!c || !it) return;
     setBatch({ ...c, current: index });
     applyIdentified(it);
-    const uri = photoUri(c.stored);
-    if (!it.box || !uri) return;
     setPreparing(true);
     try {
-      const { x, y, w, h } = it.box;
-      const size = Math.min(Math.min(dims.width, dims.height), Math.max(w * dims.width, h * dims.height) * 1.15);
-      const stored = await savePhoto(
-        { uri, width: dims.width, height: dims.height },
-        { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size },
-      );
-      setNewPhotos((p) => [...p, stored]);
-      // The other items in the photo are blurred (the background stays sharp). This happens
-      // before the photo is shown, or the picture already on screen would stay as it was.
-      try {
-        const others = c.items.map((o, i) => (i === index ? null : areaOf(o))).filter((a): a is [number, number][] => !!a);
-        await blurAreasInPhoto(stored, others, areaOf(it), dims, { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size });
-      } catch (e) {
-        // The photo is still fine without it. Dev builds say why.
-        if (IS_DEV_BUILD) Alert.alert('Blur', e instanceof Error ? e.message : String(e));
-      }
-      set('imageUri', stored);
-    } catch {
-      // Keep the whole photo; the details are already filled in.
+      const stored = await cropFor(index, dims);
+      if (stored) set('imageUri', stored);
     } finally {
       setPreparing(false);
     }
@@ -277,6 +288,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     if (!finishNow && batch && batch.current !== null && !item && batch.done.length + 1 < batch.items.length) {
       for (const uri of newPhotos) if (uri !== clean.imageUri && uri !== batch.stored) deletePhoto(uri);
       setNewPhotos([batch.stored]);
+      crops.current.clear();
       setBatch({ ...batch, done: [...batch.done, batch.current], current: null });
       setDraft({ ...EMPTY, category: defaultCategory ?? EMPTY.category });
       setWeightText('');
@@ -333,6 +345,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           if (batch && batch.done.length > 0) cancel();
         }}
         onChoose={(i, d) => void chooseItem(i, d)}
+        onPreview={(i, d) => void cropFor(i, d)}
       />
       <PhotoCropper photo={cropping} onCancel={() => setCropping(null)} onDone={(p, c) => void usePhoto(p, c)} />
 
