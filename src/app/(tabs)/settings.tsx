@@ -195,7 +195,7 @@ export default function SettingsScreen() {
       Alert.alert('App icon', 'The icon could not be changed just now.');
     }
   }
-  const canSwitchIcon = Platform.OS === 'ios' && supportsAlternateIcons;
+  const canSwitchIcon = (Platform.OS === 'ios' || Platform.OS === 'android') && supportsAlternateIcons;
   const follows = useIconFollowsMetal();
   const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
@@ -275,7 +275,7 @@ export default function SettingsScreen() {
         <>
           <ThemedText type="heading">App icon</ThemedText>
           <Card>
-            <ThemedText themeColor="textSecondary">Pick the home screen icon separately. iOS shows a short notice each time it changes.</ThemedText>
+            <ThemedText themeColor="textSecondary">Pick the home screen icon separately. {Platform.OS === 'ios' ? 'iOS shows a short notice each time it changes.' : 'On Android the icon can take a few seconds to change, and the app may close once.'}</ThemedText>
             <View style={styles.metals}>
               {[{ id: 'mixed', label: 'Mixed' }, ...METALS].map((m) => (
                 <Pressable key={m.id} onPress={() => void chooseIcon(m.id)} accessibilityRole="button" accessibilityState={{ selected: m.id === iconId }} accessibilityLabel={`${m.label} icon`} style={styles.metal}>
