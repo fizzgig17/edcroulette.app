@@ -65,7 +65,7 @@ const ITEM = {
       type: 'array',
       items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
       minItems: 8,
-      maxItems: 24,
+      maxItems: 40,
       description: "Points [x, y] (fractions 0 to 1 of the picture) going round the item's edge in order.",
     },
   },
@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model,
-        max_tokens: 600,
+        max_tokens: 3000,
         temperature: 1,
         system: SYSTEM,
         tools: [TOOL],
@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
   }
   const data = await res.json();
   const out = (data.content ?? []).find((c: { type: string }) => c.type === 'tool_use')?.input;
-  if (!out) return json({ ok: false, code: 'error', error: 'Could not read the photo. Try again.' }, 502);
+  if (!out) return json({ ok: false, code: 'error', error: 'Could not read the photo. Try again.', detail: `stop: ${data.stop_reason ?? '?'}` }, 502);
   if (out.unsafe === true) return json({ ok: false, code: 'unsafe', error: 'That photo can’t be used here.' });
 
   // Turn one reported item into the app's answer (matching its brand against the catalog).
