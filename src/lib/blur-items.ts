@@ -5,7 +5,7 @@
  * the same on iPhone, Android and the web without anything extra to install.
  */
 import { File } from 'expo-file-system';
-import { decode, encode } from 'jpeg-js';
+import { decode, encode } from '@/lib/jpeg';
 
 import { hull } from '@/components/outlined-photo';
 import type { Identified } from '@/lib/api';

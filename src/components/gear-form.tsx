@@ -4,6 +4,7 @@ import { Asset } from 'expo-asset';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
+import { refineItems } from '@/lib/refine-outline';
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
@@ -107,7 +108,14 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     applyIdentified(r);
     // Several items in the photo: let the person pick which one they mean.
     if (r.items && r.items.length > 1) {
-      setBatch({ stored, items: r.items, done: [], current: null });
+      // Tighten the rough outlines against the real picture (keeps the rough ones if that fails).
+      let items = r.items;
+      try {
+        items = await refineItems(stored, items);
+      } catch {
+        // The rough outlines still work.
+      }
+      setBatch({ stored, items, done: [], current: null });
       setPicking(true);
     }
   }
