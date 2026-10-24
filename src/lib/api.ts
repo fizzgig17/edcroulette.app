@@ -74,7 +74,7 @@ export interface Identified {
   notes: string | null;
 }
 
-export type IdentifyResult = ({ ok: true } & Identified) | { ok: false; code: string; error: string };
+export type IdentifyResult = ({ ok: true } & Identified) | { ok: false; code: string; error: string; detail?: string };
 
 /** Asks the AI service what an item is, from a small base64 JPEG. */
 export async function identifyPhoto(base64: string): Promise<IdentifyResult> {
@@ -83,7 +83,7 @@ export async function identifyPhoto(base64: string): Promise<IdentifyResult> {
     const r = await timed(`${URL_BASE}/functions/v1/edc-identify`, { method: 'POST', headers: headers(), body: JSON.stringify({ image: base64, device: deviceId() }) }, 45000);
     const body = (await r.json().catch(() => null)) as IdentifyResult | null;
     if (body && typeof body === 'object' && 'ok' in body) return body;
-    return { ok: false, code: 'error', error: 'Photo identify could not run.' };
+    return { ok: false, code: 'error', error: 'Photo identify could not run.', detail: `The server answered ${r.status} without a result.` };
   } catch {
     return { ok: false, code: 'offline', error: 'Could not reach the server. Check your connection.' };
   }

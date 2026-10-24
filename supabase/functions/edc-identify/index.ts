@@ -19,6 +19,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const MODEL = Deno.env.get('EDC_AI_MODEL') ?? 'claude-sonnet-5-5';
+const FALLBACK_MODEL = Deno.env.get('EDC_AI_FALLBACK_MODEL') ?? 'claude-haiku-5-5';
 const DEVICE_LIMIT = Number(Deno.env.get('EDC_AI_DEVICE_DAILY') ?? '25');
 const IP_LIMIT = Number(Deno.env.get('EDC_AI_IP_DAILY') ?? '60');
 const GLOBAL_LIMIT = Number(Deno.env.get('EDC_AI_GLOBAL_DAILY') ?? '3000');
@@ -109,31 +110,47 @@ Deno.serve(async (req) => {
   }
   if (!allowed) return json({ ok: false, code: 'limit', error: "You've used today's photo identifies. You can still fill in the details yourself." }, 429);
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 600,
-      system: SYSTEM,
-      tools: [TOOL],
-      tool_choice: { type: 'tool', name: 'report_item' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
-            { type: 'text', text: 'What is this item?' },
-          ],
-        },
-      ],
-    }),
-  });
+  const ask = (model: string) =>
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        max_tokens: 600,
+        temperature: 1,
+        system: SYSTEM,
+        tools: [TOOL],
+        tool_choice: { type: 'tool', name: 'report_item' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+              { type: 'text', text: 'What is this item?' },
+            ],
+          },
+        ],
+      }),
+    });
+
+  // If the main model is refused (a bad request or model setting, not just busy), try the backup once.
+  let res = await ask(MODEL);
+  let detail = '';
   if (!res.ok) {
-    console.error('Anthropic error', res.status, (await res.text()).slice(0, 300));
+    detail = `${MODEL} ${res.status}: ${(await res.text()).slice(0, 300)}`;
+    console.error('Anthropic error', detail);
+    if (res.status >= 400 && res.status < 500 && res.status !== 429 && MODEL !== FALLBACK_MODEL) {
+      res = await ask(FALLBACK_MODEL);
+      if (!res.ok) {
+        detail += ` | ${FALLBACK_MODEL} ${res.status}: ${(await res.text()).slice(0, 300)}`;
+        console.error('Anthropic fallback error', detail);
+      }
+    }
+  }
+  if (!res.ok) {
     const busy = res.status === 429 || res.status === 529 || res.status >= 500;
     return json(
-      { ok: false, code: busy ? 'busy' : 'error', error: busy ? 'The photo service is busy. Try again in a moment.' : 'Photo identify could not run.' },
+      { ok: false, code: busy ? 'busy' : 'error', error: busy ? 'The photo service is busy. Try again in a moment.' : 'Photo identify could not run.', detail },
       502,
     );
   }

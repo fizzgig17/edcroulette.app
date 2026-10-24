@@ -14,6 +14,7 @@ import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
+import { IS_DEV_BUILD } from '@/lib/env';
 import { identifyPhoto, type Identified } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
@@ -80,7 +81,8 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     }
     const r = await identifyPhoto(b64);
     if (!r.ok) {
-      setIdentify({ state: 'failed', message: r.error });
+      // Dev builds show why, so a failure can be traced.
+      setIdentify({ state: 'failed', message: IS_DEV_BUILD && r.detail ? `${r.error} (${r.detail})` : r.error });
       return;
     }
     applyIdentified(r);
