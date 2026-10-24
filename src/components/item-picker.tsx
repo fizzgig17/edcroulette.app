@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Identified } from '@/lib/api';
+import { IS_DEV_BUILD } from '@/lib/env';
 
 type Dims = { width: number; height: number };
 
@@ -107,7 +108,7 @@ function Picker({ uri, items, done, onCancel, onChoose, onPreview }: { uri: stri
               accessibilityRole="button"
               style={[styles.chip, { backgroundColor: selected === i ? theme.accent : '#FFFFFF22' }]}>
               <ThemedText type="smallBold" numberOfLines={1} style={{ color: selected === i ? theme.onAccent : '#FFFFFF', fontSize: 14 }}>
-                {i + 1} · {label(items[i] as Identified)}
+                {i + 1} · {label(items[i] as Identified)}{IS_DEV_BUILD && items[i]?.outlineSource ? ` (${items[i]?.outlineSource})` : ''}
               </ThemedText>
             </Pressable>
           ))}

@@ -80,6 +80,8 @@ export interface Identified {
   outline?: [number, number][] | null;
   /** The outline was fitted to the real picture (use it as it is, not as a rough hull). */
   tight?: boolean;
+  /** Dev builds only: how the outline was made. */
+  outlineSource?: 'object finder' | 'colours' | 'rough';
 }
 
 /** The main answer, plus every item seen when the photo has several. */

@@ -270,10 +270,10 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
   const refined = colour.map((c, i) => exact[i] ?? c);
   return items.map((it, i) => {
     const r = refined[i];
-    if (!r) return it;
+    if (!r) return { ...it, outlineSource: 'rough' as const };
     const xs = r.map((p) => p[0]);
     const ys = r.map((p) => p[1]);
     const left = Math.min(...xs), top = Math.min(...ys);
-    return { ...it, tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
+    return { ...it, outlineSource: exact[i] ? ('object finder' as const) : ('colours' as const), tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
   });
 }
