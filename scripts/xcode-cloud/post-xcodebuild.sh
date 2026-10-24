@@ -13,9 +13,9 @@ fi
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 BRANCH="${CI_BRANCH:-${CI_GIT_REF#refs/heads/}}"
 if [ "$BRANCH" = "master" ]; then
-  KIND=PRODUCTION; BACKEND=belaybuddy-prod
+  KIND=PRODUCTION; BACKEND=fizzgig-apps-prod
 else
-  KIND=DEVELOPMENT; BACKEND=belaybuddy-dev
+  KIND=DEVELOPMENT; BACKEND=fizzgig-apps-dev
 fi
 SUBJECT="$(git log -1 --pretty=%s 2>/dev/null || true)"
 SHORT="$(printf '%s' "$CI_COMMIT" | cut -c1-7)"

@@ -1,7 +1,7 @@
 -- EDC Roulette, schema version 1.
 --
--- EDC Roulette shares Belay Buddy's Supabase projects (belaybuddy-dev for
--- develop, belaybuddy-prod for master). Everything EDC owns lives in the `edc`
+-- EDC Roulette shares Belay Buddy's Supabase projects (fizzgig-apps-dev for
+-- develop, fizzgig-apps-prod for master). Everything EDC owns lives in the `edc`
 -- schema, so nothing here touches Belay Buddy's `public` tables, functions or
 -- policies. Accounts (auth.users) are shared: one sign-in works in both apps.
 --

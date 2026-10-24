@@ -1,6 +1,6 @@
 # Sets up EDC Roulette inside Belay Buddy's Supabase projects:
-#   push to develop -> belaybuddy-dev
-#   push to master  -> belaybuddy-prod
+#   push to develop -> fizzgig-apps-dev
+#   push to master  -> fizzgig-apps-prod
 #
 # EDC Roulette shares those projects (Supabase's free plan allows two projects
 # per person, and Belay Buddy's dev and prod already use them). Everything EDC
@@ -47,7 +47,7 @@ jobs:
       PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
       PROD_PROJECT_ID: ${{ secrets.PROD_PROJECT_ID }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      TARGET: ${{ github.ref_name == 'master' && 'belaybuddy-prod' || 'belaybuddy-dev' }}
+      TARGET: ${{ github.ref_name == 'master' && 'fizzgig-apps-prod' || 'fizzgig-apps-dev' }}
       # Same session pooler hosts as Belay Buddy (GitHub runners are IPv4-only).
       DEV_POOLER_HOST: aws-0-us-east-1.pooler.supabase.com
       PROD_POOLER_HOST: aws-0-us-east-1.pooler.supabase.com
@@ -60,7 +60,7 @@ jobs:
         run: |
           # Picked in the shell (not with a GitHub `a && b || c` expression) so a
           # missing prod secret can never fall back to dev.
-          if [ "$TARGET" = belaybuddy-prod ]; then
+          if [ "$TARGET" = fizzgig-apps-prod ]; then
             PROJECT_ID="$PROD_PROJECT_ID"; DB_PASSWORD="$PROD_DB_PASSWORD"; POOLER_HOST="$PROD_POOLER_HOST"
           else
             PROJECT_ID="$DEV_PROJECT_ID"; DB_PASSWORD="$DEV_DB_PASSWORD"; POOLER_HOST="$DEV_POOLER_HOST"

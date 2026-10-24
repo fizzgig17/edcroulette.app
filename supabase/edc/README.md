@@ -2,8 +2,8 @@
 
 | Branch | Project |
 |---|---|
-| `develop` | belaybuddy-dev |
-| `master` | belaybuddy-prod |
+| `develop` | fizzgig-apps-dev |
+| `master` | fizzgig-apps-prod |
 
 Everything EDC owns is in the **`edc` schema**, so it never collides with Belay
 Buddy's `public` tables. Accounts (`auth.users`) are shared between the apps.
@@ -12,7 +12,7 @@ Buddy's `public` tables. Accounts (`auth.users`) are shared between the apps.
 
 Add a new numbered file to `migrations/` (`0002_….sql`, `0003_….sql`) — never
 edit one that has already been applied. Pushing it to `develop` applies it to
-belaybuddy-dev; merging to `master` applies it to belaybuddy-prod
+fizzgig-apps-dev; merging to `master` applies it to fizzgig-apps-prod
 (`.github/workflows/supabase-edc.yml`). Each file runs once, in a transaction,
 and is recorded in `edc.schema_migrations`.
 
