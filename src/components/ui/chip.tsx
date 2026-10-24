@@ -35,15 +35,17 @@ export function ChipGroup<T extends string>({
   onChange,
   allowNone = false,
   scroll = false,
+  small = false,
 }: {
   options: readonly T[];
   value: T | null;
   onChange: (v: T | null) => void;
   allowNone?: boolean;
   scroll?: boolean;
+  small?: boolean;
 }) {
   const chips = options.map((o) => (
-    <Chip key={o} label={o} selected={value === o} onPress={() => onChange(value === o && allowNone ? null : o)} />
+    <Chip key={o} small={small} label={o} selected={value === o} onPress={() => onChange(value === o && allowNone ? null : o)} />
   ));
   if (scroll) {
     return (

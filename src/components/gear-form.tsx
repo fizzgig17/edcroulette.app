@@ -8,7 +8,8 @@ import { GearThumb } from '@/components/gear-thumb';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Chip, ChipGroup } from '@/components/ui/chip';
+import { ChipGroup } from '@/components/ui/chip';
+import { ChoiceField } from '@/components/ui/choice-field';
 import { Card, Field, Input } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
@@ -46,8 +47,6 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   // Text fields keep their own text (so typing is never interrupted); this number
   // replaces what they show when the form is filled in from the photo.
   const [formKey, setFormKey] = useState(0);
-  // Same idea for the free-text material box when a material chip is tapped.
-  const [materialKey, setMaterialKey] = useState(0);
   // Photos taken in this session that end up unused are deleted on leaving.
   const [newPhotos, setNewPhotos] = useState<string[]>([]);
 
@@ -304,7 +303,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
       ) : null}
 
       <Field label="Category">
-        <ChipGroup options={CATEGORIES} value={draft.category as (typeof CATEGORIES)[number]} onChange={(v) => v && set('category', v)} scroll />
+        <ChipGroup options={CATEGORIES} value={draft.category as (typeof CATEGORIES)[number]} onChange={(v) => v && set('category', v)} small />
       </Field>
       <Field label="Brand">
         <BrandPicker initial={draft.brand ?? ''} resetKey={formKey} category={draft.category} onChange={(b) => setBrandOrModel({ brand: b })} />
@@ -335,38 +334,10 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
         />
       </Field>
       <Field label="Material">
-        {materialOptions.length > 1 ? (
-          <View style={styles.suggest}>
-            <ThemedText type="caption" themeColor="textSecondary">
-              From your photo, could be
-            </ThemedText>
-            <View style={styles.suggestRow}>
-              {materialOptions.map((m) => (
-                <Chip
-                  key={m}
-                  small
-                  label={m}
-                  selected={draft.material === m}
-                  onPress={() => {
-                    set('material', m);
-                    setMaterialKey((k) => k + 1);
-                  }}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-        <ChipGroup options={MATERIALS} value={(MATERIALS as readonly string[]).includes(draft.material ?? '') ? (draft.material as (typeof MATERIALS)[number]) : null} onChange={(v) => {
-            set('material', v);
-            setMaterialKey((k) => k + 1);
-          }}
-          allowNone
-          scroll
-        />
-        <Input key={`material-${formKey}-${materialKey}`} defaultValue={draft.material ?? ''} onChangeText={(t) => set('material', t || null)} placeholder="Or type your own" maxLength={40} />
+        <ChoiceField key={`material-${formKey}`} options={MATERIALS} value={draft.material} onChange={(v) => set('material', v)} suggestions={materialOptions} otherPlaceholder="Type a material" />
       </Field>
       <Field label="Finish">
-        <ChipGroup options={FINISHES} value={(FINISHES as readonly string[]).includes(draft.finish ?? '') ? (draft.finish as (typeof FINISHES)[number]) : null} onChange={(v) => set('finish', v)} allowNone scroll />
+        <ChoiceField key={`finish-${formKey}`} options={FINISHES} value={draft.finish} onChange={(v) => set('finish', v)} otherPlaceholder="Type a finish" />
       </Field>
       <Field label="Color">
         <ColorPicker value={draft.primaryColor} onChange={(hex) => set('primaryColor', hex)} />
@@ -400,8 +371,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center' },
   photo: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
-  suggest: { gap: Spacing.one },
-  suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   photoButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   banner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
