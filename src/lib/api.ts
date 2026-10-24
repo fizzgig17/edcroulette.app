@@ -78,6 +78,8 @@ export interface Identified {
   box?: { x: number; y: number; w: number; h: number } | null;
   /** Points round the item's edge, as fractions (0 to 1) of the photo's width and height. */
   outline?: [number, number][] | null;
+  /** The outline was fitted to the real picture (use it as it is, not as a rough hull). */
+  tight?: boolean;
 }
 
 /** The main answer, plus every item seen when the photo has several. */

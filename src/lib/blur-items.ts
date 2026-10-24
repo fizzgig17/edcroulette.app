@@ -16,6 +16,7 @@ type Pt = [number, number];
 /** The area an item covers, as fractions of the picture: its outline's hull, or its box. */
 export function areaOf(it: Identified): Pt[] | null {
   if (it.outline && it.outline.length >= 6) {
+    if (it.tight) return it.outline as Pt[];
     const h = hull(it.outline as Pt[]);
     if (h.length >= 3) return h;
   }

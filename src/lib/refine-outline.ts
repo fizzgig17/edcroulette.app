@@ -126,26 +126,68 @@ export function refineAreas(data: ArrayLike<number>, W: number, H: number, rough
         if (er[y * W + x] && inside(core, x + 0.5, y + 0.5)) { seen[y * W + x] = 1; stack.push(y * W + x); }
       }
     }
-    const pts: Pt[] = [];
+    let count = 0;
     while (stack.length) {
       const p = stack.pop()!;
+      count += 1;
       const x = p % W;
       const y = (p - x) / W;
-      pts.push([x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
         const q = (y + dy) * W + x + dx;
         if (x + dx >= 0 && x + dx < W && y + dy >= 0 && y + dy < H && er[q] && !seen[q]) { seen[q] = 1; stack.push(q); }
       }
     }
-    if (pts.length < 12) return null;
-    const h = hull(pts);
-    if (h.length < 3) return null;
-    const ratio = area(h) / area(poly);
+    if (count < 12) return null;
+    // The item's left and right edge on every row, smoothed so a stray pixel doesn't spike the outline.
+    const rows: number[] = [];
+    const left: number[] = [];
+    const right: number[] = [];
+    for (let y = y0; y <= y1; y += 1) {
+      let lo = -1;
+      let hi = -1;
+      for (let x = x0; x <= x1; x += 1) if (seen[y * W + x]) { if (lo < 0) lo = x; hi = x; }
+      if (lo >= 0) { rows.push(y); left.push(lo); right.push(hi); }
+    }
+    if (rows.length < 6) return null;
+    const med = (arr: number[], i: number) => {
+      const w = arr.slice(Math.max(0, i - 3), Math.min(arr.length, i + 4)).sort((a, b) => a - b);
+      return w[Math.floor(w.length / 2)]!;
+    };
+    const L = left.map((_, i) => med(left, i) - 1.5); // a little over, for the erosion
+    const R = right.map((_, i) => med(right, i) + 2.5);
+    const poly2: Pt[] = [];
+    for (let i = 0; i < rows.length; i += 1) poly2.push([L[i]!, rows[i]!]);
+    for (let i = rows.length - 1; i >= 0; i -= 1) poly2.push([R[i]!, rows[i]! + 1]);
+    // The hull of the smoothed edges: tight, and not thrown off by a patch the colours got wrong.
+    const simple = simplify(hull(poly2), 0.8);
+    if (simple.length < 4) return null;
+    const ratio = area(simple) / area(poly);
     if (ratio < 0.55 || ratio > 1.45) return null;
-    // Back to fractions, and grown by a pixel for the 3x3 erosion.
-    const hc = scaled(h, 1.0);
-    return hc.map(([x, y]) => [Math.min(1, Math.max(0, x / W)), Math.min(1, Math.max(0, y / H))] as Pt);
+    return simple.map(([x, y]) => [Math.min(1, Math.max(0, x / W)), Math.min(1, Math.max(0, y / H))] as Pt);
   });
+}
+
+/** Douglas-Peucker: drops points that lie within `eps` of the line between their neighbours. */
+function simplify(pts: Pt[], eps: number): Pt[] {
+  const keep = new Uint8Array(pts.length);
+  keep[0] = 1;
+  keep[pts.length - 1] = 1;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [s, e] = stack.pop()!;
+    const a = pts[s]!;
+    const b = pts[e]!;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    let best = -1;
+    let bd = 0;
+    for (let i = s + 1; i < e; i += 1) {
+      const p = pts[i]!;
+      const d = Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / len;
+      if (d > bd) { bd = d; best = i; }
+    }
+    if (best >= 0 && bd > eps) { keep[best] = 1; stack.push([s, best], [best, e]); }
+  }
+  return pts.filter((_, i) => keep[i]);
 }
 
 /** Refines every item's outline from the saved photo; items it can't improve are returned unchanged. */
@@ -171,6 +213,6 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
     const xs = r.map((p) => p[0]);
     const ys = r.map((p) => p[1]);
     const left = Math.min(...xs), top = Math.min(...ys);
-    return { ...it, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
+    return { ...it, tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
   });
 }

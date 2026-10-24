@@ -53,8 +53,9 @@ function roundedPath(p: Pt[], r: number): string {
 export function outlineOf(it: Identified, W: number, H: number): string | null {
   const px = (pts: Pt[]) => pts.map(([x, y]) => [x * W, y * H] as Pt);
   if (it.outline && it.outline.length >= 6) {
-    const h = hull(px(it.outline as Pt[]));
-    if (h.length >= 3) return roundedPath(h, Math.max(6, Math.min(W, H) * 0.03));
+    const pts = px(it.outline as Pt[]);
+    const h = it.tight ? pts : hull(pts);
+    if (h.length >= 3) return roundedPath(h, Math.max(it.tight ? 3 : 6, Math.min(W, H) * (it.tight ? 0.012 : 0.03)));
   }
   if (!it.box) return null;
   const { x, y, w, h } = it.box;

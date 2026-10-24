@@ -112,8 +112,9 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       let items = r.items;
       try {
         items = await refineItems(stored, items);
-      } catch {
-        // The rough outlines still work.
+      } catch (e) {
+        // The rough outlines still work. Dev builds say why.
+        if (IS_DEV_BUILD) Alert.alert('Outline', e instanceof Error ? e.message : String(e));
       }
       setBatch({ stored, items, done: [], current: null });
       setPicking(true);
@@ -374,7 +375,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           </ThemedText>
         ) : null}
         {!item && !draft.imageUri && !batch ? <Button label="Try the demo photo (3 items)" icon="sparkle" variant="ghost" onPress={() => void startDemo()} /> : null}
-        {batch && batch.current !== null && !item && batch.items.length - batch.done.length > 1 ? (
+        {batch && batch.current !== null && !item && !!draft.imageUri && batch.items.length - batch.done.length > 1 ? (
           <Button label="Pick a different item from the photo" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
         ) : null}
       </View>
