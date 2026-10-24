@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   pointer: { position: 'absolute', width: 0, height: 0, borderTopWidth: 7, borderBottomWidth: 7, borderTopColor: 'transparent', borderBottomColor: 'transparent' },
   pointerL: { left: 0, borderLeftWidth: 9 },
   pointerR: { right: 0, borderRightWidth: 9 },
-  row: { alignItems: 'center', justifyContent: 'center', gap: Spacing.one, paddingHorizontal: 14 },
+  row: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', gap: Spacing.one, paddingHorizontal: 14 },
   rowWide: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: 16 },
   nameWide: { flex: 1 },
   dim: { opacity: 0.45, transform: [{ scale: 0.86 }] },
