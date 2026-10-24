@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/images/icons/mixed.png",
       "bundleIdentifier": "app.edcroulette.ios",
-      "supportsTablet": false,
+      "supportsTablet": true,
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "EDC Roulette uses the camera to take photos of your gear for your collection.",
@@ -32,6 +32,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-foldables.js",
       [
         "expo-router",
         {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SiteFooter } from '@/components/site-footer';
@@ -35,6 +35,8 @@ type ScreenProps = {
 /** Standard scrollable screen shell. */
 export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true, fullWidth }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  // Wider windows (an unfolded Fold, an iPad) get a wider column.
+  const wide = useWindowDimensions().width >= 840;
   const scroll = useRef<ScrollView>(null);
   useEffect(() => {
     if (topSignal) scroll.current?.scrollTo({ y: 0, animated: true });
@@ -46,7 +48,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
         <ScrollView
           ref={scroll}
           scrollEnabled={scrollEnabled}
-          contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, fullWidth && { maxWidth: undefined, paddingLeft: Math.max(insets.left, 0) + Spacing.three, paddingRight: Math.max(insets.right, 0) + Spacing.three }, tab && { paddingBottom: insets.bottom + 120 }]}
+          contentContainerStyle={[styles.content, wide && !readable && { maxWidth: 1040 }, readable && { maxWidth: ReadableWidth }, fullWidth && { maxWidth: undefined, paddingLeft: Math.max(insets.left, 0) + Spacing.three, paddingRight: Math.max(insets.right, 0) + Spacing.three }, tab && { paddingBottom: insets.bottom + 120 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>

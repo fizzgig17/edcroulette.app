@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { Screen } from '@/components/screen';
@@ -32,6 +32,8 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 export default function CollectionScreen() {
   const theme = useTheme();
   const { items, maxItems, slots, ownCount, sampleCount, addSamples } = useGear();
+  // An unfolded Fold, an iPad or a big window: two columns of rows.
+  const wide = useWindowDimensions().width >= 840;
   const view = useCollectionView();
   const full = ownCount >= maxItems;
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
@@ -219,8 +221,11 @@ export default function CollectionScreen() {
                   ))}
                 </View>
               ) : (
-                <Card padded={false}>
-                  {list.map((g, i) => (
+                <View style={wide ? styles.twoCols : undefined}>
+                  {(wide && list.length > 1 ? [list.slice(0, Math.ceil(list.length / 2)), list.slice(Math.ceil(list.length / 2))] : [list]).map((part, pi) => (
+                    <View key={pi} style={wide ? styles.flex : undefined}>
+                      <Card padded={false}>
+                  {part.map((g, i) => (
                     <Pressable
                       key={g.id}
                       onPress={() => open(g)}
@@ -243,7 +248,10 @@ export default function CollectionScreen() {
                       <Icon name="chevron" size={14} color={theme.textSecondary} />
                     </Pressable>
                   ))}
-                </Card>
+                      </Card>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           ))}
@@ -335,6 +343,7 @@ function Section({ title, count = 0, onClear, limit, children }: { title: string
 }
 
 const styles = StyleSheet.create({
+  twoCols: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
   add: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   small: { fontSize: 12, lineHeight: 16 },
   tools: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
