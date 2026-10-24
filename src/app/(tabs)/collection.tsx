@@ -31,7 +31,7 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { items, maxItems, slots, ownCount, sampleCount } = useGear();
+  const { items, maxItems, slots, ownCount, sampleCount, addSamples } = useGear();
   const view = useCollectionView();
   const full = ownCount >= maxItems;
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
@@ -125,6 +125,10 @@ export default function CollectionScreen() {
         <Card>
           <ThemedText>Nothing here yet. Add the gear you carry, with a photo, its material and color.</ThemedText>
           <Button label="Add gear" icon="add" onPress={() => router.push('/gear/new')} />
+          <Button label="Or try it with sample gear" icon="sparkle" variant="secondary" onPress={() => void addSamples()} />
+          <ThemedText type="small" themeColor="textSecondary">
+            Sample pieces don't count toward your limit, and Settings can remove them any time.
+          </ThemedText>
         </Card>
       ) : (
         <>

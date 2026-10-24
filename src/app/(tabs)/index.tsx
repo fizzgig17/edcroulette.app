@@ -38,7 +38,7 @@ function rowsOf<T>(picks: T[], landscape: boolean): T[][] {
 
 export default function SpinScreen() {
   const theme = useTheme();
-  const { items, lastSpin, itemById, loading } = useGear();
+  const { items, lastSpin, itemById, loading, addSamples } = useGear();
   const { width, height } = useWindowDimensions();
   // Portrait is just the wheels: adding gear happens in the Collection tab.
   const landscape = width > height;
@@ -53,6 +53,7 @@ export default function SpinScreen() {
             Add the knives, lights, pens and tools you carry. Each wheel spins through one category and picks today's piece. Lock anything you're definitely carrying.
           </ThemedText>
           <Button label="Add your first piece" icon="add" onPress={() => router.push('/gear/new')} />
+          <Button label="Or try it with sample gear" icon="sparkle" variant="secondary" onPress={() => void addSamples()} />
         </Card>
       ) : null}
 

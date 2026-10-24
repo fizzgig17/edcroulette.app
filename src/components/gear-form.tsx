@@ -280,7 +280,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     setBusy(true);
     // A sample piece keeps its drawing when edited (older samples find it by name).
     if (item?.isSample && !clean.imageUri && !item.imageUri) clean.imageUri = `sample:${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
-    const r = item ? await updateItem(item.id, clean) : await addItem(clean);
+    // The demo never saves anything.
+    const r = isDemo && !item ? ({ ok: true } as const) : item ? await updateItem(item.id, clean) : await addItem(clean);
     setBusy(false);
     if (!r.ok) {
       Alert.alert('Not saved', r.error);
@@ -288,7 +289,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     }
     // More items left in this photo: start the next one instead of leaving.
     if (!finishNow && batch && batch.current !== null && !item && batch.done.length + 1 < batch.items.length) {
-      for (const uri of newPhotos) if (uri !== clean.imageUri && uri !== batch.stored) deletePhoto(uri);
+      for (const uri of newPhotos) if ((isDemo || uri !== clean.imageUri) && uri !== batch.stored) deletePhoto(uri);
       setNewPhotos([batch.stored]);
       crops.current.clear();
       setBatch({ ...batch, done: [...batch.done, batch.current], current: null });
@@ -303,7 +304,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       setPicking(true);
       return;
     }
-    for (const uri of newPhotos) if (uri !== clean.imageUri) deletePhoto(uri);
+    for (const uri of newPhotos) if (isDemo || uri !== clean.imageUri) deletePhoto(uri);
     success();
     router.back();
   }
@@ -371,7 +372,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         )}
         {isDemo ? (
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            Demo photo: the answers are ready-made and nothing was sent anywhere. Items you add are saved like any other.
+            Demo photo: the answers are ready-made. Nothing is sent anywhere and nothing is saved to your collection.
           </ThemedText>
         ) : null}
         {!item && !draft.imageUri && !batch ? <Button label="Try the demo photo (3 items)" icon="sparkle" variant="ghost" onPress={() => void startDemo()} /> : null}
@@ -460,8 +461,19 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         <Input key={`notes-${formKey}`} defaultValue={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
       </Field>
 
-      <Button label={item ? 'Save changes' : leftAfter > 0 ? `Add, then next item (${leftAfter} left)` : batch && batch.done.length > 0 ? 'Add and finish' : 'Add to collection'} onPress={() => void save()} disabled={!canSave} busy={busy} />
-      {leftAfter > 0 ? <Button label="Add and finish" variant="secondary" onPress={() => void save(true)} disabled={!canSave || busy} /> : null}
+      <Button
+        label={
+          item
+            ? 'Save changes'
+            : isDemo
+              ? leftAfter > 0 ? `Next item (${leftAfter} left)` : 'Finish demo'
+              : leftAfter > 0 ? `Add, then next item (${leftAfter} left)` : batch && batch.done.length > 0 ? 'Add and finish' : 'Add to collection'
+        }
+        onPress={() => void save()}
+        disabled={!canSave}
+        busy={busy}
+      />
+      {leftAfter > 0 ? <Button label={isDemo ? 'Finish demo' : 'Add and finish'} variant="secondary" onPress={() => void save(true)} disabled={!canSave || busy} /> : null}
       {item ? <Button label="Delete" variant="danger" icon="trash" onPress={remove} /> : null}
       <View style={{ height: Spacing.four, backgroundColor: theme.background }} />
     </Screen>
