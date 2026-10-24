@@ -34,15 +34,8 @@ export type PhotoSource = 'camera' | 'library';
 
 /** Lets the person pick or take a photo; returns the stored name ("gear-photos/x.jpg"), or null if they cancelled. */
 export async function choosePhoto(source: PhotoSource, onPicked?: () => void): Promise<string | null> {
-  // No crop screen: iOS's editor misbehaved inside the form sheet (taps only landing on one
-  // side, photos not coming back), and the whole frame gives photo identify more to go on.
-  // Thumbnails fill their square from the middle of the photo anyway. The photo is left as the
-  // phone has it (no full-size conversion, which took seconds); shrinking below handles any format.
-  const options: ImagePicker.ImagePickerOptions = {
-    mediaTypes: ['images'],
-    allowsEditing: false,
-    quality: 1,
-  };
+  // The person frames the item in a square crop first, so the thumbnail shows what they want.
+  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
   if (source === 'camera') {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) throw new Error('Camera access is off. You can turn it on in Settings.');
