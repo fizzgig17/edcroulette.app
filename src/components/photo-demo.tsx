@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { Asset } from 'expo-asset';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { OutlinedPhoto } from '@/components/outlined-photo';
 import { ThemedText } from '@/components/themed-text';
@@ -19,12 +19,13 @@ const photoUri: string = Asset.fromModule(DEMO_PHOTO).uri;
 
 export function PhotoDemo() {
   const theme = useTheme();
-  const { width: screenW } = useWindowDimensions();
+  // Measured from the card itself: the window width is 0 in the pre-built page.
+  const [avail, setAvail] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [done, setDone] = useState<number[]>([]);
   const [finished, setFinished] = useState(false);
   const remaining = finished ? [] : DEMO_ITEMS.map((_, i) => i).filter((i) => !done.includes(i));
-  const W = Math.min(560, screenW - Spacing.three * 2 - Spacing.four);
+  const W = Math.max(0, Math.min(560, avail));
   const H = (W * DEMO_SIZE.height) / DEMO_SIZE.width;
   const item = selected !== null ? DEMO_ITEMS[selected] : null;
 
@@ -47,10 +48,10 @@ export function PhotoDemo() {
       <ThemedText themeColor="textSecondary">
         Try the photo check. This photo has three items. Tap one and the others blur, then it is read on its own. This demo uses ready-made answers, so nothing is sent anywhere.
       </ThemedText>
-      <View style={styles.center}>
+      <View style={styles.center} onLayout={(e) => setAvail(Math.floor(e.nativeEvent.layout.width))}>
         {remaining.length > 0 ? (
           <>
-            <OutlinedPhoto uri={photoUri} width={W} height={H} items={DEMO_ITEMS} remaining={remaining} selected={selected} onSelect={setSelected} added={done} />
+            {W > 0 ? <OutlinedPhoto uri={photoUri} width={W} height={H} items={DEMO_ITEMS} remaining={remaining} selected={selected} onSelect={setSelected} added={done} /> : null}
             <ThemedText type="smallBold" themeColor="textSecondary">
               {selected !== null ? 'The other items are blurred. Here is what it read:' : done.length > 0 ? `${remaining.length} more. Tap the next one.` : `3 items found. Tap the one you want.`}
             </ThemedText>
