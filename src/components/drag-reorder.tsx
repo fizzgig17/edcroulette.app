@@ -20,11 +20,13 @@ export interface DragReorderProps<T> {
   /** Draws an item. Spread `grip` on the element the person drags. */
   renderItem: (item: T, index: number, grip: GestureResponderHandlers, dragging: boolean) => ReactNode;
   onReorder: (next: T[]) => void;
+  /** Tells the screen a drag started or ended, so it can stop scrolling while an item is held. */
+  onDragChange?: (dragging: boolean) => void;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export function DragReorder<T>({ items, keyOf, direction, itemSize, gap = 8, renderItem, onReorder }: DragReorderProps<T>) {
+export function DragReorder<T>({ items, keyOf, direction, itemSize, gap = 8, renderItem, onReorder, onDragChange }: DragReorderProps<T>) {
   const horizontal = direction === 'row';
   const [width, setWidth] = useState(0);
   const [order, setOrder] = useState(items);
@@ -42,6 +44,8 @@ export function DragReorder<T>({ items, keyOf, direction, itemSize, gap = 8, ren
   stepRef.current = step;
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
+  const onDragChangeRef = useRef(onDragChange);
+  onDragChangeRef.current = onDragChange;
 
   const animOf = useCallback(
     (key: string, index: number) => {
@@ -91,6 +95,7 @@ export function DragReorder<T>({ items, keyOf, direction, itemSize, gap = 8, ren
           const from = orderRef.current.findIndex((it) => keyOf(it) === key);
           dragging.current = { key, from, at: from };
           setDragKey(key);
+          onDragChangeRef.current?.(true);
           select();
         },
         onPanResponderMove: (_e, g) => {
@@ -119,6 +124,7 @@ export function DragReorder<T>({ items, keyOf, direction, itemSize, gap = 8, ren
         Animated.timing(animOf(d.key, d.at), { toValue: d.at * stepRef.current, duration: 120, useNativeDriver: true }).start();
         dragging.current = null;
         setDragKey(null);
+        onDragChangeRef.current?.(false);
         setOrder(orderRef.current);
         if (d.at !== d.from) onReorderRef.current(orderRef.current);
       }

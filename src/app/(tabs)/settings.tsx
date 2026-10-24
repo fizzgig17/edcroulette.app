@@ -27,7 +27,7 @@ import { CATEGORIES } from '@/types/models';
 const STYLES: Record<string, SpinStyle> = { Random: 'random', Coordinated: 'coordinated' };
 const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'light', Dark: 'dark' };
 
-function WheelsEditor() {
+function WheelsEditor({ onDragChange }: { onDragChange: (dragging: boolean) => void }) {
   const theme = useTheme();
   const { slots, saveSlots, maxSlots } = useGear();
   const [picking, setPicking] = useState<number | null>(null);
@@ -72,6 +72,7 @@ function WheelsEditor() {
         </View>
       </View>
       <DragReorder
+        onDragChange={onDragChange}
         items={slots}
         keyOf={(s) => String(s.slotIndex)}
         direction="column"
@@ -179,6 +180,7 @@ export default function SettingsScreen() {
   const spinStyle = useSpinStyle();
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
+  const [holding, setHolding] = useState(false);
   const [appIcon, setAppIcon] = useState<string | null>(() => (supportsAlternateIcons ? getAppIconName() : null));
   async function chooseIcon(id: string) {
     select();
@@ -217,9 +219,9 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen title="Settings" tab>
+    <Screen title="Settings" tab scrollEnabled={!holding}>
       <ThemedText type="heading">Wheels</ThemedText>
-      <WheelsEditor />
+      <WheelsEditor onDragChange={setHolding} />
 
       <ThemedText type="heading">Spinning</ThemedText>
       <Card padded={false}>

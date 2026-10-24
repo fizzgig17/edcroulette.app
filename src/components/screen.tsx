@@ -26,10 +26,12 @@ type ScreenProps = {
   footer?: ReactNode;
   /** Scrolls to the top whenever this number changes. */
   topSignal?: number;
+  /** Set false to hold the page still (while something on it is being dragged). */
+  scrollEnabled?: boolean;
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true }: ScreenProps) {
   const insets = useSafeAreaInsets();
   const scroll = useRef<ScrollView>(null);
   useEffect(() => {
@@ -41,6 +43,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
       <SafeAreaView style={styles.flex} edges={showTitle && !IS_DEV_BUILD ? ['top'] : []}>
         <ScrollView
           ref={scroll}
+          scrollEnabled={scrollEnabled}
           contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 120 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
