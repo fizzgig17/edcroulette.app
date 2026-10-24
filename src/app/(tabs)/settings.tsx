@@ -356,6 +356,14 @@ export default function SettingsScreen() {
         )}
       </Card>
 
+      <ThemedText type="heading">Photo demo</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">
+          See how identifying from a photo works, with a built-in picture of three items and ready-made answers. Nothing is sent to the AI.
+        </ThemedText>
+        <Button label="Try the photo demo" icon="sparkle" variant="secondary" onPress={() => router.push('/gear/new?demo=1' as Href)} />
+      </Card>
+
       <ThemedText type="heading">Sample gear</ThemedText>
       <Card>
         <ThemedText themeColor="textSecondary">

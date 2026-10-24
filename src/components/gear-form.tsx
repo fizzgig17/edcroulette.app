@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Image as NativeImage, Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { identifyPhoto, type Identified } from '@/lib/api';
+import { DEMO_ITEMS, DEMO_PHOTO, DEMO_SIZE } from '@/content/demo-photo';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
 import { ItemPicker } from '@/components/item-picker';
@@ -32,7 +33,7 @@ type Identify = { state: 'idle' } | { state: 'working' } | { state: 'done'; summ
 const autoName = (brand: string | null, model: string | null) => [brand?.trim(), model?.trim()].filter(Boolean).join(' ');
 
 /** Add (no `item`) or edit (`item`) a piece of gear. A photo fills in most of the details. */
-export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCategory?: string }) {
+export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; defaultCategory?: string; demo?: boolean }) {
   const theme = useTheme();
   const { addItem, updateItem, removeItem } = useGear();
   const aiConsent = useAiConsent();
@@ -44,6 +45,7 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
   // A photo with several items is added one at a time: `done` are the ones already added, `current` the one in the form.
   const [batch, setBatch] = useState<{ stored: string; items: Identified[]; done: number[]; current: number | null } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
@@ -168,6 +170,36 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
     const bits = [next.category, autoName(next.brand, next.model), next.material, next.finish].filter(Boolean);
     setIdentify({ state: 'done', summary: bits.join(' · '), unsure: r.confidence === 'low' || (!text(r.brand) && !!text(r.brandRead)) });
   }
+
+  /** The demo: a bundled photo of three items with ready-made answers. Nothing is sent anywhere. */
+  async function startDemo() {
+    setPreparing(true);
+    try {
+      const stored = await savePhoto({ uri: NativeImage.resolveAssetSource(DEMO_PHOTO).uri, ...DEMO_SIZE });
+      setNewPhotos((p) => [...p, stored]);
+      set('imageUri', stored);
+      setIsDemo(true);
+      setPreparing(false);
+      setIdentify({ state: 'working' });
+      await new Promise((resolve) => setTimeout(resolve, 900)); // a moment to feel like a lookup
+      applyIdentified(DEMO_ITEMS[0] as Identified);
+      setBatch({ stored, items: DEMO_ITEMS, done: [], current: null });
+      setPicking(true);
+    } catch (e) {
+      setIdentify({ state: 'idle' });
+      Alert.alert('Demo', e instanceof Error ? e.message : 'Could not load the demo photo.');
+    } finally {
+      setPreparing(false);
+    }
+  }
+  const demoStarted = useRef(false);
+  useEffect(() => {
+    if (demo && !item && !demoStarted.current) {
+      demoStarted.current = true;
+      void startDemo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Pick or take a photo, let the person frame it, then save it and identify.
   async function getPhoto(source: PhotoSource) {
@@ -300,6 +332,12 @@ export function GearForm({ item, defaultCategory }: { item?: GearItem; defaultCa
               : 'Start with a photo and EDC Roulette fills in the type, brand, model, material and color for you to check.'}
           </ThemedText>
         )}
+        {isDemo ? (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+            Demo photo: the answers are ready-made and nothing was sent anywhere. Items you add are saved like any other.
+          </ThemedText>
+        ) : null}
+        {!item && !draft.imageUri && !batch ? <Button label="Try the demo photo (3 items)" icon="sparkle" variant="ghost" onPress={() => void startDemo()} /> : null}
         {batch && batch.current !== null && !item && batch.items.length - batch.done.length > 1 ? (
           <Button label="Pick a different item from the photo" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
         ) : null}

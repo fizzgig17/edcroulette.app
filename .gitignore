@@ -17,3 +17,4 @@ expo-env.d.ts
 /android
 dist-dev/
 scripts/.metals-512/
+scripts/.demo/
