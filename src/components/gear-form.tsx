@@ -1,6 +1,7 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image as NativeImage, Pressable, StyleSheet, View } from 'react-native';
+import { Asset } from 'expo-asset';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
@@ -175,7 +176,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   async function startDemo() {
     setPreparing(true);
     try {
-      const stored = await savePhoto({ uri: NativeImage.resolveAssetSource(DEMO_PHOTO).uri, ...DEMO_SIZE });
+      // Android release builds name bundled images by resource, which can't be opened as a file: copy it out first.
+      const asset = Asset.fromModule(DEMO_PHOTO);
+      await asset.downloadAsync();
+      const stored = await savePhoto({ uri: asset.localUri ?? asset.uri, ...DEMO_SIZE });
       setNewPhotos((p) => [...p, stored]);
       set('imageUri', stored);
       setIsDemo(true);
