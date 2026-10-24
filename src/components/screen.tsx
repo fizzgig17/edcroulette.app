@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,16 +24,23 @@ type ScreenProps = {
   tab?: boolean;
   /** Floats above the bottom of the screen. */
   footer?: ReactNode;
+  /** Scrolls to the top whenever this number changes. */
+  topSignal?: number;
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const scroll = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (topSignal) scroll.current?.scrollTo({ y: 0, animated: true });
+  }, [topSignal]);
   return (
     <ThemedView style={styles.container}>
       {/* The dev banner already covers the status-bar area. */}
       <SafeAreaView style={styles.flex} edges={showTitle && !IS_DEV_BUILD ? ['top'] : []}>
         <ScrollView
+          ref={scroll}
           contentContainerStyle={[styles.content, readable && { maxWidth: ReadableWidth }, tab && { paddingBottom: insets.bottom + 120 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"

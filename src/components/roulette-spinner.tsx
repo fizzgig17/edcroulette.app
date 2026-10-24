@@ -12,7 +12,20 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  Extrapolation,
+  interpolate,
+  type SharedValue,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { ThemedText } from '@/components/themed-text';
@@ -26,13 +39,12 @@ import { useGear } from '@/lib/gear';
 import { select, success } from '@/lib/haptics';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
-import { landSound, SLOW_MS, slowSound, startSpinSound, stopAllSounds, stopSound, warmUpSounds } from '@/lib/sounds';
+import { landSound, stopAllSounds, stopSound, tickSound, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
-const LOOPS = 4; // passes over the category per spin
-const BASE_MS = 1500;
-const STAGGER_MS = 380;
+const BASE_MS = 1600;
+const STAGGER_MS = 420;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
 
@@ -47,18 +59,86 @@ function shuffle<T>(list: readonly T[]): T[] {
   return a;
 }
 
-/** The item `offset` places away from `current` in the category, wrapping round. */
-function neighbour(list: readonly GearItem[], current: GearItem | null, offset: number): GearItem | null {
-  if (!list.length) return null;
-  const i = current ? Math.max(0, list.findIndex((g) => g.id === current.id)) : 0;
-  return list[(i + offset + list.length * 2) % list.length] ?? null;
-}
-
-const idleStrip = (list: readonly GearItem[], current: GearItem | null) => [neighbour(list, current, -1), current, neighbour(list, current, 1)];
-
 // ---------------------------------------------------------------------------
 // One wheel
+//
+// A wheel is a ring of rows on a drum. One number, `pos` (in rows), says which
+// row is at the payline; every row works out where it sits from that number on
+// the UI thread, wrapping round the ring. Nothing is ever swapped, remounted or
+// reset while the wheel turns, which is what used to leave wheels blank or
+// make them catch at the end. A tick plays each time a row passes the payline.
 // ---------------------------------------------------------------------------
+const MAX_RING = 36; // rows kept on a drum; bigger collections show a sample
+const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
+const SETTLE_MS = 240;
+const TICK_ROWS = 14; // rows the first wheel travels; later wheels travel further
+
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+/** The pieces on the drum: the whole category, or a sample that always keeps `must`. */
+function makeRing(list: readonly GearItem[], must: (GearItem | null)[]): GearItem[] {
+  if (list.length <= MAX_RING) return [...list];
+  const keep = new Set(must.filter((g): g is GearItem => !!g).map((g) => g.id));
+  const rest = shuffle(list.filter((g) => !keep.has(g.id))).slice(0, MAX_RING - keep.size);
+  const ids = new Set([...keep, ...rest.map((g) => g.id)]);
+  return list.filter((g) => ids.has(g.id));
+}
+
+/** A drum needs at least four rows to look continuous; tiny categories repeat. */
+function expand(ring: GearItem[]): GearItem[] {
+  if (ring.length < 2 || ring.length >= 4) return ring;
+  const out: GearItem[] = [];
+  while (out.length < 4) out.push(...ring);
+  return out;
+}
+
+const ringSignature = (ring: readonly GearItem[]) => ring.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}`).join('|');
+
+function ReelRow({
+  item,
+  index,
+  count,
+  pos,
+  rowHeight,
+  thumb,
+  wide,
+}: {
+  item: GearItem;
+  index: number;
+  count: number;
+  pos: SharedValue<number>;
+  rowHeight: number;
+  thumb: number;
+  wide: boolean;
+}) {
+  const theme = useTheme();
+  const style = useAnimatedStyle(() => {
+    const half = count / 2;
+    // Rows from the payline: 0 at the centre, negative above, positive below.
+    const rel = ((((index - pos.value + half) % count) + count) % count) - half;
+    const a = Math.abs(rel);
+    return {
+      opacity: interpolate(a, [0, 1, 1.7], [1, 0.5, 0], Extrapolation.CLAMP),
+      transform: [
+        { perspective: 520 },
+        { translateY: rel * rowHeight },
+        { rotateX: `${-rel * 24}deg` },
+        { scale: interpolate(a, [0, 1], [1, 0.9], Extrapolation.CLAMP) },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[styles.row, { height: rowHeight, top: rowHeight }, wide && styles.rowWide, style]}>
+      <GearThumb item={item} size={thumb} />
+      <ThemedText
+        numberOfLines={2}
+        style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: 13, lineHeight: 16, fontWeight: '600' }]}>
+        {item.name}
+      </ThemedText>
+    </Animated.View>
+  );
+}
+
 function Reel({
   slot,
   candidates,
@@ -66,6 +146,8 @@ function Reel({
   shown,
   target,
   spinToken,
+  snapToken,
+  order,
   durationMs,
   rowHeight,
   wide,
@@ -79,6 +161,10 @@ function Reel({
   shown: GearItem | null;
   target: GearItem | null;
   spinToken: number;
+  /** Bumped when a spin has to end right now (turning the phone, a stuck animation). */
+  snapToken: number;
+  /** Position among the visible wheels: later wheels turn longer. */
+  order: number;
   durationMs: number;
   rowHeight: number;
   /** Sideways: thumbnail beside the name instead of above it. */
@@ -89,79 +175,114 @@ function Reel({
 }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
-  // The pieces and their scroll position live in one state value, so a new strip
-  // always arrives with a fresh position (resetting them separately could leave
-  // the window scrolled past a short strip, which showed as a blank wheel).
-  const [reel, setReel] = useState<{ id: number; strip: (GearItem | null)[]; y: Animated.Value; go: number }>(() => ({
-    id: 0,
-    strip: idleStrip(candidates, shown),
-    y: new Animated.Value(0),
-    go: 0,
-  }));
-  const { strip, y } = reel;
-  const lastToken = useRef(spinToken);
+
+  const [ring, setRing] = useState<GearItem[]>(() => expand(makeRing(candidates, [shown])));
+  const count = Math.max(1, ring.length);
+  const pos = useSharedValue(Math.max(0, ring.findIndex((g) => g.id === shown?.id)));
+  const ticking = useSharedValue(false);
+  const [plan, setPlan] = useState({ id: 0, end: 0 });
+
   const animating = useRef(false);
-  const stopAtRef = useRef(0);
-
-  // What the window is showing, so a refresh that changes nothing (coming back to
-  // the app, say) never rebuilds the wheel.
+  const lastToken = useRef(spinToken);
+  const lastSnap = useRef(snapToken);
+  const endRef = useRef(0);
+  const ringSig = useRef(ringSignature(ring));
   const candSig = candidates.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}`).join('|');
-  const centerRef = useRef<string | null>(shown?.id ?? null);
-  const sigRef = useRef(candSig);
+  const candSigRef = useRef(candSig);
 
-  // Follow collection and lock changes while standing still.
+  // Standing still: follow lock and collection changes by jumping to the right row.
   useEffect(() => {
-    if (animating.current || lastToken.current !== spinToken) return;
-    if (centerRef.current === (shown?.id ?? null) && sigRef.current === candSig) return;
-    centerRef.current = shown?.id ?? null;
-    sigRef.current = candSig;
-    setReel((r) => ({ id: r.id + 1, strip: idleStrip(candidates, shown), y: new Animated.Value(0), go: 0 }));
+    if (animating.current) return;
+    const sameSet = candSigRef.current === candSig;
+    const holdsShown = ring.some((g) => g.id === shown?.id);
+    let next = ring;
+    if (!sameSet || (shown && !holdsShown)) {
+      next = expand(makeRing(candidates, [shown]));
+      candSigRef.current = candSig;
+    }
+    const sig = ringSignature(next);
+    const changed = sig !== ringSig.current;
+    if (changed) {
+      ringSig.current = sig;
+      setRing(next);
+    }
+    const idx = Math.max(0, next.findIndex((g) => g.id === shown?.id));
+    if (changed || mod(Math.round(pos.value), Math.max(1, next.length)) !== idx) pos.value = idx;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candSig, shown?.id, spinToken]);
+  }, [candSig, shown?.id]);
 
-  // Run the turn once the new strip is on screen.
-  useEffect(() => {
-    if (!reel.go) return;
-    const anim = Animated.timing(reel.y, {
-      toValue: -(stopAtRef.current - 1) * rowHeight,
-      duration: durationMs,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    });
-    anim.start(({ finished }) => {
-      animating.current = false;
-      if (finished) {
-        select();
-        onSettled(slot.slotIndex);
-      }
-    });
-    return () => anim.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reel.go]);
-
+  // A new token starts a spin: choose where to stop, then turn.
   useEffect(() => {
     if (lastToken.current === spinToken) return;
     lastToken.current = spinToken;
-    if (locked || !target || candidates.length === 0) return;
+    if (locked || !target || candidates.length < 2) return;
 
-    const s: (GearItem | null)[] = idleStrip(candidates, shown);
-    for (let i = 0; i < LOOPS; i += 1) s.push(...shuffle(candidates));
-    // The last three rows are exactly what the wheel shows at rest, so landing never shifts anything.
-    s.push(neighbour(candidates, target, -1), target, neighbour(candidates, target, 1));
-    stopAtRef.current = s.length - 2;
-    centerRef.current = target.id;
-    sigRef.current = candSig;
+    const next = expand(makeRing(candidates, [shown, target]));
+    const sig = ringSignature(next);
+    const changed = sig !== ringSig.current;
+    const m = next.length;
+    if (changed) {
+      ringSig.current = sig;
+      candSigRef.current = candSig;
+      setRing(next);
+      pos.value = Math.max(0, next.findIndex((g) => g.id === shown?.id));
+    }
+    const base = Math.round(pos.value);
+    const to = Math.max(0, next.findIndex((g) => g.id === target.id));
+    const delta = mod(to - mod(base, m), m);
+    const rows = TICK_ROWS + order * 5;
+    const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
+    endRef.current = base + delta + extra;
     animating.current = true;
-    // The strip stays where it stops; the next change swaps in a fresh one.
-    setReel((r) => ({ id: r.id + 1, strip: s, y: new Animated.Value(0), go: r.go + 1 }));
-    return undefined;
+    setPlan((p) => ({ id: p.id + 1, end: endRef.current }));
     // Only a new token starts a spin; everything else is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spinToken]);
 
+  const done = () => {
+    animating.current = false;
+    select();
+    onSettled(slot.slotIndex);
+  };
+
+  // The turn itself. It runs once the (possibly new) ring is on screen.
+  useEffect(() => {
+    if (!plan.id) return undefined;
+    ticking.value = true;
+    pos.value = withSequence(
+      withTiming(plan.end + OVERSHOOT, { duration: durationMs, easing: Easing.out(Easing.quad) }),
+      withTiming(plan.end, { duration: SETTLE_MS, easing: Easing.inOut(Easing.quad) }, (finished) => {
+        ticking.value = false;
+        if (finished) scheduleOnRN(done);
+      }),
+    );
+    return () => cancelAnimation(pos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.id]);
+
+  // End a turn immediately (the phone turned, or the animation never reported back).
+  useEffect(() => {
+    if (lastSnap.current === snapToken) return;
+    lastSnap.current = snapToken;
+    if (!animating.current) return;
+    cancelAnimation(pos);
+    pos.value = endRef.current;
+    ticking.value = false;
+    animating.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapToken]);
+
+  // A tick each time a row passes the payline.
+  useAnimatedReaction(
+    () => Math.round(pos.value),
+    (cur, prev) => {
+      if (prev !== null && cur !== prev && ticking.value) scheduleOnRN(tickSound);
+    },
+  );
+
   const isLocked = !!locked;
   const canLock = !busy && (isLocked || !!shown);
-    const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
+  const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
 
   return (
     <View style={styles.reelCol}>
@@ -177,26 +298,16 @@ function Reel({
         <View
           style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel }]}
           accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
-          <Animated.View key={reel.id} style={{ transform: [{ translateY: y }] }}>
-            {strip.map((item, i) => (
-              <View key={i} style={[styles.row, { height: rowHeight }, wide && styles.rowWide, strip.length <= 3 && i !== 1 && styles.dim]}>
-                {item ? (
-                  <>
-                    <GearThumb item={item} size={thumb} />
-                    <ThemedText
-                      numberOfLines={2}
-                      style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: 13, lineHeight: 16, fontWeight: '600' }]}>
-                      {item.name}
-                    </ThemedText>
-                  </>
-                ) : i === 1 ? (
-                  <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
-                    {`No ${slot.category.toLowerCase()} yet`}
-                  </ThemedText>
-                ) : null}
-              </View>
-            ))}
-          </Animated.View>
+          {ring.map((item, i) => (
+            <ReelRow key={`${i}:${item.id}`} item={item} index={i} count={count} pos={pos} rowHeight={rowHeight} thumb={thumb} wide={wide} />
+          ))}
+          {ring.length === 0 ? (
+            <View style={[styles.row, { height: rowHeight, top: rowHeight }]}>
+              <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
+                {`No ${slot.category.toLowerCase()} yet`}
+              </ThemedText>
+            </View>
+          ) : null}
           {/* The drum curves away at the top and bottom, with a lit band across the middle. */}
           <LinearGradient pointerEvents="none" colors={[theme.reel, theme.reel + 'E6', theme.reel + '00']} style={[styles.shade, { top: 0, height: rowHeight * 0.95 }]} />
           <LinearGradient pointerEvents="none" colors={[theme.reel + '00', theme.reel + 'E6', theme.reel]} style={[styles.shade, { bottom: 0, height: rowHeight * 0.95 }]} />
@@ -276,6 +387,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [token, setToken] = useState(0);
+  const [snap, setSnap] = useState(0);
   const [targets, setTargets] = useState<Record<number, GearItem | null>>({});
   // What each wheel is showing at rest. It changes only when that wheel lands, so a spin never flashes its result first.
   const [landed, setLanded] = useState<Record<number, GearItem | null>>({});
@@ -316,6 +428,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     if (spinning) {
       pending.current.clear();
       stopAllSounds();
+      setSnap((n) => n + 1);
       void finish();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,7 +484,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       next[s.slotIndex] = chosen;
       picks.push({ slotIndex: s.slotIndex, category: s.category, itemId: chosen?.id ?? null, locked: !!locked });
       // Wheels off screen (portrait) and locked or empty wheels pick without turning.
-      if (!locked && chosen && index < visibleCount) moving.push(s.slotIndex);
+      if (!locked && chosen && list.length > 1 && index < visibleCount) moving.push(s.slotIndex);
     });
     pending.current = new Set(moving);
     picksRef.current = picks;
@@ -385,11 +498,18 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     setPhase('spinning');
     setToken((t) => t + 1);
 
-    // Sounds: ticks while turning, slowing as the last wheel eases to a stop.
-    const longest = BASE_MS + Math.max(0, slots.findIndex((s) => s.slotIndex === moving[moving.length - 1])) * STAGGER_MS;
-    startSpinSound();
+    // The wheels tick as they turn. If one never reports back (the app was
+    // backgrounded, say), land everything once the longest turn should be over.
+    const lastIndex = Math.max(0, slots.findIndex((s) => s.slotIndex === moving[moving.length - 1]));
     timers.current.forEach(clearTimeout);
-    timers.current = [setTimeout(slowSound, Math.max(0, longest - SLOW_MS))];
+    timers.current = [
+      setTimeout(() => {
+        pending.current.clear();
+        setSnap((n) => n + 1);
+        landSound();
+        void finish();
+      }, BASE_MS + lastIndex * STAGGER_MS + 1800),
+    ];
   }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
 
   const settled = useCallback(
@@ -442,6 +562,8 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               shown={shown}
               target={targets[s.slotIndex] ?? null}
               spinToken={token}
+              snapToken={snap}
+              order={i}
               durationMs={BASE_MS + i * STAGGER_MS}
               rowHeight={rowHeight}
               wide={landscape}

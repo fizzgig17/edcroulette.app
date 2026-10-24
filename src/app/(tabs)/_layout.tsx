@@ -44,7 +44,7 @@ const MetalTab = forwardRef<View, TabTriggerSlotProps & { icon: IconName; label:
 });
 
 function SpinDock() {
-  const { control } = useSpinDock();
+  const { control, scrollToTop } = useSpinDock();
   const pathname = usePathname();
   const onSpinTab = pathname === '/' || pathname === '/index';
   const off = !control || control.disabled || control.busy;
@@ -54,6 +54,7 @@ function SpinDock() {
       onPress={() => {
         tap();
         if (!onSpinTab) router.navigate('/');
+        scrollToTop();
         control?.onPress();
       }}
       accessibilityRole="button"

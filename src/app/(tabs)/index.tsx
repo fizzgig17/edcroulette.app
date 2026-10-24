@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { RouletteSpinner } from '@/components/roulette-spinner';
@@ -8,7 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import type { GearItem } from '@/types/models';
 import { useTheme } from '@/hooks/use-theme';
 import { useGear } from '@/lib/gear';
 import { useSpinDock } from '@/lib/spin-dock';
@@ -27,10 +29,14 @@ export default function SpinScreen() {
   const { width, height } = useWindowDimensions();
   // Portrait is just the wheels: adding gear happens in the Collection tab.
   const landscape = width > height;
-  const { setControl } = useSpinDock();
+  const { setControl, topSignal } = useSpinDock();
+  const [open, setOpen] = useState<GearItem | null>(null);
+  // Two blocks across in portrait, three sideways.
+  const cols = landscape ? 3 : 2;
+  const blockWidth = (Math.min(width, MaxContentWidth) - Spacing.three * 2 - Spacing.two * (cols - 1)) / cols;
 
   return (
-    <Screen title="EDC Roulette" tab hideTitle>
+    <Screen title="EDC Roulette" tab hideTitle topSignal={topSignal}>
       {landscape && !loading && items.length === 0 ? (
         <Card>
           <ThemedText type="heading">Start your collection</ThemedText>
@@ -51,44 +57,104 @@ export default function SpinScreen() {
               {when(lastSpin.spunAt)}
             </ThemedText>
           </View>
-          {lastSpin.picks.map((p) => {
-            const g = itemById(p.itemId);
-            return (
-              <Card key={p.slotIndex}>
-                <View style={styles.pick}>
-                  <GearThumb item={g} size={52} />
-                  <View style={styles.flex}>
-                    <View style={styles.inline}>
-                      <ThemedText type="caption" themeColor="textSecondary">
-                        {p.category}
-                      </ThemedText>
-                      {p.locked ? <Icon name="lock" size={11} color={theme.accent} /> : null}
-                    </View>
-                    <ThemedText type="smallBold" numberOfLines={1} style={{ fontSize: 16 }}>
-                      {g?.name ?? (p.itemId ? 'Removed from collection' : `No ${p.category.toLowerCase()} yet`)}
-                    </ThemedText>
-                    {g ? (
+          <View style={styles.grid}>
+            {lastSpin.picks.map((p) => {
+              const g = itemById(p.itemId);
+              return (
+                <Pressable
+                  key={p.slotIndex}
+                  disabled={!g}
+                  onPress={() => setOpen(g)}
+                  accessibilityRole="button"
+                  accessibilityLabel={g ? `${p.category}: ${g.name}. Show details` : p.category}
+                  style={({ pressed }) => [styles.block, { width: blockWidth, backgroundColor: theme.surface, borderColor: theme.border }, pressed && { opacity: 0.75 }]}>
+                  <View style={styles.blockTop}>
+                    <GearThumb item={g} size={40} />
+                    <View style={styles.flex}>
                       <View style={styles.inline}>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {[g.material, g.finish].filter(Boolean).join(' · ') || 'Material not set'}
+                        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.tinyCaps}>
+                          {p.category}
                         </ThemedText>
-                        {g.primaryColor ? (
-                          <>
-                            <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} />
-                            <ThemedText type="code" themeColor="textSecondary">
-                              {g.primaryColor}
-                            </ThemedText>
-                          </>
-                        ) : null}
+                        {p.locked ? <Icon name="lock" size={10} color={theme.accent} /> : null}
                       </View>
-                    ) : null}
+                    </View>
                   </View>
-                </View>
-              </Card>
-            );
-          })}
+                  <ThemedText type="smallBold" numberOfLines={2} style={styles.blockName}>
+                    {g?.name ?? (p.itemId ? 'Removed from collection' : `No ${p.category.toLowerCase()} yet`)}
+                  </ThemedText>
+                  {g ? (
+                    <View style={styles.inline}>
+                      {g.primaryColor ? <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} /> : null}
+                      <ThemedText themeColor="textSecondary" numberOfLines={1} style={styles.blockDetail}>
+                        {[g.material, g.finish].filter(Boolean).join(' · ') || 'Material not set'}
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       ) : null}
+      <Modal visible={!!open} transparent animationType="fade" onRequestClose={() => setOpen(null)}>
+        <Pressable style={styles.scrim} onPress={() => setOpen(null)} accessibilityLabel="Close">
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => {}}>
+            <Pressable onPress={() => setOpen(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close" style={[styles.close, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <Icon name="close" size={18} color={theme.text} />
+            </Pressable>
+            {open ? (
+              <>
+                <View style={styles.hero}>
+                  <GearThumb item={open} size={132} />
+                </View>
+                <ThemedText type="caption" themeColor="textSecondary" style={styles.tinyCaps}>
+                  {open.category}
+                </ThemedText>
+                <ThemedText type="subtitle" style={{ fontSize: 24, lineHeight: 30 }}>
+                  {open.name}
+                </ThemedText>
+                <View style={styles.facts}>
+                  {[
+                    ['Brand', open.brand],
+                    ['Model', open.model],
+                    ['Material', open.material],
+                    ['Finish', open.finish],
+                    ['Color', open.primaryColor],
+                    ['Weight', open.weightGrams ? `${open.weightGrams} g` : null],
+                  ]
+                    .filter(([, v]) => !!v)
+                    .map(([k, v]) => (
+                      <View key={k as string} style={[styles.fact, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                        <ThemedText themeColor="textSecondary" style={styles.factLabel}>
+                          {k}
+                        </ThemedText>
+                        <View style={styles.inline}>
+                          {k === 'Color' ? <View style={[styles.dot, { backgroundColor: v as string, borderColor: theme.border, marginLeft: 0 }]} /> : null}
+                          <ThemedText type="smallBold" style={{ fontSize: 13 }}>
+                            {v}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    ))}
+                </View>
+                {open.notes ? (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {open.notes}
+                  </ThemedText>
+                ) : null}
+                <Button
+                  label="Open in collection"
+                  onPress={() => {
+                    const id = open.id;
+                    setOpen(null);
+                    router.push({ pathname: '/gear/[id]', params: { id } });
+                  }}
+                />
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -99,5 +165,18 @@ const styles = StyleSheet.create({
   pick: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   flex: { flex: 1, gap: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
-  dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, marginLeft: Spacing.one },
+  dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.medium, padding: Spacing.two, gap: 6 },
+  blockTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  blockName: { fontSize: 14, lineHeight: 18 },
+  blockDetail: { fontSize: 11, lineHeight: 14, flexShrink: 1 },
+  tinyCaps: { fontSize: 10, lineHeight: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
+  scrim: { flex: 1, backgroundColor: '#000000B3', alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
+  sheet: { width: '100%', maxWidth: 440, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.two },
+  close: { position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  hero: { alignItems: 'center', paddingVertical: Spacing.two },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginVertical: Spacing.one },
+  fact: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.small, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
+  factLabel: { fontSize: 10, lineHeight: 12, letterSpacing: 0.6, textTransform: 'uppercase' },
 });

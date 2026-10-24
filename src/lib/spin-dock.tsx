@@ -5,12 +5,19 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 
 import type { SpinControl } from '@/components/roulette-spinner';
 
-type Ctx = { control: SpinControl | null; setControl: (c: SpinControl | null) => void };
-const DockContext = createContext<Ctx>({ control: null, setControl: () => {} });
+type Ctx = {
+  control: SpinControl | null;
+  setControl: (c: SpinControl | null) => void;
+  /** Changes each time the Spin button is pressed; the Spin screen scrolls to the top when it does. */
+  topSignal: number;
+  scrollToTop: () => void;
+};
+const DockContext = createContext<Ctx>({ control: null, setControl: () => {}, topSignal: 0, scrollToTop: () => {} });
 
 export function SpinDockProvider({ children }: { children: ReactNode }) {
   const [control, setControl] = useState<SpinControl | null>(null);
-  const value = useMemo(() => ({ control, setControl }), [control]);
+  const [topSignal, setTopSignal] = useState(0);
+  const value = useMemo(() => ({ control, setControl, topSignal, scrollToTop: () => setTopSignal((n) => n + 1) }), [control, topSignal]);
   return <DockContext.Provider value={value}>{children}</DockContext.Provider>;
 }
 

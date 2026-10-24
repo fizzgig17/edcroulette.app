@@ -1,81 +1,98 @@
 /**
- * Spin sounds: soft ticks while the wheels turn, spacing out as they slow, a
- * tock as each one stops and a deeper one for the last. Made by
- * scripts/make-sounds.py. Off with the Settings switch; follows the phone's
- * silent switch, and mixes with music or podcasts instead of stopping them.
+ * Spin sounds. Each row passing a wheel's payline plays a soft detent click
+ * (six slightly different pitches, so fast turning doesn't repeat one sample),
+ * each wheel settles with a clunk, and the last one lands a little deeper with
+ * a faint ring. Made by scripts/make-sounds.py. Off with the Settings switch;
+ * follows the phone's silent switch, and mixes with music or podcasts.
  */
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
 import { getSoundOn } from '@/lib/preferences';
 
-const FILES = {
-  spin: require('../../assets/sounds/spin.wav'),
-  slow: require('../../assets/sounds/slow.wav'),
-  stop: require('../../assets/sounds/stop.wav'),
-  land: require('../../assets/sounds/land.wav'),
-} as const;
+const TICKS = [
+  require('../../assets/sounds/tick1.wav'),
+  require('../../assets/sounds/tick2.wav'),
+  require('../../assets/sounds/tick3.wav'),
+  require('../../assets/sounds/tick4.wav'),
+  require('../../assets/sounds/tick5.wav'),
+  require('../../assets/sounds/tick6.wav'),
+];
+const CLUNK = require('../../assets/sounds/clunk.wav');
+const LAND = require('../../assets/sounds/land.wav');
 
-type Name = keyof typeof FILES;
-export const SLOW_MS = 1400; // length of the slowing sound
-
-const players: Partial<Record<Name, AudioPlayer>> = {};
 let ready = false;
+let tickPlayers: AudioPlayer[] = [];
+let clunk: AudioPlayer | null = null;
+let land: AudioPlayer | null = null;
+let nextTick = 0;
+let lastTickAt = 0;
 
-function player(name: Name): AudioPlayer | null {
+function setup() {
+  if (ready) return;
+  ready = true;
   try {
-    if (!ready) {
-      ready = true;
-      setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
-    }
-    let p = players[name];
-    if (!p) {
-      p = createAudioPlayer(FILES[name]);
-      if (name === 'spin') p.loop = true;
-      p.volume = name === 'land' ? 0.9 : 0.7;
-      players[name] = p;
-    }
-    return p;
-  } catch {
-    return null;
-  }
-}
-
-function play(name: Name) {
-  if (!getSoundOn()) return;
-  const p = player(name);
-  if (!p) return;
-  try {
-    p.seekTo(0).catch(() => {});
-    p.play();
+    setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
+    tickPlayers = TICKS.map((f) => {
+      const p = createAudioPlayer(f);
+      p.volume = 0.6;
+      return p;
+    });
+    clunk = createAudioPlayer(CLUNK);
+    clunk.volume = 0.85;
+    land = createAudioPlayer(LAND);
+    land.volume = 0.9;
   } catch {
     // Sound is a nicety; never break a spin over it.
   }
 }
 
-/** Loads the sounds ahead of the first spin. */
-export function warmUpSounds() {
-  (Object.keys(FILES) as Name[]).forEach((n) => player(n));
+function fire(p: AudioPlayer | null | undefined, volume?: number) {
+  if (!p) return;
+  try {
+    if (volume !== undefined) p.volume = volume;
+    p.seekTo(0).catch(() => {});
+    p.play();
+  } catch {
+    // Already gone.
+  }
 }
 
-export const startSpinSound = () => play('spin');
-export const slowSound = () => {
-  stopSpinSound();
-  play('slow');
-};
-export const stopSound = () => play('stop');
-export const landSound = () => play('land');
+/** One detent click. Quick runs of clicks (three wheels at speed) are thinned and softened. */
+export function tickSound() {
+  if (!getSoundOn()) return;
+  setup();
+  const now = Date.now();
+  const gap = now - lastTickAt;
+  if (gap < 28) return;
+  lastTickAt = now;
+  const volume = gap < 55 ? 0.3 : gap < 100 ? 0.45 : 0.65;
+  // Hop around the pitches rather than walking up them.
+  nextTick = (nextTick + 1 + Math.floor(Math.random() * 4)) % tickPlayers.length;
+  fire(tickPlayers[nextTick], volume);
+}
 
-export function stopSpinSound() {
-  try {
-    players.spin?.pause();
-  } catch {
-    // Already stopped.
-  }
+/** A wheel settling into place. */
+export function stopSound() {
+  if (!getSoundOn()) return;
+  setup();
+  fire(clunk);
+}
+
+/** The last wheel settling. */
+export function landSound() {
+  if (!getSoundOn()) return;
+  setup();
+  fire(land);
+}
+
+/** Loads the sounds ahead of the first spin. */
+export function warmUpSounds() {
+  setup();
 }
 
 /** Silences everything (leaving the screen, turning sound off mid-spin). */
 export function stopAllSounds() {
-  for (const p of Object.values(players)) {
+  for (const p of [...tickPlayers, clunk, land]) {
     try {
       p?.pause();
     } catch {
