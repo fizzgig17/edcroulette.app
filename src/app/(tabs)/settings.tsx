@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Alert, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
@@ -136,19 +136,97 @@ function WheelsEditor({ onDragChange }: { onDragChange: (dragging: boolean) => v
   );
 }
 
-function ToggleRow({ label, hint, value, onValueChange, first }: { label: string; hint?: string; value: boolean; onValueChange: (v: boolean) => void; first?: boolean }) {
+/** A small "?" in a circle that shows or hides a plain explanation. */
+function InfoDot({ on, onPress, label }: { on: boolean; onPress: () => void; label: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={() => {
+        select();
+        onPress();
+      }}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={`About ${label}`}
+      accessibilityState={{ expanded: on }}
+      style={[styles.dot, { borderColor: on ? theme.accent : theme.textSecondary, backgroundColor: on ? theme.accent : 'transparent' }]}>
+      <ThemedText type="caption" style={{ color: on ? '#FFFFFF' : theme.textSecondary, fontWeight: '700', lineHeight: 15 }}>
+        ?
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+function InfoBox({ text }: { text: string }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.infoBox, { backgroundColor: theme.backgroundElement }]}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {text}
+      </ThemedText>
+    </View>
+  );
+}
+
+/** A setting's name with its own "?" and the explanation underneath when opened. */
+function Label({ text, info }: { text: string; info?: string }) {
+  const [on, setOn] = useState(false);
+  return (
+    <View style={styles.labelWrap}>
+      <View style={styles.inline}>
+        <ThemedText type="smallBold">{text}</ThemedText>
+        {info ? <InfoDot on={on} onPress={() => setOn((v) => !v)} label={text} /> : null}
+      </View>
+      {on && info ? <InfoBox text={info} /> : null}
+    </View>
+  );
+}
+
+function ToggleRow({ label, info, value, onValueChange, first }: { label: string; info?: string; value: boolean; onValueChange: (v: boolean) => void; first?: boolean }) {
   const theme = useTheme();
   return (
     <View style={[styles.toggle, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }]}>
       <View style={styles.flex}>
-        <ThemedText type="smallBold">{label}</ThemedText>
-        {hint ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            {hint}
-          </ThemedText>
-        ) : null}
+        <Label text={label} info={info} />
       </View>
       <Switch value={value} onValueChange={(v) => { select(); onValueChange(v); }} trackColor={{ true: theme.accent }} accessibilityLabel={label} />
+    </View>
+  );
+}
+
+/** A group of settings that can be folded away. The summary shows while it is closed. */
+function Section({ title, summary, info, defaultOpen, children }: { title: string; summary?: string; info?: string; defaultOpen?: boolean; children: ReactNode }) {
+  const theme = useTheme();
+  const [open, setOpen] = useState(!!defaultOpen);
+  const [help, setHelp] = useState(false);
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Pressable
+          onPress={() => {
+            select();
+            setOpen((o) => !o);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityState={{ expanded: open }}
+          style={styles.sectionTitle}>
+          <ThemedText type="heading">{title}</ThemedText>
+          {!open && summary ? (
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.summary}>
+              {summary}
+            </ThemedText>
+          ) : (
+            <View style={styles.flex} />
+          )}
+          <View style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}>
+            <Icon name="chevron" size={14} color={theme.textSecondary} />
+          </View>
+        </Pressable>
+        {info ? <InfoDot on={help} onPress={() => setHelp((v) => !v)} label={title} /> : null}
+      </View>
+      {help && info ? <InfoBox text={info} /> : null}
+      {open ? <View style={styles.sectionBody}>{children}</View> : null}
     </View>
   );
 }
@@ -225,61 +303,70 @@ export default function SettingsScreen() {
     ]);
   }
 
+  const styleName = Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random';
+  const themeName = Object.keys(THEMES).find((k) => THEMES[k] === pref) ?? 'Match phone';
+
   return (
     <Screen title="Settings" tab scrollEnabled={!holding}>
-      <ThemedText type="heading">Wheels</ThemedText>
-      <WheelsEditor onDragChange={setHolding} />
+      <Section
+        title="Wheels"
+        defaultOpen
+        summary="Add, remove and reorder"
+        info="Each wheel picks one piece from a category when you spin. Add or remove wheels, drag the grip to reorder them, tap a wheel's category to change it, and lock a wheel to keep its piece through spins.">
+        <WheelsEditor onDragChange={setHolding} />
+      </Section>
 
-      <ThemedText type="heading">Spinning</ThemedText>
-      <Card padded={false}>
-        <View style={styles.pad}>
-          <ThemedText type="smallBold">Spin style</ThemedText>
-          <ChipGroup options={Object.keys(STYLES)} value={Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random'} onChange={(v) => v && setSpinStyle(STYLES[v] ?? 'random')} />
-          <ThemedText type="small" themeColor="textSecondary">
-            {spinStyle === 'coordinated'
-              ? 'An AI picks pieces that go well together: matching materials and finishes, colors that sit well side by side. Locked wheels stay put, and it falls back to random if it can’t connect.'
-              : 'Every wheel lands on a random piece from its category.'}
-          </ThemedText>
-        </View>
-        <ToggleRow
-          label="Sound"
-          hint="Soft ticks while the wheels turn, slow down and stop."
-          value={sound}
-          onValueChange={(v) => {
-            setSoundOn(v);
-            if (v) landSound();
-          }}
-        />
-      </Card>
-
-      <ThemedText type="heading">Metal</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">The metal for the Spin button and the trim around the wheels.</ThemedText>
-        <View style={styles.metals}>
-          {METALS.map((m) => (
-            <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); if (canSwitchIcon && follows && m.id !== iconId) void chooseIcon(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
-              <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === metal.id ? theme.accent : theme.border, borderWidth: m.id === metal.id ? 3 : 1 }]} />
-              <ThemedText type="small" style={m.id === metal.id ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
-                {m.label}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-        {canSwitchIcon ? (
-          <View style={styles.followRow}>
-            <ThemedText type="small" style={styles.flex}>
-              Use this metal for the app icon too
-            </ThemedText>
-            <Switch value={follows} onValueChange={(v) => { select(); setIconFollowsMetal(v); if (v && metal.id !== iconId) void chooseIcon(metal.id); }} trackColor={{ true: theme.accent }} accessibilityLabel="Use this metal for the app icon too" />
+      <Section title="Spinning" summary={`${styleName} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, and whether it makes noise.">
+        <Card padded={false}>
+          <View style={styles.pad}>
+            <Label
+              text="Spin style"
+              info={
+                spinStyle === 'coordinated'
+                  ? 'An AI picks pieces that go well together: matching materials and finishes, colors that sit well side by side. Locked wheels stay put, and it falls back to random if it can’t connect.'
+                  : 'Random: every wheel lands on a random piece from its category. Coordinated uses AI help to pick a set that goes together.'
+              }
+            />
+            <ChipGroup options={Object.keys(STYLES)} value={styleName} onChange={(v) => v && setSpinStyle(STYLES[v] ?? 'random')} />
           </View>
-        ) : null}
-      </Card>
+          <ToggleRow
+            label="Sound"
+            info="Soft ticks while the wheels turn, slow down and stop."
+            value={sound}
+            onValueChange={(v) => {
+              setSoundOn(v);
+              if (v) landSound();
+            }}
+          />
+        </Card>
+      </Section>
 
-      {canSwitchIcon && !follows ? (
-        <>
-          <ThemedText type="heading">App icon</ThemedText>
+      <Section title="Look" summary={`${metal.label} · ${themeName}`} info="The metal for the Spin button and wheel trim, and whether the app is light or dark.">
+        <Card>
+          <Label text="Metal" info="The metal for the Spin button and the trim around the wheels." />
+          <View style={styles.metals}>
+            {METALS.map((m) => (
+              <Pressable key={m.id} onPress={() => { select(); setMetalId(m.id); if (canSwitchIcon && follows && m.id !== iconId) void chooseIcon(m.id); }} accessibilityRole="button" accessibilityState={{ selected: m.id === metal.id }} accessibilityLabel={m.label} style={styles.metal}>
+                <Image source={m.texture} contentFit="cover" style={[styles.swatch, { borderColor: m.id === metal.id ? theme.accent : theme.border, borderWidth: m.id === metal.id ? 3 : 1 }]} />
+                <ThemedText type="small" style={m.id === metal.id ? { color: theme.accent, fontWeight: '700' } : undefined} numberOfLines={1}>
+                  {m.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+          {canSwitchIcon ? (
+            <View style={styles.followRow}>
+              <ThemedText type="small" style={styles.flex}>
+                Use this metal for the app icon too
+              </ThemedText>
+              <Switch value={follows} onValueChange={(v) => { select(); setIconFollowsMetal(v); if (v && metal.id !== iconId) void chooseIcon(metal.id); }} trackColor={{ true: theme.accent }} accessibilityLabel="Use this metal for the app icon too" />
+            </View>
+          ) : null}
+        </Card>
+
+        {canSwitchIcon && !follows ? (
           <Card>
-            <ThemedText themeColor="textSecondary">Pick the home screen icon separately. {Platform.OS === 'ios' ? 'iOS shows a short notice each time it changes.' : 'On Android the icon can take a few seconds to change, and the app may close once.'}</ThemedText>
+            <Label text="App icon" info="Pick the home screen icon separately. iOS shows a short notice each time it changes." />
             <View style={styles.metals}>
               {[{ id: 'mixed', label: 'Mixed' }, ...METALS].map((m) => (
                 <Pressable key={m.id} onPress={() => void chooseIcon(m.id)} accessibilityRole="button" accessibilityState={{ selected: m.id === iconId }} accessibilityLabel={`${m.label} icon`} style={styles.metal}>
@@ -299,113 +386,114 @@ export default function SettingsScreen() {
               ))}
             </View>
           </Card>
-        </>
-      ) : null}
+        ) : null}
 
-      <ThemedText type="heading">AI help</ThemedText>
-      <Card padded={false}>
-        <ToggleRow
-          first
-          label="Allow AI help"
-          hint="Used to identify gear from a photo you choose and to pick coordinated sets. Photos and item details are sent to an AI service (Anthropic’s Claude) and aren’t stored by EDC Roulette. Off by default until you say yes."
-          value={ai === 'allowed'}
-          onValueChange={(v) => setAiConsent(v ? 'allowed' : 'declined')}
-        />
-      </Card>
+        <Card>
+          <Label text="Appearance" info="Match your phone's light or dark setting, or always use one." />
+          <ChipGroup options={Object.keys(THEMES)} value={themeName} onChange={(v) => v && setThemePref(THEMES[v] ?? 'system')} />
+        </Card>
+      </Section>
 
-      <ThemedText type="heading">Teach the photo check</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">
-          Tell it what it should know about your gear, like “My black pens are usually zirconium” or “Anything with a green handle is Micarta”. It uses these as hints each time it looks at a photo, only when AI help is on.
-        </ThemedText>
-        {notes.map((n, i) => (
-          <View key={`${i}:${n}`} style={styles.note}>
-            <ThemedText type="small" style={styles.flexText}>
-              {n}
+      <Section
+        title="AI help"
+        summary={ai === 'allowed' ? 'On' : 'Off'}
+        info="Optional. Off until you say yes. When on, photos you choose and item details are sent to an AI service (Anthropic’s Claude) to identify gear and pick coordinated sets. They aren’t stored by EDC Roulette.">
+        <Card padded={false}>
+          <ToggleRow
+            first
+            label="Allow AI help"
+            info="Used to identify gear from a photo you choose and to pick coordinated sets. Photos and item details are sent to an AI service (Anthropic’s Claude) and aren’t stored by EDC Roulette. Off by default until you say yes."
+            value={ai === 'allowed'}
+            onValueChange={(v) => setAiConsent(v ? 'allowed' : 'declined')}
+          />
+        </Card>
+
+        <Card>
+          <Label
+            text="Teach the photo check"
+            info="Tell it what it should know about your gear, like “My black pens are usually zirconium” or “Anything with a green handle is Micarta”. It uses these as hints each time it looks at a photo, only when AI help is on."
+          />
+          {notes.map((n, i) => (
+            <View key={`${i}:${n}`} style={styles.note}>
+              <ThemedText type="small" style={styles.flexText}>
+                {n}
+              </ThemedText>
+              <Pressable onPress={() => removeTrainingNote(i)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove note: ${n}`}>
+                <Icon name="trash" size={18} color={theme.danger} />
+              </Pressable>
+            </View>
+          ))}
+          {notes.length < MAX_TRAINING_NOTES ? (
+            <>
+              <Input
+                key={`note-${noteKey}`}
+                placeholder="Add a note"
+                defaultValue=""
+                onChangeText={setNoteText}
+                maxLength={MAX_TRAINING_NOTE_CHARS}
+                multiline
+                returnKeyType="done"
+                blurOnSubmit
+              />
+              <Button
+                label="Add note"
+                icon="add"
+                variant="secondary"
+                disabled={!noteText.trim()}
+                onPress={() => {
+                  if (addTrainingNote(noteText)) {
+                    setNoteText('');
+                    setNoteKey((k) => k + 1);
+                  }
+                }}
+              />
+            </>
+          ) : (
+            <ThemedText type="small" themeColor="textSecondary">
+              That’s the most notes (up to {MAX_TRAINING_NOTES}). Remove one to add another.
             </ThemedText>
-            <Pressable onPress={() => removeTrainingNote(i)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove note: ${n}`}>
-              <Icon name="trash" size={18} color={theme.danger} />
-            </Pressable>
-          </View>
-        ))}
-        {notes.length < MAX_TRAINING_NOTES ? (
-          <>
-            <Input
-              key={`note-${noteKey}`}
-              placeholder="Add a note"
-              defaultValue=""
-              onChangeText={setNoteText}
-              maxLength={MAX_TRAINING_NOTE_CHARS}
-              multiline
-              returnKeyType="done"
-              blurOnSubmit
-            />
-            <Button
-              label="Add note"
-              icon="add"
-              variant="secondary"
-              disabled={!noteText.trim()}
-              onPress={() => {
-                if (addTrainingNote(noteText)) {
-                  setNoteText('');
-                  setNoteKey((k) => k + 1);
-                }
-              }}
-            />
-          </>
-        ) : (
+          )}
+        </Card>
+
+        <Card>
+          <Label text="Photo demo" info="See how identifying from a photo works, with a built-in picture of three items and ready-made answers. Nothing is sent to the AI." />
+          <Button label="Try the photo demo" icon="sparkle" variant="secondary" onPress={() => router.push('/gear/new?demo=1' as Href)} />
+        </Card>
+      </Section>
+
+      <Section
+        title="Your data"
+        summary={sampleCount > 0 ? `${ownCount} of yours · ${sampleCount} samples` : `${ownCount} of ${maxItems} pieces`}
+        info="Everything is kept on this phone. Sample gear lets you try the wheels without adding your own pieces.">
+        <Card>
+          <Label text="Sample gear" info={`About ten pieces for each category. They don’t count toward your ${maxItems} items (${ownCount} used) and you can remove them in one tap.`} />
+          {sampleCount > 0 ? (
+            <Button label={`Remove ${sampleCount} sample pieces`} variant="secondary" icon="trash" onPress={dropSamples} />
+          ) : (
+            <Button label="Load sample gear" variant="secondary" icon="add" onPress={() => void loadSamples()} />
+          )}
+        </Card>
+        <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
+      </Section>
+
+      <Section title="Help and about" summary="Tour, Premium, policies" info="A walk through the app, what's coming, and the legal pages.">
+        <Card>
+          <Label text="Tour" info="A quick walk through the wheels, your collection and these settings." />
+          <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
+        </Card>
+        <Card>
+          <Label text="Premium" info="Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade." />
           <ThemedText type="small" themeColor="textSecondary">
-            That’s the most notes (up to {MAX_TRAINING_NOTES}). Remove one to add another.
+            Coming soon.
           </ThemedText>
-        )}
-      </Card>
+        </Card>
+        <Card padded={false}>
+          <LinkRow first label="Privacy policy" href="/privacy" />
+          <LinkRow label="Terms of use" href="/terms" />
+          <LinkRow label="Help and support" href="/support" />
+        </Card>
+      </Section>
 
-      <ThemedText type="heading">Photo demo</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">
-          See how identifying from a photo works, with a built-in picture of three items and ready-made answers. Nothing is sent to the AI.
-        </ThemedText>
-        <Button label="Try the photo demo" icon="sparkle" variant="secondary" onPress={() => router.push('/gear/new?demo=1' as Href)} />
-      </Card>
-
-      <ThemedText type="heading">Tour</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">A quick walk through the wheels, your collection and these settings.</ThemedText>
-        <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
-      </Card>
-
-      <ThemedText type="heading">Sample gear</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">
-          Want to try the wheels before adding your own? Load about ten pieces for each category. They don’t count toward your {maxItems} items ({ownCount} used) and you can remove them in one tap.
-        </ThemedText>
-        {sampleCount > 0 ? (
-          <Button label={`Remove ${sampleCount} sample pieces`} variant="secondary" icon="trash" onPress={dropSamples} />
-        ) : (
-          <Button label="Load sample gear" variant="secondary" icon="add" onPress={() => void loadSamples()} />
-        )}
-      </Card>
-
-      <ThemedText type="heading">Appearance</ThemedText>
-      <Card>
-        <ChipGroup options={Object.keys(THEMES)} value={Object.keys(THEMES).find((k) => THEMES[k] === pref) ?? 'Match phone'} onChange={(v) => v && setThemePref(THEMES[v] ?? 'system')} />
-      </Card>
-
-      <ThemedText type="heading">Premium</ThemedText>
-      <Card>
-        <ThemedText themeColor="textSecondary">
-          Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade.
-        </ThemedText>
-      </Card>
-
-      <ThemedText type="heading">About</ThemedText>
-      <Card padded={false}>
-        <LinkRow first label="Privacy policy" href="/privacy" />
-        <LinkRow label="Terms of use" href="/terms" />
-        <LinkRow label="Help and support" href="/support" />
-      </Card>
-
-      <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
       <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
         EDC Roulette {version}
         {IS_DEV_BUILD ? ' · development build' : ''}
@@ -415,6 +503,14 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  section: { gap: Spacing.two },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  sectionTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 36 },
+  sectionBody: { gap: Spacing.three },
+  summary: { flex: 1, textAlign: 'right' },
+  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  infoBox: { padding: Spacing.two, borderRadius: Radius.medium },
+  labelWrap: { gap: Spacing.two },
   note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.one },
   flexText: { flex: 1 },
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
