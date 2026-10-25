@@ -217,6 +217,18 @@ jobs:
           track: alpha
           status: draft
 
+      # The app's update check reads this release (build number and version). The app waits half an
+      # hour before offering it, while Google Play makes the new version available.
+      - name: Publish the build number for the app's update check
+        if: steps.play.outputs.go == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf 'Production Android build, published by android-build.yml.\n\nbuild: %s\nversion: %s\n' "$BUILD_NUMBER" "$ANDROID_VERSION" > release.md
+          gh release delete android-prod-latest --cleanup-tag --yes 2>/dev/null || true
+          gh release create android-prod-latest --target "$GITHUB_SHA" --prerelease --latest=false --title "Android production build $BUILD_NUMBER" --notes-file release.md
+
       # Remember this release so the next one that day gets the next number.
       - name: Tag the release
         if: steps.play.outputs.go == 'true'

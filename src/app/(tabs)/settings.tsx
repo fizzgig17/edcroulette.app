@@ -20,6 +20,7 @@ import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
+import { useUpdate } from '@/lib/update-context';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
@@ -290,6 +291,7 @@ export default function SettingsScreen() {
   }
 
   const { start: startTour } = useTour();
+  const update = useUpdate();
 
   async function loadSamples() {
     const n = await addSamples();
@@ -476,7 +478,25 @@ export default function SettingsScreen() {
         <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
       </Section>
 
-      <Section title="Help and about" summary="Tour, Premium, policies" info="A walk through the app, what's coming, and the legal pages.">
+      <Section title="Help and about" summary="Updates, tour, policies" info="Checking for a new version, a walk through the app, what's coming, and the legal pages.">
+        {update.supported ? (
+          <Card>
+            <Label text="Updates" info={`Checks whether a newer version is out. It opens ${Platform.OS === 'ios' ? 'TestFlight' : 'Google Play'}, where the update is installed.`} />
+            <ThemedText type="small" themeColor="textSecondary">
+              {update.status === 'checking'
+                ? 'Checking…'
+                : update.status === 'available'
+                  ? `A newer version is out${update.version ? ` (${update.version})` : ''}.`
+                  : update.status === 'uptodate'
+                    ? 'You have the newest version.'
+                    : update.status === 'error'
+                      ? (update.error ?? 'Could not check right now.')
+                      : `Installed build ${update.installed}.`}
+            </ThemedText>
+            {update.status === 'available' ? <Button label="Update" icon="add" onPress={() => void update.openStore()} /> : null}
+            <Button label="Check for updates" variant="secondary" onPress={() => void update.check(false)} disabled={update.status === 'checking'} />
+          </Card>
+        ) : null}
         <Card>
           <Label text="Tour" info="A quick walk through the wheels, your collection and these settings." />
           <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />

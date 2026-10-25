@@ -33,7 +33,10 @@ jobs:
       contains(github.event.head_commit.message, '[ios]')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       BUNDLE_ID: app.edcroulette.ios
       # master -> prod workflow/tester group, anything else -> dev.
       XCODE_CLOUD_WORKFLOW: ${{ github.ref_name == 'master' && 'TestFlight Prod' || 'TestFlight Dev' }}
@@ -43,6 +46,7 @@ jobs:
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
     steps:
       - name: Start the Xcode Cloud build
+        id: start
         run: |
           python3 -m pip install --quiet pyjwt cryptography
           python3 - <<'PY'
@@ -110,6 +114,18 @@ jobs:
                   'workflow': {'data': {'type': 'ciWorkflows', 'id': workflow['id']}},
                   'sourceBranchOrTag': {'data': {'type': 'scmGitReferences', 'id': ref['id']}},
               }}})['data']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f"build={run['attributes'].get('number')}\n")
           print(f"::notice::Started Xcode Cloud build {run['attributes'].get('number')} of '{wanted}' on {branch}. "
                 f"Progress: App Store Connect > EDC Roulette > Xcode Cloud.")
           PY
+
+      # Production builds only: the app's update check reads this release (build number and version).
+      # The app waits half an hour before offering it, while TestFlight processes the upload.
+      - name: Publish the build number for the app's update check
+        if: github.ref_name == 'master' && steps.start.outputs.build != ''
+        run: |
+          VERSION=$(jq -r .expo.version app.json)
+          printf 'Production iOS build, published by ios-xcode-cloud.yml.\n\nbuild: %s\nversion: %s\n' "${{ steps.start.outputs.build }}" "$VERSION" > release.md
+          gh release delete ios-prod-latest --cleanup-tag --yes 2>/dev/null || true
+          gh release create ios-prod-latest --target "$GITHUB_SHA" --prerelease --latest=false --title "iOS production build ${{ steps.start.outputs.build }}" --notes-file release.md
