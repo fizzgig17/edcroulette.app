@@ -60,7 +60,7 @@ def light(h, strength, grain=0.0, sheen=0.0):
 def finish(rgb, name, L, spec=0.0):
     img = np.clip(rgb * L[..., None] + spec * np.clip(L - 1.0, 0, 1)[..., None], 0, 1)
     full = Image.fromarray((img * 255).astype(np.uint8))
-    full.resize((256, 256), Image.LANCZOS).save(f'{OUT}/{name}.jpg', quality=90)
+    full.save(f'{OUT}/{name}.jpg', quality=88)
     os.makedirs(HI, exist_ok=True)  # full size copies, used only to draw the app icons
     full.save(f'{HI}/{name}.png')
 
@@ -83,15 +83,16 @@ def damascus():
     h = np.sin(y * 2 * np.pi * 150) * 0.5 + np.sin(y * 2 * np.pi * 63 + 1.3) * 0.3 + np.sin(y * 2 * np.pi * 27) * 0.2
     h = h + 0.15 * noise(1.2, aniso=(0.6, 2.0), seed=9)
     tone = smooth(h, -0.95, 0.95)
-    rgb = palette(tone, [(34, 36, 40), (66, 70, 76), (118, 123, 130), (176, 181, 188), (214, 218, 224)])
-    finish(rgb, 'damascus', light(tone * 2.2, 1.0, grain=0.05, sheen=0.1) * 1.08, spec=0.35)
+    tone = gaussian_filter(tone, 0.7)
+    rgb = palette(tone, [(58, 61, 67), (92, 96, 103), (138, 143, 150), (182, 186, 193), (212, 216, 222)])
+    finish(rgb, 'damascus', light(tone * 1.8, 0.8, grain=0.03, sheen=0.1) * 1.08, spec=0.3)
 
 
 # --- Mokume gane: stacked copper, brass, silver and shakudo, carved and sanded to show contour lines
 def mokume():
     # Wood-grain style flow: stretched noise, many thin contour layers, muted metals with soft seams.
     f = fractal(70, 4, aniso=(1.0, 2.6), seed=11) + 0.35 * fractal(22, 3, aniso=(1.0, 2.2), seed=12)
-    layers = 9.0
+    layers = 6.5
     v = f * layers
     idx = np.floor(v).astype(int) % 5
     frac = v - np.floor(v)
@@ -99,29 +100,34 @@ def mokume():
     rgb = cols[idx]
     rgb = rgb * (0.82 + 0.3 * smooth(frac, 0.0, 1.0)[..., None])  # each layer brightens toward its upper edge
     seam = np.exp(-((frac - 0.0) / 0.035) ** 2) + np.exp(-((frac - 1.0) / 0.035) ** 2)
-    rgb = rgb * (1 - 0.55 * np.clip(seam, 0, 1)[..., None])
-    h = frac * 0.7 - np.clip(seam, 0, 1) * 0.5 + 0.05 * noise(0.9, aniso=(0.5, 2.0), seed=13)
-    finish(rgb, 'mokume', light(h * 5, 1.1, grain=0.05, sheen=0.08) * 1.05, spec=0.3)
+    rgb = rgb * (1 - 0.32 * np.clip(seam, 0, 1)[..., None])
+    h = gaussian_filter(frac * 0.7 - np.clip(seam, 0, 1) * 0.4, 1.2)
+    rgb = np.stack([gaussian_filter(rgb[..., c], 0.8) for c in range(3)], -1)
+    finish(rgb, 'mokume', light(h * 4, 0.9, grain=0.02, sheen=0.08) * 1.05, spec=0.28)
 
 
 # --- Timascus: titanium damascus, heat-anodized to blue, violet and gold --------------------
 def timascus():
     flow = fractal(110, 3, aniso=(1.0, 1.7), seed=21)
     y = yy + 0.11 * flow + 0.03 * fractal(36, 2, aniso=(1.0, 1.6), seed=24)
-    h = np.sin(y * 2 * np.pi * 96) * 0.5 + np.sin(y * 2 * np.pi * 41 + 0.7) * 0.32 + np.sin(y * 2 * np.pi * 17) * 0.18
+    h = np.sin(y * 2 * np.pi * 70) * 0.5 + np.sin(y * 2 * np.pi * 31 + 0.7) * 0.32 + np.sin(y * 2 * np.pi * 13) * 0.18
     tone = smooth(h, -0.9, 0.9)
     heat = 0.5 + 0.5 * np.sin(fractal(200, 2, aniso=(1.0, 2.0), seed=22) * 1.6)  # slow colour drift across the bar
     v = np.clip(tone * 0.7 + heat * 0.3, 0, 1)
-    rgb = palette(v, [(20, 22, 50), (38, 52, 128), (92, 66, 160), (168, 110, 150), (214, 160, 84), (230, 202, 140)])
-    finish(rgb, 'timascus', light(tone * 2.0, 1.0, grain=0.04, sheen=0.1) * 1.05, spec=0.35)
+    v = gaussian_filter(v, 0.7)
+    rgb = palette(v, [(24, 26, 56), (44, 58, 124), (96, 76, 156), (150, 108, 148), (198, 154, 96), (222, 196, 142)])
+    finish(rgb, 'timascus', light(tone * 1.6, 0.8, grain=0.025, sheen=0.1) * 1.05, spec=0.3)
 
 
 # --- Titanium: bead-blasted, a soft cool gray with a faint blue heat tint ---------------------
 def titanium():
-    h = noise(0.9, seed=31) * 0.5 + fractal(8, 2, seed=32) * 0.12
-    base = np.full((N, N, 3), (0.50, 0.52, 0.56), np.float32)
-    tint = (fractal(180, 2, seed=33) * 0.012)[..., None] * np.array([0.5, 0.2, 1.0], np.float32)
-    finish(base + tint, 'titanium', light(h, 0.8, grain=0.03, sheen=0.1) * 1.15, spec=0.2)
+    # Satin: very fine, mostly horizontal grain over a soft cool gradient; no coarse bumps to blow up on a big button.
+    h = noise(1.0, aniso=(0.05, 30), seed=31) * 0.5 + noise(0.8, seed=34) * 0.2
+    sweep = 0.5 + 0.5 * np.sin((xx * 0.8 + yy * 0.5) * np.pi * 2)
+    tone = 0.46 + 0.1 * sweep + 0.03 * h
+    base = np.stack([tone * 0.97, tone * 1.0, tone * 1.06], -1)
+    tint = (fractal(180, 2, seed=33) * 0.01)[..., None] * np.array([0.5, 0.2, 1.0], np.float32)
+    finish(base + tint, 'titanium', light(h * 0.25, 0.4, grain=0.015, sheen=0.06) * 1.2, spec=0.2)
 
 
 # --- Zirconium: black oxide with a soft blue, violet and bronze oil-slick flow ----------------
