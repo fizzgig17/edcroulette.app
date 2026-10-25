@@ -45,7 +45,16 @@ export function WheelItemPicker({
   const { toggleFavorite } = useGear();
   const list = useRef<FlatList<GearItem>>(null);
   const [listHeight, setListHeight] = useState(0);
-  const index = currentId ? items.findIndex((g) => g.id === currentId) : -1;
+  // The order is fixed while the list is open, so starring a piece doesn't make the rows jump.
+  const [frozen, setFrozen] = useState<string[] | null>(null);
+  useEffect(() => {
+    setFrozen(visible ? items.map((g) => g.id) : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, category]);
+  const ids = frozen ?? items.map((g) => g.id);
+  const byId = new Map(items.map((g) => [g.id, g]));
+  const ordered = [...ids.map((id) => byId.get(id)).filter((g): g is GearItem => !!g), ...items.filter((g) => !ids.includes(g.id))];
+  const index = currentId ? ordered.findIndex((g) => g.id === currentId) : -1;
 
   // Open with the current piece in the middle (or at the top when there isn't one).
   const placed = useRef(false);
@@ -85,14 +94,14 @@ export function WheelItemPicker({
               <Icon name="close" size={20} color={theme.textSecondary} />
             </Pressable>
           </View>
-          {items.length === 0 ? (
+          {ordered.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
               You don’t have any {category.toLowerCase()} pieces yet. Add one in your Collection.
             </ThemedText>
           ) : (
             <FlatList
               ref={list}
-              data={items}
+              data={ordered}
               keyExtractor={(g) => g.id}
               extraData={currentId}
               onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
