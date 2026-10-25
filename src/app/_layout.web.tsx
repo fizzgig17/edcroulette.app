@@ -18,11 +18,14 @@ function SiteHeader() {
       <View style={styles.inner}>
         <Link href="/" asChild>
           <Pressable style={styles.brand} accessibilityRole="link" accessibilityLabel="EDC Roulette home">
-            <Image source={require('@/../assets/images/icon.png')} style={styles.logo} />
+            <Image source={require('@/../assets/images/icons/mixed.png')} style={styles.logo} />
             <ThemedText type="heading">EDC Roulette</ThemedText>
           </Pressable>
         </Link>
         <View style={styles.nav}>
+          <Link href="/manual">
+            <ThemedText type="link">Manual</ThemedText>
+          </Link>
           <Link href="/support">
             <ThemedText type="link">Support</ThemedText>
           </Link>
