@@ -4,6 +4,7 @@ import { Pressable } from 'react-native';
 import { DiscLabel, MetalDisc } from '@/components/metal-button';
 import { tap } from '@/lib/haptics';
 import { useSpinDock } from '@/lib/spin-dock';
+import { useTourTarget } from '@/lib/tour';
 
 /**
  * The round metal Spin button. Docked in the tab bar on phones; on bigger windows it sits just
@@ -11,11 +12,14 @@ import { useSpinDock } from '@/lib/spin-dock';
  */
 export function SpinButton({ size = 84, height, inline }: { size?: number; height?: number; inline?: boolean }) {
   const { control, scrollToTop } = useSpinDock();
+  const targetRef = useTourTarget('spin');
   const pathname = usePathname();
   const onSpinTab = inline || pathname === '/' || pathname === '/index';
   const off = !control || control.disabled;
   return (
     <Pressable
+      ref={targetRef}
+      collapsable={false}
       disabled={off}
       onPress={() => {
         tap();

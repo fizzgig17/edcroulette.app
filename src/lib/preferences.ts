@@ -116,3 +116,8 @@ export function addTrainingNote(text: string): boolean {
 }
 export const removeTrainingNote = (index: number) => saveNotes(getTrainingNotes().filter((_, i) => i !== index));
 export const useTrainingNotes = () => useSyncExternalStore(subscribe, getTrainingNotes, () => [] as string[]);
+
+// --- Whether the first-run tour has been shown ------------------------------------------------
+export const getTourSeen = () => read('edc.tourSeen') === '1';
+export const setTourSeen = (seen: boolean) => write('edc.tourSeen', seen ? '1' : null);
+export const useTourSeen = () => useSyncExternalStore(subscribe, getTourSeen, () => true);

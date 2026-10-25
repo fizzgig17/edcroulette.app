@@ -39,6 +39,7 @@ import { select, success } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
+import { useTourTarget } from '@/lib/tour';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
@@ -359,6 +360,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const { height, landscape, big } = useLayoutMode();
   // Big windows (iPad, open foldable) always show every wheel, at one size, in the middle.
   const [boxWidth, setBoxWidth] = useState(0);
+  const wheelsRef = useTourTarget('wheels');
   const { items, slots, itemById, setLock, recordSpin, lastSpin } = useGear();
   const spinStyle = useSpinStyle();
 
@@ -586,7 +588,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   }, [label, caption, spinStyle, busy, empty, phase, spinningNow, onControl]);
 
   return (
-    <View style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
+    <View ref={wheelsRef} collapsable={false} style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
       {hiddenCount > 0 ? (
         <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
           {hiddenCount === 1 ? '1 more wheel' : `${hiddenCount} more wheels`} when sideways

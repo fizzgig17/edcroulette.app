@@ -15,6 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useGear } from '@/lib/gear';
 import { useLayoutMode } from '@/lib/layout-mode';
 import { useSpinDock } from '@/lib/spin-dock';
+import { useTourTarget } from '@/lib/tour';
 
 function when(ts: number): string {
   const d = new Date(ts);
@@ -42,6 +43,7 @@ export function SpinContent() {
   const { items, lastSpin, itemById, loading, addSamples } = useGear();
   const { big, landscape } = useLayoutMode();
   const { setControl } = useSpinDock();
+  const kitRef = useTourTarget('kit');
   // Wide windows and sideways phones lay the kit out in more columns.
   const wideKit = big || landscape;
   const [open, setOpen] = useState<GearItem | null>(null);
@@ -68,7 +70,7 @@ export function SpinContent() {
       {wideKit ? null : emptyCard}
 
       {lastSpin && hasCarry ? (
-        <View style={styles.result}>
+        <View ref={kitRef} collapsable={false} style={styles.result}>
           <View style={styles.resultHead}>
             <ThemedText type="heading">Today's carry</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">

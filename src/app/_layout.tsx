@@ -9,12 +9,14 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { DevBanner } from '@/components/dev-banner';
+import { TourOverlay } from '@/components/tour';
 import { StartupError } from '@/components/startup-error';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { lastFatalError, onFatalError } from '@/lib/crash-catcher';
 import { useGear } from '@/lib/gear';
 import { LocalDataProvider } from '@/lib/local-database';
+import { TourProvider } from '@/lib/tour';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,6 +52,7 @@ function App() {
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme;
   return (
     <LocalDataProvider>
+      <TourProvider>
         <HideSplashWhenLoaded />
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, background: colors.background, card: colors.background, primary: colors.accent, text: colors.text, border: colors.border } }}>
           <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
@@ -65,7 +68,9 @@ function App() {
               <Stack.Screen name="delete-account" />
             </Stack>
           </View>
+          <TourOverlay />
         </ThemeProvider>
+      </TourProvider>
     </LocalDataProvider>
   );
 }
