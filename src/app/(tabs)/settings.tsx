@@ -184,7 +184,7 @@ export default function SettingsScreen() {
   const notes = useTrainingNotes();
   const [noteText, setNoteText] = useState('');
   const [noteKey, setNoteKey] = useState(0);
-  const [appIcon, setAppIcon] = useState<string | null>(() => (supportsAlternateIcons ? getAppIconName() : null));
+  const [appIcon, setAppIcon] = useState<string | null>(() => (Platform.OS === 'ios' && supportsAlternateIcons ? getAppIconName() : null));
   async function chooseIcon(id: string) {
     select();
     try {
@@ -195,7 +195,8 @@ export default function SettingsScreen() {
       Alert.alert('App icon', 'The icon could not be changed just now.');
     }
   }
-  const canSwitchIcon = (Platform.OS === 'ios' || Platform.OS === 'android') && supportsAlternateIcons;
+  // Android swaps launcher entries to change the icon, which closes the app and can make the icon vanish on some launchers (One UI), so it is iPhone and iPad only.
+  const canSwitchIcon = Platform.OS === 'ios' && supportsAlternateIcons;
   const follows = useIconFollowsMetal();
   const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
