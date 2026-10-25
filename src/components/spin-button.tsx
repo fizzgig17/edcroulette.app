@@ -13,14 +13,14 @@ export function SpinButton({ size = 84, height, inline }: { size?: number; heigh
   const { control, scrollToTop } = useSpinDock();
   const pathname = usePathname();
   const onSpinTab = inline || pathname === '/' || pathname === '/index';
-  const off = !control || control.disabled || control.busy;
+  const off = !control || control.disabled;
   return (
     <Pressable
       disabled={off}
       onPress={() => {
         tap();
         if (!onSpinTab) router.navigate('/');
-        if (!inline) scrollToTop();
+        if (!inline && !control?.busy) scrollToTop();
         control?.onPress();
       }}
       accessibilityRole="button"
@@ -28,7 +28,7 @@ export function SpinButton({ size = 84, height, inline }: { size?: number; heigh
       accessibilityState={{ disabled: off, busy: !!control?.busy }}
       style={({ pressed }) => [off && { opacity: 0.55 }, pressed && { transform: [{ scale: 0.96 }] }]}>
       <MetalDisc size={size} height={height} turning={!!control?.busy}>
-        <DiscLabel icon={control?.icon === 'sparkle' ? 'sparkle' : undefined} label="Spin" size={height ?? size} />
+        <DiscLabel icon={height || control?.busy ? undefined : control?.icon === 'sparkle' ? 'sparkle' : undefined} label={control?.label ?? 'Spin'} size={height ?? size} plate={!!height} />
       </MetalDisc>
     </Pressable>
   );

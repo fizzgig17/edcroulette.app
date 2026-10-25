@@ -528,6 +528,18 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     ];
   }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
 
+  // Tapping the button while the wheels turn lands them on this spin's result right away.
+  const stop = useCallback(() => {
+    if (phase !== 'spinning') return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    pending.current.clear();
+    stopAllSounds();
+    setSnap((n) => n + 1);
+    landSound();
+    void finish();
+  }, [phase, finish]);
+
   const settled = useCallback(
     (slotIndex: number) => {
       setLanded((prev) => ({ ...prev, [slotIndex]: targetsRef.current[slotIndex] ?? null }));
@@ -555,13 +567,23 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const empty = items.length === 0;
   const busy = phase === 'spinning' || phase === 'choosing';
 
-  const label = 'Spin';
+  const spinningNow = phase === 'spinning';
+  const label = spinningNow ? 'Stop' : 'Spin';
   const caption = allLocked ? 'All wheels locked' : spinStyle === 'coordinated' ? 'Picks a matching set' : undefined;
   const spinRef = useRef(spin);
   spinRef.current = spin;
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
   useEffect(() => {
-    onControl({ label, caption, icon: spinStyle === 'coordinated' ? 'sparkle' : 'spin', busy, disabled: empty || busy, onPress: () => void spinRef.current() });
-  }, [label, caption, spinStyle, busy, empty, onControl]);
+    onControl({
+      label,
+      caption,
+      icon: spinStyle === 'coordinated' ? 'sparkle' : 'spin',
+      busy,
+      disabled: empty || phase === 'choosing',
+      onPress: () => (spinningNow ? stopRef.current() : void spinRef.current()),
+    });
+  }, [label, caption, spinStyle, busy, empty, phase, spinningNow, onControl]);
 
   return (
     <View style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>

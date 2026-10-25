@@ -24,7 +24,7 @@ import { useMetalId } from '@/lib/preferences';
 import { PaneContext } from '@/lib/pane';
 import { useSpinDock } from '@/lib/spin-dock';
 
-function Pane({ children, flex = 1, centered, topSignal, fit, framed = true }: { children: ReactNode; flex?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean }) {
+function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = true }: { children: ReactNode; flex?: number; basis?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
   const [width, setWidth] = useState(0);
@@ -36,7 +36,7 @@ function Pane({ children, flex = 1, centered, topSignal, fit, framed = true }: {
   }, [topSignal]);
   const value = useMemo(() => ({ width: Math.max(0, width - Spacing.three * 2), setOverlay, setScrollEnabled }), [width]);
   return (
-    <View style={[styles.pane, fit ? styles.fit : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={[styles.pane, fit ? styles.fit : basis ? { width: basis, flexGrow: 0, flexShrink: 0 } : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <PaneContext.Provider value={value}>
         <ScrollView ref={scroll} style={fit ? styles.fitScroll : undefined} alwaysBounceVertical={false} scrollEnabled={scrollEnabled} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={[styles.column, centered && styles.centered]}>{children}</View>
@@ -97,7 +97,7 @@ export function Dashboard() {
     <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
-          <Pane flex={1} centered topSignal={topSignal}>
+          <Pane basis={Math.round(width * 0.46)} centered topSignal={topSignal}>
             <SpinContent />
           </Pane>
           <SideTabs />
