@@ -7,7 +7,8 @@ import cv2, numpy as np, glob, os
 
 SRC = 'assets/images/icons'
 OUT = 'assets/images/icons/android'
-SAFE = 0.64  # discs' share of the canvas: the visible circle of an adaptive icon is about 2/3
+SAFE = 0.68  # discs' share of the canvas: the visible circle of an adaptive icon is about 2/3
+SHRINK = 0.82  # each disc is drawn this much smaller about its own centre, leaving clear gaps between the four
 
 def find_discs(img):
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -17,6 +18,20 @@ def find_discs(img):
     cs, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cs = sorted(cs, key=cv2.contourArea, reverse=True)[:4]
     return [cv2.minEnclosingCircle(c) for c in cs]  # ((x, y), r)
+
+def shrink_discs(rgba, discs):
+    out = np.zeros_like(rgba)
+    for (x, y), r in discs:
+        r = int(r)
+        x, y = int(x), int(y)
+        patch = rgba[max(0, y - r):y + r, max(0, x - r):x + r]
+        n = max(2, int(patch.shape[0] * SHRINK)), max(2, int(patch.shape[1] * SHRINK))
+        small = cv2.resize(patch, (n[1], n[0]), interpolation=cv2.INTER_AREA)
+        oy, ox = y - n[0] // 2, x - n[1] // 2
+        region = out[oy:oy + n[0], ox:ox + n[1]]
+        a = small[:, :, 3:4].astype(np.float32) / 255
+        region[:] = np.where(a > 0, small, region)
+    return out
 
 def cutout(path, discs, scale, canvas, white=False):
     img = cv2.imread(path)
@@ -33,6 +48,7 @@ def cutout(path, discs, scale, canvas, white=False):
         glyph = cv2.morphologyEx(glyph, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
         rgba[:, :, :3] = 255
         rgba[:, :, 3] = cv2.GaussianBlur(cv2.subtract(mask, glyph), (0, 0), 1.2)
+    rgba = shrink_discs(rgba, discs)
     crop = rgba[y0:y1, x0:x1]
     side = max(crop.shape[:2])
     target = int(canvas * scale)
