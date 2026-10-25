@@ -46,7 +46,7 @@ import { select, success, tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
 import { setScrollLocked } from '@/lib/scroll-lock';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
-import { CATEGORIES } from '@/types/models';
+import { CATEGORIES, DEFAULT_SLOT_CATEGORIES } from '@/types/models';
 import { useTourTarget } from '@/lib/tour';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
@@ -384,7 +384,7 @@ function Cell({
   onRemove,
   onDragStart,
   onDragMove,
-  onDragEnd,
+  onDrop,
 }: {
   id: number;
   index: number;
@@ -404,7 +404,7 @@ function Cell({
   onRemove: (id: number) => void;
   onDragStart: (id: number) => void;
   onDragMove: (id: number, to: number) => void;
-  onDragEnd: () => void;
+  onDrop: (id: number, to: number) => void;
 }) {
   const theme = useTheme();
   const target = cellPosition(index, total, cols, size);
@@ -415,7 +415,12 @@ function Cell({
   const dragY = useSharedValue(0);
   const wig = useSharedValue(0);
   const lastIndex = useSharedValue(index);
+  // The slot this wheel belongs in right now, readable from the gesture even when it was set up a render ago.
+  const slotX = useSharedValue(target.x);
+  const slotY = useSharedValue(target.y);
   const first = useRef(true);
+  slotX.value = target.x;
+  slotY.value = target.y;
 
   // Slide to a new place when the order changes (not the one being dragged, which follows the finger).
   useEffect(() => {
@@ -475,14 +480,15 @@ function Cell({
         scheduleOnRN(onDragMove, id, to);
       }
     })
-    .onEnd(() => {
-      // Glide from where the finger left it into the slot.
+    .onFinalize(() => {
+      // Runs when the finger lifts, and also if the gesture is cancelled: either way the wheel is dropped where it hovers.
+      if (!lift.value) return;
       x.value = dragX.value;
       y.value = dragY.value;
       lift.value = 0;
-      x.value = withTiming(target.x, { duration: 180 });
-      y.value = withTiming(target.y, { duration: 180 });
-      scheduleOnRN(onDragEnd);
+      x.value = withTiming(slotX.value, { duration: 180 });
+      y.value = withTiming(slotY.value, { duration: 180 });
+      scheduleOnRN(onDrop, id, lastIndex.value);
     });
   const gesture = Gesture.Race(hold, drag, press);
 
@@ -588,6 +594,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const [editing, setEditing] = useState(false);
   const [order, setOrder] = useState<number[]>([]);
   const orderRef = useRef<number[]>([]);
+  const savingOrder = useRef('');
   const [picker, setPicker] = useState<{ mode: 'change'; slotIndex: number } | { mode: 'add' } | null>(null);
   const [fullWidth, setFullWidth] = useState(0);
   const { width: windowWidth } = useWindowDimensions();
@@ -829,6 +836,35 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     },
     [saveSlots],
   );
+  // Saves the wheels in the order they now sit in, if that differs from the saved one.
+  const commitOrder = useCallback(() => {
+    const o = orderRef.current;
+    const cur = slotsRef.current;
+    if (o.length !== cur.length || o.every((id, i) => id === i)) return;
+    const next = o.map((id) => cur[id]).filter((s): s is SlotConfig => !!s);
+    const sig = next.map((s) => s.slotIndex).join(',');
+    if (savingOrder.current === sig) return;
+    savingOrder.current = sig;
+    void apply(draftOf(next)).finally(() => {
+      savingOrder.current = '';
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apply]);
+  const onDrop = useCallback(
+    (id: number, to: number) => {
+      // Make sure the dropped wheel is where it was hovering, then save.
+      const o = [...orderRef.current];
+      const from = o.indexOf(id);
+      if (from >= 0 && to >= 0 && to < o.length && from !== to) {
+        o.splice(from, 1);
+        o.splice(to, 0, id);
+        orderRef.current = o;
+        setOrder(o);
+      }
+      commitOrder();
+    },
+    [commitOrder],
+  );
   // Whenever the wheels change, the editing order starts over from them.
   useEffect(() => {
     const o = slots.map((_, i) => i);
@@ -842,10 +878,11 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     setScrollLocked(true);
   }, []);
   const stopEditing = useCallback(() => {
+    commitOrder();
     setEditing(false);
     setScrollLocked(false);
     setPicker(null);
-  }, []);
+  }, [commitOrder]);
   // Leaving the Spin screen, or starting a spin, ends editing.
   useEffect(() => {
     if (busy && editing) stopEditing();
@@ -861,13 +898,6 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     setOrder(o);
     select();
   }, []);
-  const onDragEnd = useCallback(() => {
-    const o = orderRef.current;
-    const cur = slotsRef.current;
-    if (o.every((id, i) => id === i)) return;
-    void apply(draftOf(o.map((id) => cur[id]).filter((s): s is SlotConfig => !!s)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apply]);
   const onRemove = useCallback(
     (id: number) => {
       select();
@@ -876,6 +906,19 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [apply],
   );
+  const resetWheels = () => {
+    Alert.alert('Reset wheels?', 'Go back to the four starting wheels: Knife, Flashlight, Pen and Multi-tool. Locks are cleared. Your collection is not touched.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        style: 'destructive',
+        onPress: () => {
+          select();
+          void apply(DEFAULT_SLOT_CATEGORIES.map((category) => ({ category, lockedItemId: null })));
+        },
+      },
+    ]);
+  };
   const onTapCell = useCallback((id: number) => {
     select();
     setPicker(id === PLUS_ID ? { mode: 'add' } : { mode: 'change', slotIndex: id });
@@ -915,7 +958,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               onRemove={onRemove}
               onDragStart={select}
               onDragMove={onMove}
-              onDragEnd={onDragEnd}>
+              onDrop={onDrop}>
               <Reel
                 slot={s}
                 candidates={list}
@@ -937,7 +980,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDragEnd={onDragEnd}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
@@ -957,6 +1000,11 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           <ThemedText type="small" themeColor="textSecondary" style={[styles.flex, { fontSize: 12, lineHeight: 16 }]}>
             Tap a wheel to change what it spins. Drag to reorder, or tap the x to remove it.
           </ThemedText>
+          <Pressable onPress={resetWheels} hitSlop={8} accessibilityRole="button" accessibilityLabel="Reset wheels to the starting four">
+            <ThemedText type="small" style={{ color: theme.accent }}>
+              Reset
+            </ThemedText>
+          </Pressable>
           <Pressable onPress={stopEditing} accessibilityRole="button" accessibilityLabel="Done editing wheels" style={[styles.done, { backgroundColor: theme.accent }]}>
             <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
               Done
