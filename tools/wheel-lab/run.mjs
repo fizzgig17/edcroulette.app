@@ -133,6 +133,11 @@ const phone = SIZES[0];
   check('tap again unlocks it', !/locked/.test((await first.getAttribute('aria-label')) ?? ''));
 
   // Press and hold: everything wiggles, x on each wheel, + for a new one.
+  // Spin first, so the wheels hold pieces that must travel with them when rearranged.
+  await page.getByTestId('spin').click({ force: true });
+  await page.waitForTimeout(9000);
+  const labelsOf = async () => Object.fromEntries((await wheels(page).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).map((l) => [l.split(' wheel:')[0], l]));
+  const spun = await labelsOf();
   let c = await centre(wheels(page).nth(1));
   await page.mouse.move(c.x, c.y);
   await page.mouse.down();
@@ -155,7 +160,13 @@ const phone = SIZES[0];
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${SHOTS}/phone-dragging.png` });
   await page.mouse.up();
-  await page.waitForTimeout(900);
+  const spots = () => wheels(page).evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), e.getBoundingClientRect().x, e.getBoundingClientRect().y]));
+  await page.waitForTimeout(150);
+  const early = await spots();
+  await page.waitForTimeout(750);
+  const late = await spots();
+  const drift = Math.max(...early.map(([l, x, y]) => { const f = late.find((w) => w[0] === l); return f ? Math.hypot(f[1] - x, f[2] - y) : 999; }));
+  check('after a drop the wheels settle where they were dropped (none fly across)', drift < 20, `largest move after 150ms: ${Math.round(drift)}px`);
   const after = await order(page);
   check('dragging reorders the wheels', before.join() !== after.join() && after[2] === before[0], `${before.join(' > ')}  =>  ${after.join(' > ')}`);
 
@@ -164,6 +175,8 @@ const phone = SIZES[0];
   await page.waitForTimeout(700);
   const saved = await order(page);
   check('the new order stays after Done', saved.join() === after.join(), saved.join(' > '));
+  const afterMove = await labelsOf();
+  check('each wheel keeps its piece when rearranged', Object.keys(spun).every((k) => afterMove[k] === spun[k]), JSON.stringify(Object.keys(spun).filter((k) => afterMove[k] !== spun[k])));
 
   // Edit again: change a wheel's category, remove one, add one.
   c = await centre(wheels(page).nth(3));
