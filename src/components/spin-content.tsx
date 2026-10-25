@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
+import { SpinButton } from '@/components/spin-button';
 import { RouletteSpinner } from '@/components/roulette-spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,11 @@ export function SpinContent() {
     <>
       {wideKit ? emptyCard : null}
       <RouletteSpinner onControl={setControl} />
+      {big ? (
+        <View style={styles.spinRow}>
+          <SpinButton size={112} inline />
+        </View>
+      ) : null}
       {wideKit ? null : emptyCard}
 
       {lastSpin && hasCarry ? (
@@ -183,6 +189,7 @@ export function SpinContent() {
 }
 
 const styles = StyleSheet.create({
+  spinRow: { alignItems: 'center' },
   result: { gap: Spacing.two },
   resultHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   pick: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },

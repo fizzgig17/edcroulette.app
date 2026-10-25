@@ -3,20 +3,20 @@
  * docked at the right end, the round Spin button. Built on expo-router's
  * headless tabs so routing, deep links and history work as usual.
  */
-import { router, usePathname } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { forwardRef } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiscLabel, MetalDisc } from '@/components/metal-button';
+import { SpinButton } from '@/components/spin-button';
 import { ThemedText } from '@/components/themed-text';
 import type { IconName } from '@/constants/icons';
 import { lift, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
-import { SpinDockProvider, useSpinDock } from '@/lib/spin-dock';
+import { SpinDockProvider } from '@/lib/spin-dock';
 
 const TAB = 44;
 
@@ -45,28 +45,7 @@ const MetalTab = forwardRef<View, TabTriggerSlotProps & { icon: IconName; label:
 });
 
 function SpinDock() {
-  const { control, scrollToTop } = useSpinDock();
-  const pathname = usePathname();
-  const onSpinTab = pathname === '/' || pathname === '/index';
-  const off = !control || control.disabled || control.busy;
-  return (
-    <Pressable
-      disabled={off}
-      onPress={() => {
-        tap();
-        if (!onSpinTab) router.navigate('/');
-        scrollToTop();
-        control?.onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={control?.label ?? 'Spin'}
-      accessibilityState={{ disabled: off, busy: !!control?.busy }}
-      style={({ pressed }) => [off && { opacity: 0.55 }, pressed && { transform: [{ scale: 0.96 }] }]}>
-      <MetalDisc size={84} turning={!!control?.busy}>
-        <DiscLabel icon={control?.icon === 'sparkle' ? 'sparkle' : undefined} label="Spin" size={84} />
-      </MetalDisc>
-    </Pressable>
-  );
+  return <SpinButton />;
 }
 
 function Bar() {
@@ -74,13 +53,12 @@ function Bar() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   // On an iPad everything is on one screen, so only the Spin button is docked.
-  const { dashboard } = useLayoutMode();
+  const { dashboard, big } = useLayoutMode();
+  // Bigger windows put the Spin button under the wheels, so the bar is just the tabs.
+  if (dashboard) return null;
   return (
-    <View pointerEvents="box-none" style={[styles.barWrap, { bottom: Math.max(insets.bottom, 12) - 4, paddingHorizontal: width > 700 ? width * 0.2 : Spacing.three }]}>
+    <View pointerEvents="box-none" style={[styles.barWrap, { bottom: Math.max(insets.bottom, 12) - 4, paddingHorizontal: big ? Math.max(Spacing.three, (width - 520) / 2) : Spacing.three }]}>
       <View style={styles.row} pointerEvents="box-none">
-        {dashboard ? (
-          <View style={styles.flexSpace} />
-        ) : (
         <View style={[styles.pill, lift(theme.shadow, 3), { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <TabTrigger name="index" asChild>
             <MetalTab icon="spin" label="Spin" />
@@ -92,8 +70,7 @@ function Bar() {
             <MetalTab icon="settings" label="Settings" />
           </TabTrigger>
         </View>
-        )}
-        <SpinDock />
+        {big ? null : <SpinDock />}
       </View>
     </View>
   );
@@ -123,5 +100,4 @@ const styles = StyleSheet.create({
   tab: { alignItems: 'center', gap: 3, minWidth: 64 },
   tabLabel: { fontSize: 10, lineHeight: 12, letterSpacing: 0.4 },
   hidden: { display: 'none' },
-  flexSpace: { flex: 1 },
 });

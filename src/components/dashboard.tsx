@@ -7,14 +7,15 @@
  * at the bottom right (see the tab layout).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CollectionScreen from '@/app/(tabs)/collection';
 import SettingsScreen from '@/app/(tabs)/settings';
 import { SpinContent } from '@/components/spin-content';
+import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { PaneContext } from '@/lib/pane';
@@ -41,6 +42,41 @@ function Pane({ children, flex = 1, centered, topSignal }: { children: ReactNode
   );
 }
 
+/** Sideways, the right-hand side shows Collection or Settings, one at a time. */
+function SideTabs() {
+  const theme = useTheme();
+  const [tab, setTab] = useState<'collection' | 'settings'>('collection');
+  return (
+    <View style={styles.side}>
+      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]} accessibilityRole="tablist">
+        {(['collection', 'settings'] as const).map((t) => (
+          <Pressable
+            key={t}
+            onPress={() => setTab(t)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t }}
+            style={[styles.tab, tab === t && { backgroundColor: theme.surface }]}>
+            <ThemedText type="smallBold" style={{ color: tab === t ? theme.accent : theme.textSecondary }}>
+              {t === 'collection' ? 'Collection' : 'Settings'}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
+      {/* Both stay mounted, so filters and scroll positions survive switching. */}
+      <View style={[styles.side, tab !== 'collection' && styles.hidden]}>
+        <Pane>
+          <CollectionScreen />
+        </Pane>
+      </View>
+      <View style={[styles.side, tab !== 'settings' && styles.hidden]}>
+        <Pane>
+          <SettingsScreen />
+        </Pane>
+      </View>
+    </View>
+  );
+}
+
 export function Dashboard() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -56,11 +92,7 @@ export function Dashboard() {
             <SpinContent />
           </Pane>
           <View style={[styles.vline, line]} />
-          <Pane>
-            <CollectionScreen />
-            <View style={[styles.hline, line]} />
-            <SettingsScreen />
-          </Pane>
+          <SideTabs />
         </View>
       ) : (
         <View style={styles.col}>
@@ -88,10 +120,13 @@ const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row' },
   col: { flex: 1 },
   pane: { minWidth: 0 },
-  // Leaves room for the Spin button docked at the bottom right.
-  content: { padding: Spacing.three, paddingBottom: 120 },
+  content: { padding: Spacing.three, paddingBottom: Spacing.six },
   column: { gap: Spacing.three, width: '100%' },
   centered: { maxWidth: 760, alignSelf: 'center' },
+  side: { flex: 1 },
+  hidden: { display: 'none' },
+  tabs: { flexDirection: 'row', margin: Spacing.three, marginBottom: 0, padding: 3, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, gap: 3 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: Radius.small },
   vline: { width: StyleSheet.hairlineWidth },
   hline: { height: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
 });
