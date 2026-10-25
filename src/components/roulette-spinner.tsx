@@ -866,6 +866,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         orderRef.current = o;
         setOrder(o);
       }
+      setScrollLocked(false);
       commitOrder();
     },
     [commitOrder],
@@ -880,7 +881,6 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const startEditing = useCallback(() => {
     tap();
     setEditing(true);
-    setScrollLocked(true);
   }, []);
   const stopEditing = useCallback(() => {
     commitOrder();
@@ -893,6 +893,11 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     if (busy && editing) stopEditing();
   }, [busy, editing, stopEditing]);
 
+  // The page scrolls freely while the wheels wiggle; it only holds still while a wheel is being dragged.
+  const onLift = useCallback(() => {
+    select();
+    setScrollLocked(true);
+  }, []);
   const onMove = useCallback((id: number, to: number) => {
     const o = [...orderRef.current];
     const from = o.indexOf(id);
@@ -962,7 +967,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               onTap={onTapCell}
               onToggle={toggleSlot}
               onRemove={onRemove}
-              onDragStart={select}
+              onDragStart={onLift}
               onDragMove={onMove}
               onDrop={onDrop}>
               <Reel
@@ -986,7 +991,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDrop={onDrop}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
