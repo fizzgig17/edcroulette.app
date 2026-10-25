@@ -23,6 +23,7 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { useMetalId } from '@/lib/preferences';
 import { PaneContext } from '@/lib/pane';
 import { useSpinDock } from '@/lib/spin-dock';
+import { useTour, useTourTarget } from '@/lib/tour';
 
 function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = true }: { children: ReactNode; flex?: number; basis?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean }) {
   const theme = useTheme();
@@ -52,13 +53,16 @@ function SideTabs() {
   const theme = useTheme();
   const metal = metalById(useMetalId());
   const [tab, setTab] = useState<'collection' | 'settings'>('collection');
+  const { signal } = useTour();
+  const collectionTab = useTourTarget('tab-collection');
+  const settingsTab = useTourTarget('tab-settings');
   return (
     <View style={[styles.side, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
       <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: `${metal.line}66` }]} accessibilityRole="tablist">
         {(['collection', 'settings'] as const).map((t) => {
           const on = tab === t;
           return (
-            <Pressable key={t} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={({ pressed }) => [styles.tab, pressed && { opacity: 0.8 }]}>
+            <Pressable key={t} ref={t === 'collection' ? collectionTab : settingsTab} collapsable={false} onPress={() => { setTab(t); signal(`tab-${t}`); }} accessibilityRole="tab" accessibilityState={{ selected: on }} style={({ pressed }) => [styles.tab, pressed && { opacity: 0.8 }]}>
               {on ? (
                 <>
                   <LinearGradient colors={[metal.hi, metal.lo, metal.hi]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.small }]} />
