@@ -109,11 +109,14 @@ jobs:
           # Tell Gradle to sign release builds with it.
           python3 .github/scripts/android-signing.py
 
-      - name: Build the APK and AAB
+      # develop builds make only the APK (installed directly, put on the dev website); master builds
+      # make only the AAB (what Google Play takes). Building both would double a very long step.
+      - name: Build the APK (develop) or AAB (master)
         working-directory: android
         run: |
           set -o pipefail
-          ./gradlew assembleRelease bundleRelease --no-daemon --console=plain -q 2>&1 | tee ../gradle.log
+          if [ "$GITHUB_REF_NAME" = "master" ]; then TASK=bundleRelease; else TASK=assembleRelease; fi
+          ./gradlew "$TASK" --no-daemon --console=plain -q 2>&1 | tee ../gradle.log
 
       # Run logs can't be downloaded, so surface the cause as annotations on the run's page.
       - name: Show why the build failed
@@ -128,8 +131,11 @@ jobs:
       - name: Keep the build files
         run: |
           mkdir -p out
-          cp android/app/build/outputs/apk/release/*.apk out/edc-roulette-${TARGET}-${BUILD_NUMBER}.apk
-          cp android/app/build/outputs/bundle/release/*.aab out/edc-roulette-${TARGET}-${BUILD_NUMBER}.aab
+          if [ "$GITHUB_REF_NAME" = "master" ]; then
+            cp android/app/build/outputs/bundle/release/*.aab out/edc-roulette-${TARGET}-${BUILD_NUMBER}.aab
+          else
+            cp android/app/build/outputs/apk/release/*.apk out/edc-roulette-${TARGET}-${BUILD_NUMBER}.apk
+          fi
           ls -la out
       - uses: actions/upload-artifact@v4
         with:

@@ -19,6 +19,7 @@ import { select } from '@/lib/haptics';
 import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
+import { useTour } from '@/lib/tour';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
@@ -210,6 +211,8 @@ export default function SettingsScreen() {
     ]);
   }
 
+  const { start: startTour } = useTour();
+
   async function loadSamples() {
     const n = await addSamples();
     Alert.alert('Sample gear', n > 0 ? `Added ${n} sample pieces. They don't count toward your ${maxItems} items, and you can remove them here any time.` : 'The sample gear is already loaded.');
@@ -363,6 +366,12 @@ export default function SettingsScreen() {
           See how identifying from a photo works, with a built-in picture of three items and ready-made answers. Nothing is sent to the AI.
         </ThemedText>
         <Button label="Try the photo demo" icon="sparkle" variant="secondary" onPress={() => router.push('/gear/new?demo=1' as Href)} />
+      </Card>
+
+      <ThemedText type="heading">Tour</ThemedText>
+      <Card>
+        <ThemedText themeColor="textSecondary">A quick walk through the wheels, your collection and these settings.</ThemedText>
+        <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
       </Card>
 
       <ThemedText type="heading">Sample gear</ThemedText>
