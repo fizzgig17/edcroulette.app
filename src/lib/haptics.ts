@@ -17,3 +17,8 @@ export function select() {
 export function success() {
   if (native) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 }
+
+/** A gentle "not that" (a limit reached). */
+export function warn() {
+  if (native) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+}
