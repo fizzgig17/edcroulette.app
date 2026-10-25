@@ -72,6 +72,8 @@ export const OVERSHOOT = 0.16; // rows past the stop before it settles back, lik
 export const SETTLE_MS = 240;
 const TICK_ROWS = 10; // the fewest rows a wheel travels
 const ROWS_PER_MS = 0.0047; // about the same speed on every wheel
+/** Each wheel's own speed for one spin: close to the others, never exactly the same. */
+const speedFor = () => 0.85 + Math.random() * 0.3;
 /** How long one wheel turns: a random place in the stopping order, each with its own friction, so they never stop in lockstep. */
 const turnMs = (index: number) => (BASE_MS + index * STAGGER_MS) * (0.88 + Math.random() * 0.24);
 
@@ -150,6 +152,7 @@ function Reel({
   spinToken,
   snapToken,
   durationMs,
+  speed,
   rowHeight,
   wide,
   busy,
@@ -165,8 +168,10 @@ function Reel({
   spinToken: number;
   /** Bumped when a spin has to end right now (turning the phone, a stuck animation). */
   snapToken: number;
-  /** Position among the visible wheels: later wheels turn longer. */
+  /** How long this wheel turns this spin (it differs from wheel to wheel). */
   durationMs: number;
+  /** This wheel's speed for this spin, close to 1. */
+  speed: number;
   rowHeight: number;
   /** Sideways: thumbnail beside the name instead of above it. */
   wide: boolean;
@@ -232,8 +237,8 @@ function Reel({
     const base = Math.round(pos.value);
     const to = Math.max(0, next.findIndex((g) => g.id === target.id));
     const delta = mod(to - mod(base, m), m);
-    // Every wheel turns at about the same speed: the longer it runs, the further it goes.
-    const rows = Math.max(TICK_ROWS, Math.round(durationMs * ROWS_PER_MS));
+    // Every wheel turns at about the same speed, each a little different: the longer it runs, the further it goes.
+    const rows = Math.max(TICK_ROWS, Math.round(durationMs * ROWS_PER_MS * speed));
     const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
     endRef.current = base + delta + extra;
     onPlan(slot.slotIndex, delta + extra, durationMs);
@@ -389,6 +394,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const pending = useRef(new Set<number>());
   const picksRef = useRef<SpinPick[]>([]);
   const [durations, setDurations] = useState<Record<number, number>>({});
+  const [speeds, setSpeeds] = useState<Record<number, number>>({});
   const plans = useRef(new Map<number, { rows: number; durationMs: number }>());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -488,6 +494,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       times[slotIndex] = turnMs(places[k] ?? k);
     });
     setDurations(times);
+    setSpeeds(Object.fromEntries(moving.map((m) => [m, speedFor()])));
     plans.current.clear();
     picksRef.current = picks;
     targetsRef.current = next;
@@ -572,6 +579,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               spinToken={token}
               snapToken={snap}
               durationMs={durations[s.slotIndex] ?? BASE_MS + i * STAGGER_MS}
+              speed={speeds[s.slotIndex] ?? 1}
               rowHeight={rowHeight}
               wide={landscape}
               busy={busy}
