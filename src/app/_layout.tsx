@@ -67,8 +67,8 @@ function App() {
               <Stack.Screen name="support" />
               <Stack.Screen name="delete-account" />
             </Stack>
+            <TourOverlay />
           </View>
-          <TourOverlay />
         </ThemeProvider>
       </TourProvider>
     </LocalDataProvider>

@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { View } from 'react-native';
 
-export type TourTargetId = 'wheels' | 'spin' | 'kit';
+export type TourTargetId = 'wheels' | 'spin' | 'kit' | 'tab-collection' | 'tab-settings';
 
 type Ctx = {
   active: boolean;
@@ -15,10 +15,13 @@ type Ctx = {
   /** Where a target is on screen right now (window coordinates), or null if it isn't showing. */
   measure: (id: TourTargetId) => Promise<{ x: number; y: number; width: number; height: number } | null>;
   register: (id: TourTargetId, ref: RefObject<View | null>) => () => void;
+  /** Something the tour may be waiting for just happened (a tab was tapped). */
+  signal: (name: string) => void;
+  event: { name: string; n: number };
 };
 
 const noop = () => {};
-const TourContext = createContext<Ctx>({ active: false, start: noop, stop: noop, measure: async () => null, register: () => noop });
+const TourContext = createContext<Ctx>({ active: false, start: noop, stop: noop, measure: async () => null, register: () => noop, signal: noop, event: { name: '', n: 0 } });
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState(false);
@@ -38,16 +41,18 @@ export function TourProvider({ children }: { children: ReactNode }) {
       }),
     [],
   );
-  const value = useMemo(() => ({ active, start: () => setActive(true), stop: () => setActive(false), measure, register }), [active, measure, register]);
+  const [event, setEvent] = useState({ name: '', n: 0 });
+  const signal = useCallback((name: string) => setEvent((e) => ({ name, n: e.n + 1 })), []);
+  const value = useMemo(() => ({ active, start: () => setActive(true), stop: () => setActive(false), measure, register, signal, event }), [active, measure, register, signal, event]);
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
 }
 
 export const useTour = () => useContext(TourContext);
 
 /** Mark a view as something the tour can point at: put the returned ref on it. */
-export function useTourTarget(id: TourTargetId) {
+export function useTourTarget(id?: TourTargetId) {
   const ref = useRef<View>(null);
   const { register } = useTour();
-  useEffect(() => register(id, ref), [id, register]);
+  useEffect(() => (id ? register(id, ref) : undefined), [id, register]);
   return ref;
 }

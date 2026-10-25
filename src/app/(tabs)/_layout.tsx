@@ -16,27 +16,33 @@ import { lift, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
+import { useTour, useTourTarget, type TourTargetId } from '@/lib/tour';
 import { SpinDockProvider } from '@/lib/spin-dock';
 
 const TAB = 44;
 
-const MetalTab = forwardRef<View, TabTriggerSlotProps & { icon: IconName; label: string }>(function MetalTab({ icon, label, isFocused, onPress, ...rest }, ref) {
+const MetalTab = forwardRef<View, TabTriggerSlotProps & { icon: IconName; label: string; target?: TourTargetId }>(function MetalTab({ icon, label, target, isFocused, onPress, ...rest }, ref) {
   const theme = useTheme();
+  const targetRef = useTourTarget(target);
+  const { signal } = useTour();
   return (
     <Pressable
       ref={ref}
       {...rest}
       onPress={(e) => {
         tap();
+        if (target) signal(target);
         onPress?.(e);
       }}
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: !!isFocused }}
       style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}>
-      <MetalDisc size={TAB} lit={!!isFocused} ring={isFocused ? theme.accent : undefined}>
-        <DiscLabel icon={icon} size={TAB} />
-      </MetalDisc>
+      <View ref={targetRef} collapsable={false}>
+        <MetalDisc size={TAB} lit={!!isFocused} ring={isFocused ? theme.accent : undefined}>
+          <DiscLabel icon={icon} size={TAB} />
+        </MetalDisc>
+      </View>
       <ThemedText type="caption" style={[styles.tabLabel, { color: isFocused ? theme.accent : theme.textSecondary }]}>
         {label}
       </ThemedText>
@@ -64,10 +70,10 @@ function Bar() {
             <MetalTab icon="spin" label="Spin" />
           </TabTrigger>
           <TabTrigger name="collection" asChild>
-            <MetalTab icon="collection" label="Collection" />
+            <MetalTab icon="collection" label="Collection" target="tab-collection" />
           </TabTrigger>
           <TabTrigger name="settings" asChild>
-            <MetalTab icon="settings" label="Settings" />
+            <MetalTab icon="settings" label="Settings" target="tab-settings" />
           </TabTrigger>
         </View>
         {big ? null : <SpinDock />}
