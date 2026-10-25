@@ -289,7 +289,6 @@ function Reel({
   }, [snapToken]);
 
   const isLocked = !!locked;
-  const canLock = !busy && !editing && (isLocked || !!shown);
   // The window is square: the piece on the payline in the middle, a sliver of its neighbours above and below.
   const win = size - BEZEL * 2;
   const peek = Math.round(win * 0.13);
@@ -303,17 +302,7 @@ function Reel({
         <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
           {slot.category}
         </ThemedText>
-        {!editing ? (
-          <Pressable
-            onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
-            disabled={!canLock}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={isLocked ? `Unlock ${slot.category}` : `Lock ${shown?.name ?? slot.category}`}
-            style={({ pressed }) => [styles.lockHit, !canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
-            <Icon name={isLocked ? 'lock' : 'unlock'} size={18} color={isLocked ? theme.accent : theme.textSecondary} />
-          </Pressable>
-        ) : null}
+        {!editing ? <Icon name={isLocked ? 'lock' : 'unlock'} size={18} color={isLocked ? theme.accent : theme.textSecondary} /> : null}
       </View>
       <View style={[styles.bezel, { padding: BEZEL }, lift(theme.shadow, 3)]}>
         {/* The trim is cut from the chosen metal. */}
@@ -381,6 +370,7 @@ function Cell({
   children,
   onHold,
   onTap,
+  onToggle,
   onRemove,
   onDragStart,
   onDragMove,
@@ -401,6 +391,8 @@ function Cell({
   children: ReactNode;
   onHold: () => void;
   onTap: (id: number) => void;
+  /** Tapping a wheel (not editing) locks or unlocks it. */
+  onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onDragStart: (id: number) => void;
   onDragMove: (id: number, to: number) => void;
@@ -455,9 +447,11 @@ function Cell({
       scheduleOnRN(onHold);
     });
   const press = Gesture.Tap()
-    .enabled(editing)
+    .enabled(!plus || editing)
     .onEnd((_e, ok) => {
-      if (ok) scheduleOnRN(onTap, id);
+      if (!ok) return;
+      if (editing) scheduleOnRN(onTap, id);
+      else scheduleOnRN(onToggle, id);
     });
   const drag = Gesture.Pan()
     .enabled(editing && !plus)
@@ -796,6 +790,17 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     }
   }, []);
 
+  // Tapping anywhere on a wheel locks or unlocks it (the lock icon above it shows which).
+  const toggleSlot = (id: number) => {
+    if (busy || editing) return;
+    const list = candidates.get(id) ?? [];
+    const locked = lockedBySlot.get(id) ?? null;
+    const shown = locked ?? landed[id] ?? restingFromLastSpin.get(id) ?? list[0] ?? null;
+    if (!locked && !shown) return;
+    select();
+    toggleLock(id, locked ? null : shown);
+  };
+
   const toggleLock = useCallback((slotIndex: number, item: GearItem | null) => void setLock(slotIndex, item?.id ?? null), [setLock]);
 
   const allLocked = slots.length > 0 && slots.every((s) => lockedBySlot.get(s.slotIndex));
@@ -955,6 +960,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               canHold={!busy}
               onHold={startEditing}
               onTap={onTapCell}
+              onToggle={toggleSlot}
               onRemove={onRemove}
               onDragStart={select}
               onDragMove={onMove}
@@ -980,7 +986,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDrop={onDrop}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
