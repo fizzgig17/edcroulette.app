@@ -70,7 +70,10 @@ function shuffle<T>(list: readonly T[]): T[] {
 const MAX_RING = 36; // rows kept on a drum; bigger collections show a sample
 export const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
 export const SETTLE_MS = 240;
-const TICK_ROWS = 10; // rows the first wheel travels; later wheels travel further
+const TICK_ROWS = 10; // the fewest rows a wheel travels
+const ROWS_PER_MS = 0.0047; // about the same speed on every wheel
+/** How long one wheel turns: left to right, but each with its own friction, so they never stop in lockstep. */
+const turnMs = (index: number) => (BASE_MS + index * STAGGER_MS) * (0.88 + Math.random() * 0.24);
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 
@@ -146,7 +149,6 @@ function Reel({
   target,
   spinToken,
   snapToken,
-  order,
   durationMs,
   rowHeight,
   wide,
@@ -164,7 +166,6 @@ function Reel({
   /** Bumped when a spin has to end right now (turning the phone, a stuck animation). */
   snapToken: number;
   /** Position among the visible wheels: later wheels turn longer. */
-  order: number;
   durationMs: number;
   rowHeight: number;
   /** Sideways: thumbnail beside the name instead of above it. */
@@ -231,7 +232,8 @@ function Reel({
     const base = Math.round(pos.value);
     const to = Math.max(0, next.findIndex((g) => g.id === target.id));
     const delta = mod(to - mod(base, m), m);
-    const rows = TICK_ROWS + order * 3;
+    // Every wheel turns at about the same speed: the longer it runs, the further it goes.
+    const rows = Math.max(TICK_ROWS, Math.round(durationMs * ROWS_PER_MS));
     const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
     endRef.current = base + delta + extra;
     onPlan(slot.slotIndex, delta + extra, durationMs);
@@ -386,6 +388,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const [note, setNote] = useState<string | null>(null);
   const pending = useRef(new Set<number>());
   const picksRef = useRef<SpinPick[]>([]);
+  const [durations, setDurations] = useState<Record<number, number>>({});
   const plans = useRef(new Map<number, { rows: number; durationMs: number }>());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -478,6 +481,11 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       if (!locked && chosen && list.length > 1 && index < visibleCount) moving.push(s.slotIndex);
     });
     pending.current = new Set(moving);
+    const times: Record<number, number> = {};
+    slots.forEach((s, index) => {
+      times[s.slotIndex] = turnMs(index);
+    });
+    setDurations(times);
     plans.current.clear();
     picksRef.current = picks;
     targetsRef.current = next;
@@ -500,7 +508,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         setSnap((n) => n + 1);
         stopAllSounds();
         void finish();
-      }, BASE_MS + lastIndex * STAGGER_MS + 1800),
+      }, Math.max(...moving.map((m) => times[m] ?? 0), BASE_MS + lastIndex * STAGGER_MS) + SETTLE_MS + 1800),
     ];
   }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
 
@@ -562,8 +570,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               target={targets[s.slotIndex] ?? null}
               spinToken={token}
               snapToken={snap}
-              order={i}
-              durationMs={BASE_MS + i * STAGGER_MS}
+              durationMs={durations[s.slotIndex] ?? BASE_MS + i * STAGGER_MS}
               rowHeight={rowHeight}
               wide={landscape}
               busy={busy}
