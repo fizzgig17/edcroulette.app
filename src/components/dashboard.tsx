@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CollectionScreen from '@/app/(tabs)/collection';
@@ -17,11 +18,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { metalById } from '@/constants/metals';
 import { IS_DEV_BUILD } from '@/lib/env';
+import { useMetalId } from '@/lib/preferences';
 import { PaneContext } from '@/lib/pane';
 import { useSpinDock } from '@/lib/spin-dock';
 
-function Pane({ children, flex = 1, centered, topSignal }: { children: ReactNode; flex?: number; centered?: boolean; topSignal?: number }) {
+function Pane({ children, flex = 1, centered, topSignal, fit, framed = true }: { children: ReactNode; flex?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean }) {
+  const theme = useTheme();
+  const metal = metalById(useMetalId());
   const [width, setWidth] = useState(0);
   const [overlay, setOverlay] = useState<ReactNode>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -31,9 +36,9 @@ function Pane({ children, flex = 1, centered, topSignal }: { children: ReactNode
   }, [topSignal]);
   const value = useMemo(() => ({ width: Math.max(0, width - Spacing.three * 2), setOverlay, setScrollEnabled }), [width]);
   return (
-    <View style={[styles.pane, { flex }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={[styles.pane, fit ? styles.fit : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <PaneContext.Provider value={value}>
-        <ScrollView ref={scroll} scrollEnabled={scrollEnabled} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <ScrollView ref={scroll} style={fit ? styles.fitScroll : undefined} alwaysBounceVertical={false} scrollEnabled={scrollEnabled} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={[styles.column, centered && styles.centered]}>{children}</View>
         </ScrollView>
         {overlay}
@@ -45,31 +50,36 @@ function Pane({ children, flex = 1, centered, topSignal }: { children: ReactNode
 /** Sideways, the right-hand side shows Collection or Settings, one at a time. */
 function SideTabs() {
   const theme = useTheme();
+  const metal = metalById(useMetalId());
   const [tab, setTab] = useState<'collection' | 'settings'>('collection');
   return (
-    <View style={styles.side}>
-      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]} accessibilityRole="tablist">
-        {(['collection', 'settings'] as const).map((t) => (
-          <Pressable
-            key={t}
-            onPress={() => setTab(t)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === t }}
-            style={[styles.tab, tab === t && { backgroundColor: theme.surface }]}>
-            <ThemedText type="smallBold" style={{ color: tab === t ? theme.accent : theme.textSecondary }}>
-              {t === 'collection' ? 'Collection' : 'Settings'}
-            </ThemedText>
-          </Pressable>
-        ))}
+    <View style={[styles.side, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
+      <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: `${metal.line}66` }]} accessibilityRole="tablist">
+        {(['collection', 'settings'] as const).map((t) => {
+          const on = tab === t;
+          return (
+            <Pressable key={t} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={({ pressed }) => [styles.tab, pressed && { opacity: 0.8 }]}>
+              {on ? (
+                <>
+                  <LinearGradient colors={[metal.hi, metal.lo, metal.hi]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.small }]} />
+                  <LinearGradient colors={['#FFFFFF40', '#FFFFFF00', '#00000059']} locations={[0, 0.45, 1]} style={[StyleSheet.absoluteFill, { borderRadius: Radius.small }]} />
+                </>
+              ) : null}
+              <ThemedText type="smallBold" style={on ? styles.tabOn : { color: theme.textSecondary }}>
+                {t === 'collection' ? 'Collection' : 'Settings'}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
       </View>
       {/* Both stay mounted, so filters and scroll positions survive switching. */}
       <View style={[styles.side, tab !== 'collection' && styles.hidden]}>
-        <Pane>
+        <Pane framed={false}>
           <CollectionScreen />
         </Pane>
       </View>
       <View style={[styles.side, tab !== 'settings' && styles.hidden]}>
-        <Pane>
+        <Pane framed={false}>
           <SettingsScreen />
         </Pane>
       </View>
@@ -83,28 +93,25 @@ export function Dashboard() {
   const { width, height } = useWindowDimensions();
   const { topSignal } = useSpinDock();
   const landscape = width > height;
-  const line = { backgroundColor: theme.border };
   return (
-    <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top }]}>
+    <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
           <Pane flex={1.15} centered topSignal={topSignal}>
             <SpinContent />
           </Pane>
-          <View style={[styles.vline, line]} />
           <SideTabs />
         </View>
       ) : (
         <View style={styles.col}>
-          <Pane centered topSignal={topSignal}>
+          {/* The top section is as tall as the wheels and today's carry need, so it doesn't scroll after a spin. */}
+          <Pane centered fit>
             <SpinContent />
           </Pane>
-          <View style={[styles.hline, line]} />
-          <View style={styles.row}>
+          <View style={[styles.row, styles.bottom]}>
             <Pane>
               <CollectionScreen />
             </Pane>
-            <View style={[styles.vline, line]} />
             <Pane>
               <SettingsScreen />
             </Pane>
@@ -116,17 +123,20 @@ export function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  row: { flex: 1, flexDirection: 'row' },
-  col: { flex: 1 },
+  root: { flex: 1, padding: Spacing.two },
+  row: { flex: 1, flexDirection: 'row', gap: Spacing.two },
+  col: { flex: 1, gap: Spacing.two },
+  bottom: { minHeight: 260 },
   pane: { minWidth: 0 },
+  fit: { flexShrink: 1, minHeight: 0 },
+  fitScroll: { flexGrow: 0 },
+  frame: { borderWidth: 1.5, borderRadius: Radius.large, overflow: 'hidden' },
+  tabOn: { color: '#FFFFFF' },
   content: { padding: Spacing.three, paddingBottom: Spacing.six },
   column: { gap: Spacing.three, width: '100%' },
   centered: { maxWidth: 760, alignSelf: 'center' },
   side: { flex: 1 },
   hidden: { display: 'none' },
-  tabs: { flexDirection: 'row', margin: Spacing.three, marginBottom: 0, padding: 3, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, gap: 3 },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: Radius.small },
-  vline: { width: StyleSheet.hairlineWidth },
-  hline: { height: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  tabs: { flexDirection: 'row', margin: Spacing.three, marginBottom: 0, padding: 3, borderRadius: Radius.medium, borderWidth: 1, gap: 3 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: Radius.small, overflow: 'hidden' },
 });
