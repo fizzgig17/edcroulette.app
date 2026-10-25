@@ -33,6 +33,7 @@
     },
     "plugins": [
       "./plugins/with-foldables.js",
+      "./plugins/with-play-update.js",
       [
         "expo-router",
         {
