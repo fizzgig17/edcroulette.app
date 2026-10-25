@@ -11,7 +11,7 @@ import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig
 export type Result = { ok: true } | { ok: false; error: string };
 export type SlotDraft = { category: string; lockedItemId: string | null; from?: number };
 
-const ITEMS: GearItem[] = SAMPLE_GEAR.map((d, i) => ({ ...d, id: `lab-${i}`, isSample: true, createdAt: i, updatedAt: i }) as GearItem);
+const ITEMS: GearItem[] = SAMPLE_GEAR.map((d, i) => ({ ...d, id: `lab-${i}`, isSample: true, favorite: false, createdAt: i, updatedAt: i }) as GearItem);
 
 const Ctx = createContext<ReturnType<typeof build> | null>(null);
 
@@ -32,6 +32,7 @@ function build(items: GearItem[], slots: SlotConfig[], last: SpinRecord | null, 
     addItem: async (_d: GearDraft): Promise<Result & { item?: GearItem }> => ({ ok: false, error: 'lab' }),
     updateItem: async (_id: string, _d: GearDraft): Promise<Result> => ({ ok: false, error: 'lab' }),
     removeItem: async (_id: string) => {},
+    toggleFavorite: async (_id: string) => {},
     setLock: async (slotIndex: number, itemId: string | null) => set.setSlots(slots.map((s) => (s.slotIndex === slotIndex ? { ...s, lockedItemId: itemId } : s))),
     saveSlots: async (next: SlotDraft[]): Promise<Result> => {
       if (next.length < MIN_SLOTS) return { ok: false, error: 'Keep at least one slot.' };

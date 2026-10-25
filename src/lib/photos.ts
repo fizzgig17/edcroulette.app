@@ -99,6 +99,18 @@ export async function savePhoto(photo: PickedPhoto, crop?: PhotoCrop, maxEdge: n
   return `${FOLDER}/${name}`;
 }
 
+/** The real pixel size of a stored photo. A picture viewer can report a scaled-down size (Android does), which would put crops in the wrong place. */
+export async function photoSize(stored: string | null | undefined): Promise<{ width: number; height: number } | null> {
+  const uri = photoUri(stored);
+  if (!uri) return null;
+  try {
+    const image = await ImageManipulator.manipulate(uri).renderAsync();
+    return { width: image.width, height: image.height };
+  } catch {
+    return null;
+  }
+}
+
 /** Removes a photo this app saved. Ignores anything outside its own folder. */
 export function deletePhoto(stored: string | null | undefined) {
   const uri = photoUri(stored);

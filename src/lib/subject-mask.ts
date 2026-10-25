@@ -1,12 +1,15 @@
 /**
- * The phone's own object finder (Apple Vision on iPhone, iOS 17 and later). It labels every
- * pixel with the object it belongs to, which gives far better outlines than guessing from
- * colours. Not available on Android or the web: null there, and the app falls back to colours.
+ * The phone's own object finder: Apple Vision on iPhone (iOS 17 and later), Google's subject
+ * segmentation on Android. It labels every pixel with the object it belongs to, which gives far
+ * better outlines than guessing from colours. Not available on the web (or while Android is still
+ * downloading its model): null there, and the app falls back to colours.
  */
 import { requireOptionalNativeModule } from 'expo';
+import { NativeModules } from 'react-native';
 
 type Raw = { width: number; height: number; data: string } | null;
-const native = requireOptionalNativeModule<{ instanceMask(uri: string, maxEdge: number): Promise<Raw> }>('EdcSubjectMask');
+type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw> };
+const native = requireOptionalNativeModule<Finder>('EdcSubjectMask') ?? ((NativeModules.EdcSubjectMask as Finder | undefined) || null);
 
 export type InstanceMask = { width: number; height: number; labels: Uint8Array };
 

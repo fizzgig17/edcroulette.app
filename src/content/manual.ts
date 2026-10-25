@@ -29,8 +29,9 @@ export const MANUAL: Section[] = [
     body: [
       'Tap Spin to turn the wheels. Each wheel stops at its own time and a little different speed. While they turn the Spin button says Stop; tap it to land every wheel on this spin’s result right away.',
       'Each wheel is a small square window: the piece it landed on in the middle, with a sliver of the pieces above and below. Tap a wheel to lock the piece it shows (a lock icon appears above it). Locked wheels stay put through later spins, so you can lock what you’re definitely carrying and spin for the rest. Tap the wheel again to release it.',
+      'To choose the exact piece for a wheel, double-tap it. A list of everything in that category opens, scrolled to the piece the wheel shows now and with it marked. Tap a piece to use it: the wheel locks on it and the list closes. Tap Unlock in the list to release the wheel instead, or tap outside it to close it with no change.',
       'All your wheels are always on screen, three across (sideways on a phone they all sit in one row). On an iPad, a tablet or an open foldable the wheels look the same, just bigger.',
-      'To change your wheels, press and hold any wheel. They all start to wiggle like icons on a home screen. Tap a wheel to choose what it spins (you can use the same category on more than one wheel). Drag a wheel to move it. Tap the x on a wheel to remove it; you always keep at least one. If you have fewer than six wheels a + appears in the next empty spot to add one. Reset puts the wheels back to the starting four (Knife, Flashlight, Pen and Multi-tool) and never touches your collection. Reset puts the wheels back to the starting four (Knife, Flashlight, Pen and Multi-tool) and never touches your collection. Tap Done, or tap Spin, when you’re finished.',
+      'To change your wheels, press and hold any wheel. They all start to wiggle like icons on a home screen. Tap a wheel to choose what it spins (you can use the same category on more than one wheel). Drag a wheel to move it. Tap the x on a wheel to remove it; you always keep at least one. If you have fewer than six wheels a + appears in the next empty spot to add one. Reset puts the wheels back to the starting four (Knife, Flashlight, Pen and Multi-tool) and never touches your collection. Tap Done, or tap Spin, when you’re finished.',
     ],
   },
   {
@@ -45,6 +46,7 @@ export const MANUAL: Section[] = [
     body: [
       'Open Collection and tap + to add a piece. Give it a name, category, brand, model, material, finish and color, and a photo if you like. Typing a brand matches it against a list of popular brands, including common misspellings.',
       'The collection can be shown as a list, a grid or compact rows. Search by name or brand, filter by category with the chips, and tap a piece to see or edit it.',
+      'Tap the star on a piece to make it a favorite without opening it. Favorites are listed first, and a favorite is a little more likely to come up when a wheel spins. In Settings, under Spinning, Favorites sets how much more likely: Off, Light (2 times), Medium (3 times) or Strong (5 times). Locked wheels aren’t affected, and a Coordinated spin chooses on its own.',
       'To delete a piece, swipe it left. An Undo bar appears for a few seconds. To remove several at once, press and hold a piece (or tap Select), tick the ones you want, then tap Remove.',
     ],
   },

@@ -126,11 +126,34 @@ const phone = SIZES[0];
   // Tap a wheel to lock it, again to unlock.
   const first = wheels(page).first();
   await first.click({ force: true });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(700);
   check('tap locks a wheel', /locked/.test((await first.getAttribute('aria-label')) ?? ''));
   await first.click({ force: true });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(700);
   check('tap again unlocks it', !/locked/.test((await first.getAttribute('aria-label')) ?? ''));
+
+  // Double-tap: a list of that category opens with the current piece marked; choosing one locks the wheel on it.
+  const shownBefore = ((await first.getAttribute('aria-label')) ?? '').replace(/^.* wheel: /, '');
+  await first.dblclick({ force: true });
+  await page.waitForTimeout(600);
+  const opened = (await page.getByText(/^Choose a /).count()) > 0;
+  const marked = await page.locator('[aria-label$=", current"]').count();
+  const currentName = ((await page.locator('[aria-label$=", current"]').first().getAttribute('aria-label')) ?? '').replace(/, current$/, '');
+  check('double-tap opens the list of that wheel\'s pieces', opened, `${marked} marked`);
+  check('the wheel\'s current piece is the marked one', marked === 1 && currentName === shownBefore, `${currentName} / ${shownBefore}`);
+  await page.screenshot({ path: `${SHOTS}/phone-picker.png` });
+  const other = page.locator('[aria-label^="Choose a"]').first();
+  const pick = page.locator('[role="button"][aria-label]:not([aria-label$=", current"]):not([aria-label^="Make "]):not([aria-label^="Remove "]):not([aria-label="Close"]):not([aria-label="Unlock this wheel"])').filter({ hasText: /\S/ });
+  void other;
+  const rows = await page.locator('[aria-label][role="button"]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')).filter((l) => l && !/^(Make |Remove |Close|Unlock|Done|Reset|Share|Spin|Stop)/.test(l) && !/ wheel: /.test(l) && !/, current$/.test(l)));
+  void pick;
+  const chosen = rows.find((l) => l && !/tab|Collection|Settings/i.test(l));
+  if (chosen) await page.locator(`[aria-label="${chosen}"]`).first().click({ force: true });
+  await page.waitForTimeout(500);
+  const afterLabel = (await first.getAttribute('aria-label')) ?? '';
+  check('choosing a piece locks the wheel on it', !!chosen && afterLabel.includes(chosen) && /locked/.test(afterLabel), afterLabel);
+  await first.click({ force: true });
+  await page.waitForTimeout(700);
 
   // Press and hold: everything wiggles, x on each wheel, + for a new one.
   // Spin first, so the wheels hold pieces that must travel with them when rearranged.
@@ -198,7 +221,8 @@ const phone = SIZES[0];
   for (const cat of ['Watch', 'Keychain', 'Pry bar']) {
     await page.getByText('Add a wheel').first().click({ force: true });
     await page.waitForTimeout(400);
-    await page.getByRole('button', { name: new RegExp(`^${cat}`) }).click({ force: true });
+    if (!(await page.getByRole('button', { name: new RegExp(`^${cat}`) }).count())) await page.screenshot({ path: `${SHOTS}/debug-add-${cat}.png` });
+    await page.getByRole('button', { name: new RegExp(`^${cat}`) }).click({ force: true, timeout: 5000 });
     await page.waitForTimeout(700);
   }
   const six = await order(page);

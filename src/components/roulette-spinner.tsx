@@ -45,7 +45,8 @@ import { MIN_SLOTS } from '@/lib/limits';
 import { select, success, tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
 import { setScrollLocked } from '@/lib/scroll-lock';
-import { useMetalId, useSpinStyle } from '@/lib/preferences';
+import { WheelItemPicker } from '@/components/wheel-item-picker';
+import { useFavoriteBoost, useMetalId, useSpinStyle } from '@/lib/preferences';
 import { CATEGORIES, DEFAULT_SLOT_CATEGORIES } from '@/types/models';
 import { useTourTarget } from '@/lib/tour';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
@@ -60,6 +61,17 @@ const STAGGER_MS = 500;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
 
+/** Picks one, with starred pieces `boost` times as likely as the rest. */
+const pickWeighted = (list: readonly GearItem[], boost: number): GearItem | null => {
+  if (!list.length) return null;
+  const total = list.reduce((n, g) => n + (g.favorite ? boost : 1), 0);
+  let r = Math.random() * total;
+  for (const g of list) {
+    r -= g.favorite ? boost : 1;
+    if (r < 0) return g;
+  }
+  return list[list.length - 1] ?? null;
+};
 const pickRandom = <T,>(list: readonly T[]): T | null => (list.length ? list[Math.floor(Math.random() * list.length)] ?? null : null);
 
 function shuffle<T>(list: readonly T[]): T[] {
@@ -371,6 +383,7 @@ function Cell({
   onHold,
   onTap,
   onToggle,
+  onChoose,
   onRemove,
   version,
   onDragStart,
@@ -396,6 +409,8 @@ function Cell({
   onTap: (id: number) => void;
   /** Tapping a wheel (not editing) locks or unlocks it. */
   onToggle: (id: number) => void;
+  /** Double-tapping a wheel (not editing) opens the list of its pieces. */
+  onChoose: (id: number) => void;
   onRemove: (id: number) => void;
   onDragStart: (id: number) => void;
   onDragMove: (id: number, to: number) => void;
@@ -468,6 +483,13 @@ function Cell({
       if (editing) scheduleOnRN(onTap, id);
       else scheduleOnRN(onToggle, id);
     });
+  const double = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDelay(250)
+    .enabled(!editing && !plus)
+    .onEnd((_e, ok) => {
+      if (ok) scheduleOnRN(onChoose, id);
+    });
   const drag = Gesture.Pan()
     .enabled(editing && !plus)
     .minDistance(8)
@@ -499,7 +521,8 @@ function Cell({
       y.value = withTiming(slotY.value, { duration: 180 });
       scheduleOnRN(onDrop, id, lastIndex.value);
     });
-  const gesture = Gesture.Race(hold, drag, press);
+  // Outside editing, a single tap waits a moment to see whether a second one follows (editing taps act at once).
+  const gesture = Gesture.Race(hold, drag, editing || plus ? press : Gesture.Exclusive(double, press));
 
   const style = useAnimatedStyle(() => ({
     left: lift.value ? dragX.value : x.value,
@@ -598,6 +621,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const wheelsRef = useTourTarget('wheels');
   const { items, slots, itemById, setLock, recordSpin, lastSpin } = useGear();
   const spinStyle = useSpinStyle();
+  const boost = useFavoriteBoost();
 
   const { saveSlots, maxSlots } = useGear();
   const [editing, setEditing] = useState(false);
@@ -731,7 +755,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       const coordinatedPick = coordinated?.get(s.slotIndex);
       const coordinatedItem = coordinatedPick ? (list.find((g) => g.id === coordinatedPick) ?? null) : null;
       // Two wheels of the same category don't land on the same piece when there is another to choose.
-      const chosen = locked ?? coordinatedItem ?? pickRandom(list.filter((g) => !taken.has(g.id))) ?? pickRandom(list);
+      const chosen = locked ?? coordinatedItem ?? pickWeighted(list.filter((g) => !taken.has(g.id)), boost) ?? pickWeighted(list, boost);
       if (chosen) taken.add(chosen.id);
       next[s.slotIndex] = chosen;
       picks.push({ slotIndex: s.slotIndex, category: s.category, itemId: chosen?.id ?? null, locked: !!locked });
@@ -770,7 +794,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         void finish();
       }, Math.max(...moving.map((m) => times[m] ?? 0)) + SETTLE_MS + 1800),
     ];
-  }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, finish]);
+  }, [phase, spinStyle, boost, items.length, slots, lockedBySlot, candidates, finish]);
 
   // Tapping the button while the wheels turn lands them on this spin's result right away.
   const stop = useCallback(() => {
@@ -815,6 +839,17 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     select();
     toggleLock(id, locked ? null : shown);
   };
+
+  // Double-tap: choose the piece for a wheel from a list, which also locks it.
+  const [choosing, setChoosing] = useState<number | null>(null);
+  const onChooseCell = (id: number) => {
+    if (busy || editing) return;
+    select();
+    setChoosing(id);
+  };
+  const chooseSlot = slots.find((s) => s.slotIndex === choosing) ?? null;
+  const chooseList = chooseSlot ? (candidates.get(chooseSlot.slotIndex) ?? []) : [];
+  const chooseShown = chooseSlot ? (lockedBySlot.get(chooseSlot.slotIndex) ?? landed[chooseSlot.slotIndex] ?? restingFromLastSpin.get(chooseSlot.slotIndex) ?? chooseList[0] ?? null) : null;
 
   const toggleLock = useCallback((slotIndex: number, item: GearItem | null) => void setLock(slotIndex, item?.id ?? null), [setLock]);
 
@@ -992,6 +1027,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               onHold={startEditing}
               onTap={onTapCell}
               onToggle={toggleSlot}
+              onChoose={onChooseCell}
               onRemove={onRemove}
               onDragStart={onLift}
               onDragMove={onMove}
@@ -1017,7 +1053,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} version={slotsVersion.current} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} version={slotsVersion.current} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onChoose={onChooseCell} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
@@ -1050,9 +1086,29 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         </View>
       ) : !empty ? (
         <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
-          Tap a wheel to lock it. Press and hold to change, reorder or remove.
+          Tap a wheel to lock it. Double-tap to choose a piece. Hold to edit the wheels.
         </ThemedText>
       ) : null}
+      <WheelItemPicker
+        visible={!!chooseSlot}
+        category={chooseSlot?.category ?? ''}
+        items={chooseList}
+        currentId={chooseShown?.id ?? null}
+        locked={chooseSlot ? !!lockedBySlot.get(chooseSlot.slotIndex) : false}
+        onChoose={(item) => {
+          if (!chooseSlot) return;
+          select();
+          toggleLock(chooseSlot.slotIndex, item);
+          setChoosing(null);
+        }}
+        onUnlock={() => {
+          if (!chooseSlot) return;
+          select();
+          toggleLock(chooseSlot.slotIndex, null);
+          setChoosing(null);
+        }}
+        onClose={() => setChoosing(null)}
+      />
       <CategoryPicker
         visible={!!picker}
         title={picker?.mode === 'add' ? 'Add a wheel' : 'What does this wheel spin?'}

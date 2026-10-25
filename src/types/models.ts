@@ -31,11 +31,13 @@ export interface GearItem {
   imageUri: string | null;
   /** Part of the sample set (not counted toward the free limit; removed with "Remove sample gear"). */
   isSample: boolean;
+  /** Starred by the person: listed first, and a little more likely to come up in a spin. */
+  favorite: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
-export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt' | 'isSample'> & { isSample?: boolean };
+export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt' | 'isSample' | 'favorite'> & { isSample?: boolean; favorite?: boolean };
 
 export interface SlotConfig {
   slotIndex: number;

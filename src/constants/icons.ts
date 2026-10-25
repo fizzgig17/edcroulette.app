@@ -10,6 +10,8 @@ export const Icons = {
   spin: icon('arrow.triangle.2.circlepath', 'autorenew'),
   collection: icon('square.grid.2x2', 'grid_view'),
   settings: icon('gearshape', 'settings'),
+  star: icon('star', 'star'),
+  starOn: icon('star.fill', 'star'),
   lock: icon('lock.fill', 'lock'),
   unlock: icon('lock.open', 'lock_open'),
   add: icon('plus', 'add'),

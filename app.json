@@ -34,6 +34,7 @@
     "plugins": [
       "./plugins/with-foldables.js",
       "./plugins/with-play-update.js",
+      "./plugins/with-subject-mask.js",
       [
         "expo-router",
         {

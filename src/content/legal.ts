@@ -115,7 +115,7 @@ export const SUPPORT: Section[] = [
   {
     title: 'How does the spin work?',
     body: [
-      'Each wheel picks from one category, like Knife or Flashlight. Spin, and each unlocked wheel lands on a piece from your collection in that category: a random one, or a set that goes well together if you choose the Coordinated spin style in Settings. Tap a wheel to lock its current piece for the next spins. Press and hold a wheel to change what it spins, reorder wheels, remove them or add one (up to six).',
+      'Each wheel picks from one category, like Knife or Flashlight. Spin, and each unlocked wheel lands on a piece from your collection in that category: a random one, or a set that goes well together if you choose the Coordinated spin style in Settings. Tap a wheel to lock its current piece for the next spins, or double-tap it to choose a piece from a list. Starring a piece as a favorite lists it first and makes it somewhat more likely to be picked; stars are kept on your phone like the rest of your collection. Press and hold a wheel to change what it spins, reorder wheels, remove them or add one (up to six).',
     ],
   },
   {

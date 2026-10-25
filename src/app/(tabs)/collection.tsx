@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -37,7 +37,7 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem } = useGear();
+  const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem, toggleFavorite } = useGear();
   const insets = useSafeAreaInsets();
 
   // Selecting several: press and hold a piece (or tap "Select"), tap to add or remove.
@@ -136,6 +136,17 @@ export default function CollectionScreen() {
   const finishes = useMemo(() => uniq(items.map((g) => g.finish)), [items]);
   const brands = useMemo(() => uniq(items.map((g) => g.brand)), [items]);
 
+  // Starring a piece fills its star at once but doesn't move the row (that would jump the page under your finger).
+  // The list re-sorts when you leave the screen or change the search, filters or sort.
+  const [settled, setSettled] = useState<Map<string, boolean>>(() => new Map());
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const settle = useCallback(() => setSettled(new Map(itemsRef.current.map((g) => [g.id, g.favorite]))), []);
+  useFocusEffect(useCallback(() => settle, [settle]));
+  useEffect(() => {
+    settle();
+  }, [query, cats, mats, fins, brands_, source, lockedOnly, sort, settle]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = items.filter((g) => {
@@ -158,9 +169,12 @@ export default function CollectionScreen() {
     else if (sort === 'brand') list.sort(by((g) => `${g.brand ?? '~'} ${g.name}`));
     else if (sort === 'newest') list.sort((a, b) => b.createdAt - a.createdAt);
     else if (sort === 'lightest') list.sort(by((g) => g.weightGrams ?? 99999));
-    return list;
+    // The collection arrives with starred pieces first; for ordering, use the stars as they were when the list last settled.
+    if (sort === 'category') list.sort(by((g) => g.name));
+    const starred = (g: GearItem) => settled.get(g.id) ?? g.favorite;
+    return [...list.filter(starred), ...list.filter((g) => !starred(g))];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, query, cats, mats, fins, brands_, source, lockedOnly, sort, slots]);
+  }, [items, query, cats, mats, fins, brands_, source, lockedOnly, sort, slots, settled]);
 
   const activeCount = mats.length + fins.length + brands_.length + (source !== 'all' ? 1 : 0) + (lockedOnly ? 1 : 0) + (sort !== 'category' ? 1 : 0);
   const filtering = activeCount > 0 || cats.length > 0 || query.trim() !== '';
@@ -215,6 +229,20 @@ export default function CollectionScreen() {
             </ThemedText>
           )}
         </View>
+        {selecting ? null : (
+          <Pressable
+            onPress={() => {
+              select();
+              void toggleFavorite(g.id);
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityState={{ selected: g.favorite }}
+            accessibilityLabel={g.favorite ? `Remove ${g.name} from favorites` : `Make ${g.name} a favorite`}
+            style={styles.star}>
+            <Icon name={g.favorite ? 'starOn' : 'star'} size={18} color={g.favorite ? theme.accent : theme.textSecondary} />
+          </Pressable>
+        )}
         {lockedIds.has(g.id) ? <Icon name="lock" size={14} color={theme.accent} /> : null}
         {g.primaryColor ? <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} /> : null}
         {selecting ? null : <Icon name="chevron" size={14} color={theme.textSecondary} />}
@@ -549,6 +577,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   rowCompact: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 8, paddingHorizontal: Spacing.three },
   flex: { flex: 1 },
+  star: { padding: 4 },
   dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   tile: { width: '30%', alignItems: 'center', gap: 4 },
