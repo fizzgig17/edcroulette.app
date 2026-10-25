@@ -2,7 +2,7 @@
  * The wheels: one vertical wheel per slot, up to six. Locked wheels never turn
  * and always land on their locked piece. Unlocked wheels land on a random piece
  * of their category, or on a set that goes well together when the spin style is
- * "Coordinated" (an AI picks; see lib/api.ts). They stop left to right with soft
+ * "Coordinated" (an AI picks; see lib/api.ts). They stop in a random order with soft
  * tick sounds, and the result is recorded as today's carry.
  *
  * Portrait shows the first three wheels; sideways shows them all. Wheels that
@@ -12,7 +12,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -36,6 +36,7 @@ import { ensureAiConsent } from '@/lib/ai-consent';
 import { pickCoordinated } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { select, success } from '@/lib/haptics';
+import { useLayoutMode } from '@/lib/layout-mode';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
@@ -43,6 +44,8 @@ import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
 const BASE_MS = 2200;
+const WHEEL_WIDTH = 118; // about a phone's wheel, upright
+const REEL_GAP = 8; // Spacing.two
 const STAGGER_MS = 500;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
@@ -70,7 +73,12 @@ function shuffle<T>(list: readonly T[]): T[] {
 const MAX_RING = 36; // rows kept on a drum; bigger collections show a sample
 export const OVERSHOOT = 0.16; // rows past the stop before it settles back, like a detent
 export const SETTLE_MS = 240;
-const TICK_ROWS = 10; // rows the first wheel travels; later wheels travel further
+const TICK_ROWS = 10; // the fewest rows a wheel travels
+const ROWS_PER_MS = 0.0047; // about the same speed on every wheel
+/** Each wheel's own speed for one spin: close to the others, never exactly the same. */
+const speedFor = () => 0.85 + Math.random() * 0.3;
+/** How long one wheel turns: a random place in the stopping order, each with its own friction, so they never stop in lockstep. */
+const turnMs = (index: number) => (BASE_MS + index * STAGGER_MS) * (0.88 + Math.random() * 0.24);
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 
@@ -146,10 +154,11 @@ function Reel({
   target,
   spinToken,
   snapToken,
-  order,
   durationMs,
+  speed,
   rowHeight,
   wide,
+  width,
   busy,
   onSettled,
   onPlan,
@@ -163,12 +172,15 @@ function Reel({
   spinToken: number;
   /** Bumped when a spin has to end right now (turning the phone, a stuck animation). */
   snapToken: number;
-  /** Position among the visible wheels: later wheels turn longer. */
-  order: number;
+  /** How long this wheel turns this spin (it differs from wheel to wheel). */
   durationMs: number;
+  /** This wheel's speed for this spin, close to 1. */
+  speed: number;
   rowHeight: number;
   /** Sideways: thumbnail beside the name instead of above it. */
   wide: boolean;
+  /** Big windows: every wheel is this wide (px), whatever the window. */
+  width?: number;
   busy: boolean;
   onSettled: (slotIndex: number) => void;
   /** Tells the screen how far this wheel will turn, so the sound can follow it. */
@@ -231,7 +243,8 @@ function Reel({
     const base = Math.round(pos.value);
     const to = Math.max(0, next.findIndex((g) => g.id === target.id));
     const delta = mod(to - mod(base, m), m);
-    const rows = TICK_ROWS + order * 3;
+    // Every wheel turns at about the same speed, each a little different: the longer it runs, the further it goes.
+    const rows = Math.max(TICK_ROWS, Math.round(durationMs * ROWS_PER_MS * speed));
     const extra = delta >= rows ? 0 : m * Math.ceil((rows - delta) / m);
     endRef.current = base + delta + extra;
     onPlan(slot.slotIndex, delta + extra, durationMs);
@@ -276,7 +289,7 @@ function Reel({
   const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
 
   return (
-    <View style={styles.reelCol}>
+    <View style={[styles.reelCol, width ? { width, flex: 0 } : null]}>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.center}>
         {slot.category}
       </ThemedText>
@@ -343,14 +356,16 @@ export interface SpinControl {
 
 export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => void }) {
   const theme = useTheme();
-  const { width, height } = useWindowDimensions();
-  const landscape = width > height;
+  const { height, landscape, big } = useLayoutMode();
+  // Big windows (iPad, open foldable) always show every wheel, at one size, in the middle.
+  const [boxWidth, setBoxWidth] = useState(0);
   const { items, slots, itemById, setLock, recordSpin, lastSpin } = useGear();
   const spinStyle = useSpinStyle();
 
-  const visibleCount = landscape ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
+  const visibleCount = landscape || big ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
   const hiddenCount = slots.length - visibleCount;
-  const rowHeight = landscape ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
+  const rowHeight = landscape && !big ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
+  const reelWidth = big ? Math.max(84, Math.min(WHEEL_WIDTH, boxWidth ? Math.floor((boxWidth - REEL_GAP * (visibleCount - 1)) / Math.max(1, visibleCount)) : WHEEL_WIDTH)) : undefined;
 
   const candidates = useMemo(() => {
     const m = new Map<number, GearItem[]>();
@@ -386,6 +401,8 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const [note, setNote] = useState<string | null>(null);
   const pending = useRef(new Set<number>());
   const picksRef = useRef<SpinPick[]>([]);
+  const [durations, setDurations] = useState<Record<number, number>>({});
+  const [speeds, setSpeeds] = useState<Record<number, number>>({});
   const plans = useRef(new Map<number, { rows: number; durationMs: number }>());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -478,6 +495,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
       if (!locked && chosen && list.length > 1 && index < visibleCount) moving.push(s.slotIndex);
     });
     pending.current = new Set(moving);
+    const times: Record<number, number> = {};
+    // Each turning wheel gets a random place in the stopping order, not left to right.
+    const places = shuffle(moving.map((_, k) => k));
+    moving.forEach((slotIndex, k) => {
+      times[slotIndex] = turnMs(places[k] ?? k);
+    });
+    setDurations(times);
+    setSpeeds(Object.fromEntries(moving.map((m) => [m, speedFor()])));
     plans.current.clear();
     picksRef.current = picks;
     targetsRef.current = next;
@@ -492,7 +517,6 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
     // The wheels tick as they turn. If one never reports back (the app was
     // backgrounded, say), land everything once the longest turn should be over.
-    const lastIndex = Math.max(0, slots.findIndex((s) => s.slotIndex === moving[moving.length - 1]));
     timers.current.forEach(clearTimeout);
     timers.current = [
       setTimeout(() => {
@@ -500,7 +524,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         setSnap((n) => n + 1);
         stopAllSounds();
         void finish();
-      }, BASE_MS + lastIndex * STAGGER_MS + 1800),
+      }, Math.max(...moving.map((m) => times[m] ?? 0)) + SETTLE_MS + 1800),
     ];
   }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
 
@@ -540,14 +564,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   }, [label, caption, spinStyle, busy, empty, onControl]);
 
   return (
-    <View style={styles.machine}>
+    <View style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
       {hiddenCount > 0 ? (
         <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
           {hiddenCount === 1 ? '1 more wheel' : `${hiddenCount} more wheels`} when sideways
         </ThemedText>
       ) : null}
 
-      <View style={styles.reels}>
+      <View style={[styles.reels, big && styles.reelsCentered]}>
         {slots.slice(0, visibleCount).map((s, i) => {
           const locked = lockedBySlot.get(s.slotIndex) ?? null;
           const list = candidates.get(s.slotIndex) ?? [];
@@ -562,10 +586,11 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               target={targets[s.slotIndex] ?? null}
               spinToken={token}
               snapToken={snap}
-              order={i}
-              durationMs={BASE_MS + i * STAGGER_MS}
+              durationMs={durations[s.slotIndex] ?? BASE_MS + i * STAGGER_MS}
+              speed={speeds[s.slotIndex] ?? 1}
               rowHeight={rowHeight}
-              wide={landscape}
+              wide={landscape && !big}
+              width={reelWidth}
               busy={busy}
               onSettled={settled}
               onPlan={planned}
@@ -601,6 +626,7 @@ const styles = StyleSheet.create({
   machine: { gap: Spacing.three },
   flex: { flex: 1 },
   reels: { flexDirection: 'row', gap: Spacing.two },
+  reelsCentered: { justifyContent: 'center' },
   reelCol: { flex: 1, gap: Spacing.two, alignItems: 'stretch' },
   bezel: { borderRadius: Radius.large, padding: 5 },
   bezelMetal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.large, overflow: 'hidden' },

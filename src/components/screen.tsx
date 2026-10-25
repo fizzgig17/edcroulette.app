@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
 import { IS_DEV_BUILD } from '@/lib/env';
+import { usePane } from '@/lib/pane';
 
 type ScreenProps = {
   title: string;
@@ -35,12 +36,44 @@ type ScreenProps = {
 /** Standard scrollable screen shell. */
 export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true, fullWidth }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const pane = usePane();
+  const embedded = !!pane;
   // Wider windows (an unfolded Fold, an iPad) get a wider column.
   const wide = useWindowDimensions().width >= 840;
   const scroll = useRef<ScrollView>(null);
   useEffect(() => {
     if (topSignal) scroll.current?.scrollTo({ y: 0, animated: true });
   }, [topSignal]);
+  // In a pane, a floating footer (like Undo) is shown over the pane instead of at the end of the content.
+  const setOverlay = pane?.setOverlay;
+  const setPaneScroll = pane?.setScrollEnabled;
+  useEffect(() => {
+    if (!setPaneScroll) return undefined;
+    setPaneScroll(scrollEnabled);
+    return () => setPaneScroll(true);
+  }, [setPaneScroll, scrollEnabled]);
+  useEffect(() => {
+    if (!setOverlay) return undefined;
+    setOverlay(footer ?? null);
+    return () => setOverlay(null);
+  }, [setOverlay, footer]);
+  if (embedded) {
+    // Inside an iPad pane: the pane scrolls, so this is just the title and the content.
+    return (
+      <View style={styles.paneContent}>
+        {showTitle && !hideTitle && (
+          <View style={styles.titleRow}>
+            <ThemedText type="subtitle" accessibilityRole="header" style={styles.flex}>
+              {title}
+            </ThemedText>
+            {action}
+          </View>
+        )}
+        {subtitle ? <ThemedText themeColor="textSecondary">{subtitle}</ThemedText> : null}
+        {children}
+      </View>
+    );
+  }
   return (
     <ThemedView style={styles.container}>
       {/* The dev banner already covers the status-bar area. */}
@@ -73,6 +106,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
+  paneContent: { gap: Spacing.three, width: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   content: { padding: Spacing.three, paddingBottom: Spacing.six, gap: Spacing.three, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' },
 });

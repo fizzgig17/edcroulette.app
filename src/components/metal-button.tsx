@@ -20,22 +20,24 @@ import { useMetalId } from '@/lib/preferences';
 const GLYPH_SHADOW = { textShadowColor: '#000C', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } } as const;
 
 /** The metal disc itself. `lit` brightens it (the selected tab). */
-export function MetalDisc({ size, lit = true, ring, turning, children }: { size: number; lit?: boolean; ring?: string; turning?: boolean; children?: ReactNode }) {
+export function MetalDisc({ size, height = size, lit = true, ring, turning, children }: { size: number; height?: number; lit?: boolean; ring?: string; turning?: boolean; children?: ReactNode }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
-  const rim = Math.max(3, Math.round(size * 0.07));
+  const round = height === size;
+  const rim = Math.max(3, Math.round(height * 0.07));
   const inner = size - rim * 2;
+  const innerH = height - rim * 2;
   return (
-    <View style={[{ width: size, height: size, borderRadius: size / 2 }, lift(theme.shadow, lit ? 3 : 2)]}>
-      <LinearGradient colors={[metal.hi, metal.lo, metal.hi]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]} />
-      <View style={[styles.face, { width: inner, height: inner, borderRadius: inner / 2, top: rim, left: rim, backgroundColor: metal.lo }]}>
+    <View style={[{ width: size, height, borderRadius: height / 2 }, lift(theme.shadow, lit ? 3 : 2)]}>
+      <LinearGradient colors={[metal.hi, metal.lo, metal.hi]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: height / 2 }]} />
+      <View style={[styles.face, { width: inner, height: innerH, borderRadius: innerH / 2, top: rim, left: rim, backgroundColor: metal.lo }]}>
         <Image source={metal.texture} style={StyleSheet.absoluteFill} contentFit="cover" />
         <LinearGradient colors={['#FFFFFF4D', '#FFFFFF00', '#00000066']} locations={[0, 0.45, 1]} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
         {lit ? null : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: 0.38 }]} />}
         <View style={styles.center}>{children}</View>
       </View>
-      {turning ? <TurningRing size={size - rim * 2 - 8} offset={rim + 4} /> : null}
-      {ring ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: size / 2, borderWidth: 2.5, borderColor: ring }]} /> : null}
+      {turning && round ? <TurningRing size={size - rim * 2 - 8} offset={rim + 4} /> : null}
+      {ring ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: height / 2, borderWidth: 2.5, borderColor: ring }]} /> : null}
     </View>
   );
 }
