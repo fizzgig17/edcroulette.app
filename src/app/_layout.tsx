@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DevBanner } from '@/components/dev-banner';
 import { TourOverlay } from '@/components/tour';
@@ -59,7 +60,7 @@ function App() {
         <HideSplashWhenLoaded />
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, background: colors.background, card: colors.background, primary: colors.accent, text: colors.text, border: colors.border } }}>
           <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-          <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
             <DevBanner />
             <Stack screenOptions={{ headerShown: false, headerTintColor: colors.accent, headerTitleStyle: { color: colors.text } }}>
               <Stack.Screen name="(tabs)" />
@@ -73,7 +74,7 @@ function App() {
             </Stack>
             <UpdateBanner />
             <TourOverlay />
-          </View>
+          </GestureHandlerRootView>
         </ThemeProvider>
       </TourProvider>
       </UpdateProvider>

@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { usePane } from '@/lib/pane';
+import { useScrollLocked } from '@/lib/scroll-lock';
 
 type ScreenProps = {
   title: string;
@@ -34,7 +35,8 @@ type ScreenProps = {
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled = true, fullWidth }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled: scrollWanted = true, fullWidth }: ScreenProps) {
+  const scrollEnabled = scrollWanted && !useScrollLocked();
   const insets = useSafeAreaInsets();
   const pane = usePane();
   const embedded = !!pane;

@@ -5,14 +5,17 @@
  * "Coordinated" (an AI picks; see lib/api.ts). They stop in a random order with soft
  * tick sounds, and the result is recorded as today's carry.
  *
- * Portrait shows the first three wheels; sideways shows them all. Wheels that
- * aren't on screen still pick a piece (it appears in Today's carry), they just
- * don't turn. The order strip lets the person drag wheels into a new order.
+ * Every wheel is a square window onto its drum: the piece in the middle with a
+ * sliver of the one above and below. Three across (all six sideways on a phone),
+ * the same on every device, just bigger on a tablet. Press and hold a wheel and
+ * they all wiggle like home-screen icons: tap one to change what it spins, drag
+ * to reorder, tap the x to remove, tap the + to add one (repeats are allowed).
  */
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -21,6 +24,8 @@ import Animated, {
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -30,23 +35,27 @@ import { GearThumb } from '@/components/gear-thumb';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { metalById } from '@/constants/metals';
+import { Button } from '@/components/ui/button';
 import { lift, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ensureAiConsent } from '@/lib/ai-consent';
 import { pickCoordinated } from '@/lib/api';
-import { useGear } from '@/lib/gear';
-import { select, success } from '@/lib/haptics';
+import { useGear, type SlotDraft } from '@/lib/gear';
+import { MIN_SLOTS } from '@/lib/limits';
+import { select, success, tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
-import { PORTRAIT_WHEELS } from '@/lib/limits';
+import { setScrollLocked } from '@/lib/scroll-lock';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
+import { CATEGORIES } from '@/types/models';
 import { useTourTarget } from '@/lib/tour';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
-const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
 const BASE_MS = 2200;
-const WHEEL_WIDTH = 118; // about a phone's wheel, upright
-const REEL_GAP = 8; // Spacing.two
+const GAP = 10; // between wheels, sideways and down
+const LABEL_H = 22; // the category name and lock above each window
+const BEZEL = 4; // the metal trim around a window
+const PLUS_ID = 999; // the empty slot shown while editing
 const STAGGER_MS = 500;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
@@ -108,16 +117,19 @@ function ReelRow({
   count,
   pos,
   rowHeight,
+  top,
   thumb,
-  wide,
+  font,
 }: {
   item: GearItem;
   index: number;
   count: number;
   pos: SharedValue<number>;
   rowHeight: number;
+  /** Where the row sits in the window when it is on the payline. */
+  top: number;
   thumb: number;
-  wide: boolean;
+  font: number;
 }) {
   const theme = useTheme();
   const style = useAnimatedStyle(() => {
@@ -127,20 +139,13 @@ function ReelRow({
     const a = Math.abs(rel);
     return {
       opacity: interpolate(a, [0, 1, 1.7], [1, 0.5, 0], Extrapolation.CLAMP),
-      transform: [
-        { translateY: rel * rowHeight },
-        // Rows curve away by shrinking a little; true 3D tilt made the gold pointers flicker.
-        { scaleY: interpolate(a, [0, 1.5], [1, 0.8], Extrapolation.CLAMP) },
-        { scale: interpolate(a, [0, 1], [1, 0.9], Extrapolation.CLAMP) },
-      ],
+      transform: [{ translateY: rel * rowHeight }, { scale: interpolate(a, [0, 1], [1, 0.9], Extrapolation.CLAMP) }],
     };
   });
   return (
-    <Animated.View style={[styles.row, { height: rowHeight, top: rowHeight }, wide && styles.rowWide, style]}>
+    <Animated.View style={[styles.row, styles.rowTile, { height: rowHeight, top }, style]}>
       <GearThumb item={item} size={thumb} />
-      <ThemedText
-        numberOfLines={2}
-        style={[wide ? styles.nameWide : styles.center, { color: theme.reelText, fontSize: 13, lineHeight: 16, fontWeight: '600' }]}>
+      <ThemedText numberOfLines={2} style={[styles.center, { color: theme.reelText, fontSize: font, lineHeight: font + 2, fontWeight: '600' }]}>
         {item.name}
       </ThemedText>
     </Animated.View>
@@ -157,9 +162,8 @@ function Reel({
   snapToken,
   durationMs,
   speed,
-  rowHeight,
-  wide,
-  width,
+  size,
+  editing,
   busy,
   onSettled,
   onPlan,
@@ -177,11 +181,10 @@ function Reel({
   durationMs: number;
   /** This wheel's speed for this spin, close to 1. */
   speed: number;
-  rowHeight: number;
-  /** Sideways: thumbnail beside the name instead of above it. */
-  wide: boolean;
-  /** Big windows: every wheel is this wide (px), whatever the window. */
-  width?: number;
+  /** Width of the wheel, trim included (px). The window is square. */
+  size: number;
+  /** Wiggling: the lock is hidden while wheels are being rearranged. */
+  editing: boolean;
   busy: boolean;
   onSettled: (slotIndex: number) => void;
   /** Tells the screen how far this wheel will turn, so the sound can follow it. */
@@ -286,60 +289,277 @@ function Reel({
   }, [snapToken]);
 
   const isLocked = !!locked;
-  const canLock = !busy && (isLocked || !!shown);
-  const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
+  const canLock = !busy && !editing && (isLocked || !!shown);
+  // The window is square: the piece on the payline in the middle, a sliver of its neighbours above and below.
+  const win = size - BEZEL * 2;
+  const peek = Math.round(win * 0.13);
+  const rowHeight = win - peek * 2;
+  const thumb = Math.round(rowHeight * 0.5);
+  const font = Math.max(10, Math.round(win * 0.1));
 
   return (
-    <View style={[styles.reelCol, width ? { width, flex: 0 } : null]}>
-      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.center}>
-        {slot.category}
-      </ThemedText>
-      <View style={[styles.bezel, lift(theme.shadow, 3)]}>
+    <View style={{ width: size }}>
+      <View style={styles.labelRow}>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
+          {slot.category}
+        </ThemedText>
+        {!editing ? (
+          <Pressable
+            onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
+            disabled={!canLock}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={isLocked ? `Unlock ${slot.category}` : `Lock ${shown?.name ?? slot.category}`}
+            style={({ pressed }) => [!canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
+            <Icon name={isLocked ? 'lock' : 'unlock'} size={15} color={isLocked ? theme.accent : theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={[styles.bezel, { padding: BEZEL }, lift(theme.shadow, 3)]}>
         {/* The trim is cut from the chosen metal. */}
         <View style={styles.bezelMetal}>
           <Image source={metal.texture} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={['#FFFFFF59', '#FFFFFF00', '#00000073']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
         </View>
         <View
-          style={[styles.window, { height: rowHeight * VISIBLE_ROWS, backgroundColor: theme.reel }]}
+          style={[styles.window, { width: win, height: win, backgroundColor: theme.reel }]}
           accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
           {ring.map((item, i) => (
-            <ReelRow key={`${i}:${item.id}`} item={item} index={i} count={count} pos={pos} rowHeight={rowHeight} thumb={thumb} wide={wide} />
+            <ReelRow key={`${i}:${item.id}`} item={item} index={i} count={count} pos={pos} rowHeight={rowHeight} top={peek} thumb={thumb} font={font} />
           ))}
           {ring.length === 0 ? (
-            <View style={[styles.row, { height: rowHeight, top: rowHeight }]}>
-              <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: 13, lineHeight: 17 }]}>
+            <View style={[styles.row, styles.rowTile, { height: rowHeight, top: peek }]}>
+              <ThemedText style={[styles.center, { color: theme.reelText, opacity: 0.7, fontSize: font, lineHeight: font + 3 }]}>
                 {`No ${slot.category.toLowerCase()} yet`}
               </ThemedText>
             </View>
           ) : null}
           {/* The drum curves away at the top and bottom, with a lit band across the middle. */}
-          <LinearGradient pointerEvents="none" colors={[theme.reel, theme.reel + 'E6', theme.reel + '00']} style={[styles.shade, { top: 0, height: rowHeight * 0.95 }]} />
-          <LinearGradient pointerEvents="none" colors={[theme.reel + '00', theme.reel + 'E6', theme.reel]} style={[styles.shade, { bottom: 0, height: rowHeight * 0.95 }]} />
-          <LinearGradient pointerEvents="none" colors={['#FFFFFF00', '#FFFFFF1C', '#FFFFFF00']} style={[styles.shade, { top: rowHeight, height: rowHeight }]} />
-          <View pointerEvents="none" style={[styles.line, { top: rowHeight, backgroundColor: metal.line }]} />
-          <View pointerEvents="none" style={[styles.line, { top: rowHeight * 2 - 1.5, backgroundColor: metal.line }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: rowHeight * 1.5 - 7, borderLeftColor: metal.line }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: rowHeight * 1.5 - 7, borderRightColor: metal.line }]} />
+          <LinearGradient pointerEvents="none" colors={[theme.reel, theme.reel + 'E6', theme.reel + '00']} style={[styles.shade, { top: 0, height: peek + rowHeight * 0.15 }]} />
+          <LinearGradient pointerEvents="none" colors={[theme.reel + '00', theme.reel + 'E6', theme.reel]} style={[styles.shade, { bottom: 0, height: peek + rowHeight * 0.15 }]} />
+          <LinearGradient pointerEvents="none" colors={['#FFFFFF00', '#FFFFFF1C', '#FFFFFF00']} style={[styles.shade, { top: peek, height: rowHeight }]} />
+          <View pointerEvents="none" style={[styles.line, { top: peek, backgroundColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.line, { top: peek + rowHeight - 1.5, backgroundColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: win / 2 - 7, borderLeftColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: win / 2 - 7, borderRightColor: metal.line }]} />
           {/* Inner edge, and a diagonal glint on the glass. */}
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium, borderWidth: 1, borderColor: '#000000AA' }]} />
           <LinearGradient pointerEvents="none" colors={['#FFFFFF33', '#FFFFFF08', '#FFFFFF00']} locations={[0, 0.35, 0.6]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium }]} />
         </View>
         {isLocked ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Radius.large, borderWidth: 3, borderColor: theme.accent }]} /> : null}
       </View>
-      <Pressable
-        onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
-        disabled={!canLock}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityLabel={isLocked ? `Unlock ${slot.category}` : `Lock ${shown?.name ?? slot.category}`}
-        style={({ pressed }) => [styles.lock, !canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
-        <Icon name={isLocked ? 'lock' : 'unlock'} size={20} color={isLocked ? theme.accent : theme.text} />
-        <ThemedText type="smallBold" style={{ color: isLocked ? theme.accent : theme.textSecondary, fontSize: 11, lineHeight: 13 }}>
-          {isLocked ? 'Locked' : 'Lock'}
-        </ThemedText>
-      </Pressable>
     </View>
+  );
+}
+
+/**
+ * Where a wheel sits on the grid: `cols` across, a short last row centred.
+ * Used both to place wheels and to work out where a dragged one is hovering.
+ */
+function cellPosition(index: number, total: number, cols: number, size: number) {
+  const row = Math.floor(index / cols);
+  const inRow = Math.min(cols, total - row * cols);
+  const offset = ((cols - inRow) * (size + GAP)) / 2;
+  return { x: (index % cols) * (size + GAP) + offset, y: row * (size + LABEL_H + GAP) };
+}
+
+/**
+ * One wheel's place on the grid. Holds the wiggle, the x, and the gestures: press and hold
+ * starts editing; while editing, tap changes the wheel and dragging moves it.
+ */
+function Cell({
+  id,
+  index,
+  total,
+  last,
+  cols,
+  size,
+  editing,
+  plus,
+  canRemove,
+  canHold,
+  children,
+  onHold,
+  onTap,
+  onRemove,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: {
+  id: number;
+  index: number;
+  total: number;
+  /** Index of the last real wheel (the + slot, when shown, comes after it). */
+  last: number;
+  cols: number;
+  size: number;
+  editing: boolean;
+  /** The empty slot shown while editing, to add a wheel. */
+  plus?: boolean;
+  canRemove: boolean;
+  canHold: boolean;
+  children: ReactNode;
+  onHold: () => void;
+  onTap: (id: number) => void;
+  onRemove: (id: number) => void;
+  onDragStart: (id: number) => void;
+  onDragMove: (id: number, to: number) => void;
+  onDragEnd: () => void;
+}) {
+  const theme = useTheme();
+  const target = cellPosition(index, total, cols, size);
+  const x = useSharedValue(target.x);
+  const y = useSharedValue(target.y);
+  const lift = useSharedValue(0);
+  const dragX = useSharedValue(0);
+  const dragY = useSharedValue(0);
+  const wig = useSharedValue(0);
+  const lastIndex = useSharedValue(index);
+  const first = useRef(true);
+
+  // Slide to a new place when the order changes (not the one being dragged, which follows the finger).
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (lift.value) return;
+    x.value = withTiming(target.x, { duration: 200 });
+    y.value = withTiming(target.y, { duration: 200 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.x, target.y]);
+
+  // Wiggle like a home-screen icon, each wheel a little out of step.
+  useEffect(() => {
+    if (editing && !plus) {
+      wig.value = -1;
+      wig.value = withDelay((id % 3) * 45, withRepeat(withTiming(1, { duration: 120 }), -1, true));
+    } else {
+      cancelAnimation(wig);
+      wig.value = withTiming(0, { duration: 120 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, plus]);
+
+  const cellH = size + LABEL_H;
+
+  const hold = Gesture.LongPress()
+    .minDuration(450)
+    .enabled(!editing && canHold && !plus)
+    .onStart(() => {
+      scheduleOnRN(onHold);
+    });
+  const press = Gesture.Tap()
+    .enabled(editing)
+    .onEnd((_e, ok) => {
+      if (ok) scheduleOnRN(onTap, id);
+    });
+  const drag = Gesture.Pan()
+    .enabled(editing && !plus)
+    .minDistance(8)
+    .onStart(() => {
+      dragX.value = x.value;
+      dragY.value = y.value;
+      lastIndex.value = index;
+      lift.value = 1;
+      scheduleOnRN(onDragStart, id);
+    })
+    .onUpdate((e) => {
+      dragX.value = x.value + e.translationX;
+      dragY.value = y.value + e.translationY;
+      const col = Math.max(0, Math.min(cols - 1, Math.round(dragX.value / (size + GAP))));
+      const row = Math.max(0, Math.round(dragY.value / (cellH + GAP)));
+      const to = Math.max(0, Math.min(last, row * cols + col));
+      if (to !== lastIndex.value) {
+        lastIndex.value = to;
+        scheduleOnRN(onDragMove, id, to);
+      }
+    })
+    .onEnd(() => {
+      // Glide from where the finger left it into the slot.
+      x.value = dragX.value;
+      y.value = dragY.value;
+      lift.value = 0;
+      x.value = withTiming(target.x, { duration: 180 });
+      y.value = withTiming(target.y, { duration: 180 });
+      scheduleOnRN(onDragEnd);
+    });
+  const gesture = Gesture.Race(hold, drag, press);
+
+  const style = useAnimatedStyle(() => ({
+    left: lift.value ? dragX.value : x.value,
+    top: lift.value ? dragY.value : y.value,
+    zIndex: lift.value ? 10 : 1,
+    transform: [{ rotate: `${wig.value * 1.5}deg` }, { scale: lift.value ? 1.07 : 1 }],
+  }));
+
+  return (
+    <Animated.View style={[styles.cell, { width: size, height: cellH }, style]}>
+      <GestureDetector gesture={gesture}>
+        <Animated.View collapsable={false} style={styles.flex}>
+          {children}
+        </Animated.View>
+      </GestureDetector>
+      {editing && !plus && canRemove ? (
+        <Pressable
+          onPress={() => onRemove(id)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Remove this wheel"
+          style={[styles.remove, { backgroundColor: theme.text, borderColor: theme.background }]}>
+          <Icon name="close" size={11} color={theme.background} />
+        </Pressable>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+/** Choose what a wheel spins. Categories you have nothing in yet are still allowed. */
+function CategoryPicker({
+  visible,
+  title,
+  current,
+  counts,
+  onChoose,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  current: string | null;
+  counts: Map<string, number>;
+  onChoose: (category: string) => void;
+  onClose: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
+        <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => undefined}>
+          <ThemedText type="heading">{title}</ThemedText>
+          <View style={styles.choices}>
+            {CATEGORIES.map((c) => {
+              const on = current === c;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => onChoose(c)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={({ pressed }) => [styles.choice, { backgroundColor: on ? theme.accent : theme.backgroundElement, borderColor: on ? theme.accent : theme.border }, pressed && { opacity: 0.7 }]}>
+                  <ThemedText type="smallBold" style={{ color: on ? theme.onAccent : theme.text }}>
+                    {c}
+                    <ThemedText type="small" style={{ color: on ? theme.onAccent : theme.textSecondary }}>{`  ${counts.get(c) ?? 0}`}</ThemedText>
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+          <ThemedText type="small" themeColor="textSecondary">
+            You can have the same category on more than one wheel.
+          </ThemedText>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -357,17 +577,31 @@ export interface SpinControl {
 
 export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => void }) {
   const theme = useTheme();
-  const { height, landscape, big } = useLayoutMode();
+  const { landscape, big } = useLayoutMode();
   // Big windows (iPad, open foldable) always show every wheel, at one size, in the middle.
   const [boxWidth, setBoxWidth] = useState(0);
   const wheelsRef = useTourTarget('wheels');
   const { items, slots, itemById, setLock, recordSpin, lastSpin } = useGear();
   const spinStyle = useSpinStyle();
 
-  const visibleCount = landscape || big ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
-  const hiddenCount = slots.length - visibleCount;
-  const rowHeight = landscape && !big ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
-  const reelWidth = big ? Math.max(84, Math.min(WHEEL_WIDTH, boxWidth ? Math.floor((boxWidth - REEL_GAP * (visibleCount - 1)) / Math.max(1, visibleCount)) : WHEEL_WIDTH)) : undefined;
+  const { saveSlots, maxSlots } = useGear();
+  const [editing, setEditing] = useState(false);
+  const [order, setOrder] = useState<number[]>([]);
+  const orderRef = useRef<number[]>([]);
+  const [picker, setPicker] = useState<{ mode: 'change'; slotIndex: number } | { mode: 'add' } | null>(null);
+  const [fullWidth, setFullWidth] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
+
+  // Three across, two down; sideways on a phone all six fit in one row. The same on every device, just bigger on a big window.
+  const count = slots.length;
+  const canAdd = editing && count < maxSlots;
+  const total = count + (canAdd ? 1 : 0);
+  const cols = landscape && !big ? Math.max(1, Math.min(6, total)) : 3;
+  const rows = Math.max(1, Math.ceil(total / cols));
+  const avail = boxWidth || fullWidth || windowWidth - Spacing.three * 2;
+  const maxSize = big ? 190 : landscape ? 132 : 150;
+  const size = Math.max(84, Math.min(maxSize, Math.floor((avail - GAP * (cols - 1)) / cols)));
+  const gridHeight = rows * (size + LABEL_H) + (rows - 1) * GAP;
 
   const candidates = useMemo(() => {
     const m = new Map<number, GearItem[]>();
@@ -432,20 +666,9 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     await recordSpin(picksRef.current);
   }, [recordSpin]);
 
-  // Turning the phone mid-spin changes which wheels are on screen: just land.
-  const spinning = phase === 'spinning';
-  useEffect(() => {
-    if (spinning) {
-      pending.current.clear();
-      stopAllSounds();
-      setSnap((n) => n + 1);
-      void finish();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleCount]);
-
   const spin = useCallback(async () => {
     if (phase === 'spinning' || phase === 'choosing') return;
+    setEditing(false);
     stopAllSounds();
     setWhy(null);
     setNote(null);
@@ -485,16 +708,19 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     const next: Record<number, GearItem | null> = {};
     const picks: SpinPick[] = [];
     const moving: number[] = [];
-    slots.forEach((s, index) => {
+    const taken = new Set<string>();
+    slots.forEach((s) => {
       const locked = lockedBySlot.get(s.slotIndex) ?? null;
       const list = candidates.get(s.slotIndex) ?? [];
       const coordinatedPick = coordinated?.get(s.slotIndex);
       const coordinatedItem = coordinatedPick ? (list.find((g) => g.id === coordinatedPick) ?? null) : null;
-      const chosen = locked ?? coordinatedItem ?? pickRandom(list);
+      // Two wheels of the same category don't land on the same piece when there is another to choose.
+      const chosen = locked ?? coordinatedItem ?? pickRandom(list.filter((g) => !taken.has(g.id))) ?? pickRandom(list);
+      if (chosen) taken.add(chosen.id);
       next[s.slotIndex] = chosen;
       picks.push({ slotIndex: s.slotIndex, category: s.category, itemId: chosen?.id ?? null, locked: !!locked });
-      // Wheels off screen (portrait) and locked or empty wheels pick without turning.
-      if (!locked && chosen && list.length > 1 && index < visibleCount) moving.push(s.slotIndex);
+      // Locked or empty wheels pick without turning.
+      if (!locked && chosen && list.length > 1) moving.push(s.slotIndex);
     });
     pending.current = new Set(moving);
     const times: Record<number, number> = {};
@@ -528,7 +754,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         void finish();
       }, Math.max(...moving.map((m) => times[m] ?? 0)) + SETTLE_MS + 1800),
     ];
-  }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
+  }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, finish]);
 
   // Tapping the button while the wheels turn lands them on this spin's result right away.
   const stop = useCallback(() => {
@@ -587,42 +813,169 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     });
   }, [label, caption, spinStyle, busy, empty, phase, spinningNow, onControl]);
 
+  // --- Rearranging the wheels ------------------------------------------------------------
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of items) m.set(g.category, (m.get(g.category) ?? 0) + 1);
+    return m;
+  }, [items]);
+  const draftOf = (list: SlotConfig[]): SlotDraft[] => list.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex }));
+  const apply = useCallback(
+    async (next: SlotDraft[]) => {
+      const r = await saveSlots(next);
+      if (!r.ok) Alert.alert('Wheels', r.error);
+    },
+    [saveSlots],
+  );
+  // Whenever the wheels change, the editing order starts over from them.
+  useEffect(() => {
+    const o = slots.map((_, i) => i);
+    orderRef.current = o;
+    setOrder(o);
+  }, [slots]);
+  useEffect(() => () => setScrollLocked(false), []);
+  const startEditing = useCallback(() => {
+    tap();
+    setEditing(true);
+    setScrollLocked(true);
+  }, []);
+  const stopEditing = useCallback(() => {
+    setEditing(false);
+    setScrollLocked(false);
+    setPicker(null);
+  }, []);
+  // Leaving the Spin screen, or starting a spin, ends editing.
+  useEffect(() => {
+    if (busy && editing) stopEditing();
+  }, [busy, editing, stopEditing]);
+
+  const onMove = useCallback((id: number, to: number) => {
+    const o = [...orderRef.current];
+    const from = o.indexOf(id);
+    if (from < 0 || from === to) return;
+    o.splice(from, 1);
+    o.splice(to, 0, id);
+    orderRef.current = o;
+    setOrder(o);
+    select();
+  }, []);
+  const onDragEnd = useCallback(() => {
+    const o = orderRef.current;
+    const cur = slotsRef.current;
+    if (o.every((id, i) => id === i)) return;
+    void apply(draftOf(o.map((id) => cur[id]).filter((s): s is SlotConfig => !!s)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apply]);
+  const onRemove = useCallback(
+    (id: number) => {
+      select();
+      void apply(draftOf(slotsRef.current.filter((s) => s.slotIndex !== id)));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [apply],
+  );
+  const onTapCell = useCallback((id: number) => {
+    select();
+    setPicker(id === PLUS_ID ? { mode: 'add' } : { mode: 'change', slotIndex: id });
+  }, []);
+  const choose = (category: string) => {
+    const mode = picker;
+    setPicker(null);
+    if (!mode) return;
+    select();
+    const cur = draftOf(slotsRef.current);
+    void apply(mode.mode === 'add' ? [...cur, { category, lockedItemId: null }] : cur.map((d) => (d.from === mode.slotIndex ? { ...d, category } : d)));
+  };
+  const pickerCurrent = picker?.mode === 'change' ? (slots.find((s) => s.slotIndex === picker.slotIndex)?.category ?? null) : null;
+
   return (
     <View ref={wheelsRef} collapsable={false} style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
-      {hiddenCount > 0 ? (
-        <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
-          {hiddenCount === 1 ? '1 more wheel' : `${hiddenCount} more wheels`} when sideways
-        </ThemedText>
-      ) : null}
-
-      <View style={[styles.reels, big && styles.reelsCentered]}>
-        {slots.slice(0, visibleCount).map((s, i) => {
+      <View style={{ height: gridHeight, width: cols * size + (cols - 1) * GAP, alignSelf: 'center' }}>
+        {slots.map((s) => {
           const locked = lockedBySlot.get(s.slotIndex) ?? null;
           const list = candidates.get(s.slotIndex) ?? [];
           const shown = locked ?? landed[s.slotIndex] ?? restingFromLastSpin.get(s.slotIndex) ?? list[0] ?? null;
+          const at = editing ? order.indexOf(s.slotIndex) : s.slotIndex;
           return (
-            <Reel
+            <Cell
               key={s.slotIndex}
-              slot={s}
-              candidates={list}
-              locked={locked}
-              shown={shown}
-              target={targets[s.slotIndex] ?? null}
-              spinToken={token}
-              snapToken={snap}
-              durationMs={durations[s.slotIndex] ?? BASE_MS + i * STAGGER_MS}
-              speed={speeds[s.slotIndex] ?? 1}
-              rowHeight={rowHeight}
-              wide={landscape && !big}
-              width={reelWidth}
-              busy={busy}
-              onSettled={settled}
-              onPlan={planned}
-              onToggleLock={toggleLock}
-            />
+              id={s.slotIndex}
+              index={at < 0 ? s.slotIndex : at}
+              total={total}
+              last={count - 1}
+              cols={cols}
+              size={size}
+              editing={editing}
+              canRemove={count > MIN_SLOTS}
+              canHold={!busy}
+              onHold={startEditing}
+              onTap={onTapCell}
+              onRemove={onRemove}
+              onDragStart={select}
+              onDragMove={onMove}
+              onDragEnd={onDragEnd}>
+              <Reel
+                slot={s}
+                candidates={list}
+                locked={locked}
+                shown={shown}
+                target={targets[s.slotIndex] ?? null}
+                spinToken={token}
+                snapToken={snap}
+                durationMs={durations[s.slotIndex] ?? BASE_MS + s.slotIndex * STAGGER_MS}
+                speed={speeds[s.slotIndex] ?? 1}
+                size={size}
+                editing={editing}
+                busy={busy}
+                onSettled={settled}
+                onPlan={planned}
+                onToggleLock={toggleLock}
+              />
+            </Cell>
           );
         })}
+        {canAdd ? (
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onRemove={onRemove} onDragStart={select} onDragMove={onMove} onDragEnd={onDragEnd}>
+            <View style={{ width: size }}>
+              <View style={styles.labelRow}>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
+                  Add a wheel
+                </ThemedText>
+              </View>
+              <View style={[styles.plus, { width: size, height: size, borderColor: theme.border }]}>
+                <Icon name="add" size={Math.round(size * 0.3)} color={theme.textSecondary} />
+              </View>
+            </View>
+          </Cell>
+        ) : null}
       </View>
+
+      {editing ? (
+        <View style={styles.editBar}>
+          <ThemedText type="small" themeColor="textSecondary" style={[styles.flex, { fontSize: 12, lineHeight: 16 }]}>
+            Tap a wheel to change what it spins. Drag to reorder, or tap the x to remove it.
+          </ThemedText>
+          <Pressable onPress={stopEditing} accessibilityRole="button" accessibilityLabel="Done editing wheels" style={[styles.done, { backgroundColor: theme.accent }]}>
+            <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
+              Done
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : !empty ? (
+        <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
+          Press and hold a wheel to change, reorder or remove it
+        </ThemedText>
+      ) : null}
+      <CategoryPicker
+        visible={!!picker}
+        title={picker?.mode === 'add' ? 'Add a wheel' : 'What does this wheel spin?'}
+        current={pickerCurrent}
+        counts={counts}
+        onChoose={choose}
+        onClose={() => setPicker(null)}
+      />
 
       {why && phase === 'done' ? (
         <View style={[styles.why, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
@@ -649,9 +1002,18 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 const styles = StyleSheet.create({
   machine: { gap: Spacing.three },
   flex: { flex: 1 },
-  reels: { flexDirection: 'row', gap: Spacing.two },
-  reelsCentered: { justifyContent: 'center' },
-  reelCol: { flex: 1, gap: Spacing.two, alignItems: 'stretch' },
+  cell: { position: 'absolute' },
+  labelRow: { height: LABEL_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 3 },
+  labelText: { flex: 1, fontSize: 10, lineHeight: 12, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
+  rowTile: { paddingHorizontal: 5, gap: 3 },
+  remove: { position: 'absolute', left: -6, top: LABEL_H - 8, width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  plus: { borderRadius: Radius.large, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  editBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  done: { borderRadius: 999, paddingHorizontal: 18, paddingVertical: 8, minHeight: 36, justifyContent: 'center' },
+  scrim: { flex: 1, backgroundColor: '#000000B3', alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
+  sheet: { width: '100%', maxWidth: 440, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.four, gap: Spacing.three },
+  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  choice: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
   bezel: { borderRadius: Radius.large, padding: 5 },
   bezelMetal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.large, overflow: 'hidden' },
   window: { borderRadius: Radius.medium, overflow: 'hidden' },

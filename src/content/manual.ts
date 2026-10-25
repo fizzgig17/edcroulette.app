@@ -28,8 +28,9 @@ export const MANUAL: Section[] = [
     title: 'The wheels and spinning',
     body: [
       'Tap Spin to turn the wheels. Each wheel stops at its own time and a little different speed. While they turn the Spin button says Stop; tap it to land every wheel on this spin’s result right away.',
-      'Tap Lock under a wheel to keep the piece it shows. Locked wheels stay put through later spins, so you can lock what you’re definitely carrying and spin for the rest. Tap Lock again to release it.',
-      'On a phone held upright you see the first three wheels; turn the phone sideways to see them all. Wheels that aren’t on screen still pick a piece, they just don’t turn. On an iPad, a tablet or an open foldable all the wheels are always shown, centered, with the Spin button under them.',
+      'Each wheel is a small square window: the piece it landed on in the middle, with a sliver of the pieces above and below. Tap the lock above a wheel to keep the piece it shows. Locked wheels stay put through later spins, so you can lock what you’re definitely carrying and spin for the rest. Tap the lock again to release it.',
+      'All your wheels are always on screen, three across (sideways on a phone they all sit in one row). On an iPad, a tablet or an open foldable the wheels look the same, just bigger.',
+      'To change your wheels, press and hold any wheel. They all start to wiggle like icons on a home screen. Tap a wheel to choose what it spins (you can use the same category on more than one wheel). Drag a wheel to move it. Tap the x on a wheel to remove it; you always keep at least one. If you have fewer than six wheels a + appears in the next empty spot to add one. Tap Done, or tap Spin, when you’re finished.',
     ],
   },
   {
@@ -45,12 +46,6 @@ export const MANUAL: Section[] = [
       'Open Collection and tap + to add a piece. Give it a name, category, brand, model, material, finish and color, and a photo if you like. Typing a brand matches it against a list of popular brands, including common misspellings.',
       'The collection can be shown as a list, a grid or compact rows. Search by name or brand, filter by category with the chips, and tap a piece to see or edit it.',
       'To delete a piece, swipe it left. An Undo bar appears for a few seconds. To remove several at once, press and hold a piece (or tap Select), tick the ones you want, then tap Remove.',
-    ],
-  },
-  {
-    title: 'Settings: wheels',
-    body: [
-      'Settings → Wheels lets you add or remove wheels, drag the grip to reorder them, and tap a wheel’s swap button to change its category. The first three wheels are the ones shown on a phone held upright.',
     ],
   },
   {

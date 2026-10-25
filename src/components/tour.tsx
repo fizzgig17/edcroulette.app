@@ -24,13 +24,13 @@ type Step = {
 
 const STEPS: Step[] = [
   { id: 'welcome', title: 'Welcome to EDC Roulette', body: 'Keep a list of the things you carry, then let the wheels pick today’s everyday carry. This takes about a minute.', route: '/' },
-  { id: 'wheels', title: 'Your wheels', body: 'Each wheel is a category: knife, flashlight, pen and so on. Tap Lock under a wheel to keep what’s on it for the next spin.', route: '/', target: 'wheels' },
+  { id: 'wheels', title: 'Your wheels', body: 'Each square is a wheel for one category: knife, flashlight, pen and so on. Tap the lock above a wheel to keep what’s on it. Press and hold a wheel and they all wiggle: tap one to change what it spins, drag to reorder, tap the x to remove it, or tap + to add another.', route: '/', target: 'wheels' },
   { id: 'spin', title: 'Try a spin', body: 'Tap Spin. The wheels stop at different times, and tapping Stop lands them right away.', route: '/', target: 'spin', expect: 'spin' },
   { id: 'kit', title: 'Today’s carry', body: 'Your result lands here and is remembered. Tap any piece to see its details.', route: '/', target: 'kit' },
   { id: 'tab-collection', title: 'Open your collection', body: 'Tap Collection to see everything you own.', target: 'tab-collection', expect: 'tab-collection' },
   { id: 'collection', title: 'Your collection', body: 'Tap + to add a piece, with a photo if you like. Search and filter by category, swipe a piece left to delete it (you can undo), or press and hold to select several.', route: '/collection' },
   { id: 'tab-settings', title: 'Now Settings', body: 'Tap Settings to make the app yours.', target: 'tab-settings', expect: 'tab-settings' },
-  { id: 'settings', title: 'Make it yours', body: 'Add, remove and reorder wheels, and change what each one covers. Pick the metal for the Spin button and wheel trim, and turn sound on or off.', route: '/settings' },
+  { id: 'settings', title: 'Make it yours', body: 'Pick the metal for the Spin button and wheel trim, and turn sound on or off.', route: '/settings' },
   { id: 'ai', title: 'Optional AI help', body: 'AI help is off until you say yes. Turn it on in Settings to identify a piece from its photo, get brand suggestions, or have a spin pick a set that goes together.', route: '/settings' },
   { id: 'done', title: 'You’re set', body: 'Replay this tour any time from Settings: Show the tour again.', route: '/' },
 ];

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 
 import { checkForUpdate, installedBuild, openStore, updatesSupported } from '@/lib/app-update';
+import { setUpdateDismissed, useUpdateDismissed } from '@/lib/preferences';
 
 export type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'error';
 
@@ -28,7 +29,8 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [announced, setAnnounced] = useState(false);
-  const [dismissed, setDismissed] = useState(0);
+  // Remembered, so a dismissed banner stays away until a newer build comes out.
+  const dismissed = useUpdateDismissed();
   const busy = useRef(false);
   const last = useRef(0);
 
@@ -70,10 +72,10 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       latest,
       version,
       error,
-      bannerVisible: status === 'available' && announced && dismissed !== latest,
+      bannerVisible: status === 'available' && announced && latest > dismissed,
       check,
       openStore,
-      dismissBanner: () => setDismissed(latest),
+      dismissBanner: () => setUpdateDismissed(latest),
     }),
     [status, latest, version, error, announced, dismissed, check],
   );

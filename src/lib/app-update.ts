@@ -11,8 +11,11 @@ import { IS_DEV_BUILD } from '@/lib/env';
 
 const REPO = 'fizzgig17/edcroulette.app';
 const TAG = Platform.OS === 'ios' ? 'ios-prod-latest' : 'android-prod-latest';
-/** The release is published when the build starts or uploads; the store needs a while to offer it. */
-const STORE_DELAY_MS = 30 * 60 * 1000;
+/**
+ * The release is published when the build starts or uploads; the store needs a while to offer it
+ * (Google Play takes much longer than TestFlight, since it processes and may review each upload).
+ */
+const STORE_DELAY_MS = (Platform.OS === 'ios' ? 30 : 180) * 60 * 1000;
 
 export interface UpdateInfo {
   available: boolean;

@@ -121,3 +121,8 @@ export const useTrainingNotes = () => useSyncExternalStore(subscribe, getTrainin
 export const getTourSeen = () => read('edc.tourSeen') === '1';
 export const setTourSeen = (seen: boolean) => write('edc.tourSeen', seen ? '1' : null);
 export const useTourSeen = () => useSyncExternalStore(subscribe, getTourSeen, () => true);
+
+// --- The newest build whose "update available" banner was dismissed -----------------------------
+export const getUpdateDismissed = () => parseInt(read('edc.updateDismissed') ?? '0', 10) || 0;
+export const setUpdateDismissed = (build: number) => write('edc.updateDismissed', String(build));
+export const useUpdateDismissed = () => useSyncExternalStore(subscribe, getUpdateDismissed, () => 0);
