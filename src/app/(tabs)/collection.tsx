@@ -37,7 +37,7 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem } = useGear();
+  const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem, toggleFavorite } = useGear();
   const insets = useSafeAreaInsets();
 
   // Selecting several: press and hold a piece (or tap "Select"), tap to add or remove.
@@ -158,6 +158,8 @@ export default function CollectionScreen() {
     else if (sort === 'brand') list.sort(by((g) => `${g.brand ?? '~'} ${g.name}`));
     else if (sort === 'newest') list.sort((a, b) => b.createdAt - a.createdAt);
     else if (sort === 'lightest') list.sort(by((g) => g.weightGrams ?? 99999));
+    // Starred pieces go first, whatever the sort (the sorts above are stable, so each group keeps its order).
+    if (sort !== 'category') return [...list.filter((g) => g.favorite), ...list.filter((g) => !g.favorite)];
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, query, cats, mats, fins, brands_, source, lockedOnly, sort, slots]);
@@ -215,6 +217,20 @@ export default function CollectionScreen() {
             </ThemedText>
           )}
         </View>
+        {selecting ? null : (
+          <Pressable
+            onPress={() => {
+              select();
+              void toggleFavorite(g.id);
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityState={{ selected: g.favorite }}
+            accessibilityLabel={g.favorite ? `Remove ${g.name} from favorites` : `Make ${g.name} a favorite`}
+            style={styles.star}>
+            <Icon name={g.favorite ? 'starOn' : 'star'} size={18} color={g.favorite ? theme.accent : theme.textSecondary} />
+          </Pressable>
+        )}
         {lockedIds.has(g.id) ? <Icon name="lock" size={14} color={theme.accent} /> : null}
         {g.primaryColor ? <View style={[styles.dot, { backgroundColor: g.primaryColor, borderColor: theme.border }]} /> : null}
         {selecting ? null : <Icon name="chevron" size={14} color={theme.textSecondary} />}
@@ -549,6 +565,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   rowCompact: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 8, paddingHorizontal: Spacing.three },
   flex: { flex: 1 },
+  star: { padding: 4 },
   dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   tile: { width: '30%', alignItems: 'center', gap: 4 },

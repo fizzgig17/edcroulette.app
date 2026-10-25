@@ -19,11 +19,12 @@ import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'exp
 import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
-import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
+import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 
 const STYLES: Record<string, SpinStyle> = { Random: 'random', Coordinated: 'coordinated' };
+const BOOSTS: Record<string, FavoriteBoost> = { Off: 1, Light: 2, Medium: 3, Strong: 5 };
 const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'light', Dark: 'dark' };
 
 /** A small "?" in a circle that shows or hides a plain explanation. */
@@ -134,6 +135,8 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const pref = useThemePref();
   const spinStyle = useSpinStyle();
+  const boost = useFavoriteBoost();
+  const boostName = Object.keys(BOOSTS).find((k) => BOOSTS[k] === boost) ?? 'Light';
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
   const notes = useTrainingNotes();
@@ -188,7 +191,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen title="Settings" tab>
-      <Section title="Spinning" summary={`${styleName} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, and whether it makes noise.">
+      <Section title="Spinning" summary={`${styleName} · favorites ${boost === 1 ? 'off' : `${boost}×`} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, how much stars count, and whether it makes noise.">
         <Card padded={false}>
           <View style={styles.pad}>
             <Label
@@ -200,6 +203,17 @@ export default function SettingsScreen() {
               }
             />
             <ChipGroup options={Object.keys(STYLES)} value={styleName} onChange={(v) => v && setSpinStyle(STYLES[v] ?? 'random')} />
+          </View>
+          <View style={styles.pad}>
+            <Label
+              text="Favorites"
+              info={
+                boost === 1
+                  ? 'Off: starred pieces are listed first but are no more likely than any other to come up.'
+                  : `A starred piece is ${boost} times as likely as an unstarred one to land on its wheel. Locked wheels and coordinated picks aren’t changed.`
+              }
+            />
+            <ChipGroup options={Object.keys(BOOSTS)} value={boostName} onChange={(v) => v && setFavoriteBoost(BOOSTS[v] ?? 2)} />
           </View>
           <ToggleRow
             label="Sound"

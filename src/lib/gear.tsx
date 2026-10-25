@@ -33,6 +33,7 @@ type GearState = {
   addItem: (draft: GearDraft) => Promise<Result & { item?: GearItem }>;
   updateItem: (id: string, draft: GearDraft) => Promise<Result>;
   removeItem: (id: string) => Promise<void>;
+  toggleFavorite: (id: string) => Promise<void>;
   setLock: (slotIndex: number, itemId: string | null) => Promise<void>;
   saveSlots: (slots: SlotDraft[]) => Promise<Result>;
   recordSpin: (picks: SpinPick[]) => Promise<void>;
@@ -40,6 +41,9 @@ type GearState = {
 };
 
 const GearContext = createContext<GearState | null>(null);
+
+const sortGear = (list: GearItem[]) =>
+  [...list].sort((a, b) => a.category.localeCompare(b.category) || Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
 export function GearProvider({ children }: { children: ReactNode }) {
   const sqlite = useSQLiteContext();
@@ -112,6 +116,13 @@ export function GearProvider({ children }: { children: ReactNode }) {
         await db.deleteGear(sqlite, id);
         deletePhoto(before?.imageUri);
         await reload();
+      },
+
+      toggleFavorite: async (id) => {
+        const was = byId.get(id)?.favorite ?? false;
+        await db.setFavorite(sqlite, id, !was);
+        // Same order as the database gives: by category, favorites first, then by name.
+        setItems((prev) => sortGear(prev.map((g) => (g.id === id ? { ...g, favorite: !was } : g))));
       },
 
       setLock: async (slotIndex, itemId) => {

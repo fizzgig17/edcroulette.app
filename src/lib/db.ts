@@ -9,7 +9,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig, type SpinPick, type SpinRecord } from '@/types/models';
 
 export const DATABASE_NAME = 'edc-roulette.db';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 export async function migrate(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -58,6 +58,11 @@ export async function migrate(db: SQLiteDatabase) {
     `);
     version = 2;
   }
+  if (version === 2) {
+    // Favorites.
+    await db.execAsync('ALTER TABLE gear_items ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
+    version = 3;
+  }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
@@ -78,6 +83,7 @@ interface GearRow {
   notes: string | null;
   image_uri: string | null;
   is_sample: number;
+  favorite: number;
   created_at: number;
   updated_at: number;
 }
@@ -95,12 +101,13 @@ const toGear = (r: GearRow): GearItem => ({
   notes: r.notes,
   imageUri: r.image_uri,
   isSample: r.is_sample === 1,
+  favorite: r.favorite === 1,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
 
 export async function listGear(db: SQLiteDatabase): Promise<GearItem[]> {
-  const rows = await db.getAllAsync<GearRow>('SELECT * FROM gear_items ORDER BY category, name COLLATE NOCASE');
+  const rows = await db.getAllAsync<GearRow>('SELECT * FROM gear_items ORDER BY category, favorite DESC, name COLLATE NOCASE');
   return rows.map(toGear);
 }
 
@@ -112,11 +119,11 @@ export async function countGear(db: SQLiteDatabase): Promise<number> {
 
 export async function insertGear(db: SQLiteDatabase, draft: GearDraft): Promise<GearItem> {
   const now = Date.now();
-  const item: GearItem = { ...draft, isSample: draft.isSample ?? false, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
+  const item: GearItem = { ...draft, isSample: draft.isSample ?? false, favorite: draft.favorite ?? false, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
   await db.runAsync(
-    `INSERT INTO gear_items (id, name, brand, model, category, material, finish, primary_color, weight_grams, notes, image_uri, is_sample, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    item.id, item.name, item.brand, item.model, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, item.isSample ? 1 : 0, now, now,
+    `INSERT INTO gear_items (id, name, brand, model, category, material, finish, primary_color, weight_grams, notes, image_uri, is_sample, favorite, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    item.id, item.name, item.brand, item.model, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, item.isSample ? 1 : 0, item.favorite ? 1 : 0, now, now,
   );
   return item;
 }
@@ -128,6 +135,10 @@ export async function updateGear(db: SQLiteDatabase, id: string, draft: GearDraf
      WHERE id = ?`,
     draft.name, draft.brand, draft.model, draft.category, draft.material, draft.finish, draft.primaryColor, draft.weightGrams, draft.notes, draft.imageUri, Date.now(), id,
   );
+}
+
+export async function setFavorite(db: SQLiteDatabase, id: string, favorite: boolean): Promise<void> {
+  await db.runAsync('UPDATE gear_items SET favorite = ? WHERE id = ?', favorite ? 1 : 0, id);
 }
 
 /** Adds the sample drafts (skipping any already loaded) in one go. Returns how many were added. */

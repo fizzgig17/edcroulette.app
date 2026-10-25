@@ -2,8 +2,8 @@
  * The iPad's layout: Spin, Collection and Settings share one screen instead of three tabs.
  *
  * Upright: the wheels and today's carry across the top half; below, Collection on the left and
- * Settings on the right. Sideways: the wheels and today's carry on the left; on the right,
- * Collection and then Settings. Each pane scrolls on its own, and the Spin button stays docked
+ * Settings on the right. Sideways: the wheels and today's carry on the left half; on the right half,
+ * Collection and Settings (one at a time). Each pane scrolls on its own, and the Spin button stays docked
  * at the bottom right (see the tab layout).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -101,7 +101,7 @@ export function Dashboard() {
     <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
-          <Pane basis={Math.round(width * 0.46)} centered topSignal={topSignal}>
+          <Pane centered topSignal={topSignal}>
             <SpinContent />
           </Pane>
           <SideTabs />

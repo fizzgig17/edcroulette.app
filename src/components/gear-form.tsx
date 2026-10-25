@@ -27,7 +27,7 @@ import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
 import { ItemPicker } from '@/components/item-picker';
 import { PhotoCropper } from '@/components/photo-cropper';
-import { deletePhoto, photoBase64, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
+import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
 import { CATEGORIES, FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
@@ -133,6 +133,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     const cached = crops.current.get(index);
     if (cached) return cached;
     const job = (async () => {
+      // Work in the photo's real pixels, not the size the picture on screen reported.
+      dims = (await photoSize(c.stored)) ?? dims;
       const { x, y, w, h } = it.box!;
       const size = Math.min(Math.min(dims.width, dims.height), Math.max(w * dims.width, h * dims.height) * 1.15);
       const crop = { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size };

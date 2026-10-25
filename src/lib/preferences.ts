@@ -48,6 +48,16 @@ export const getSpinStyle = (): SpinStyle => (read('edc.spinStyle') === 'coordin
 export const setSpinStyle = (s: SpinStyle) => write('edc.spinStyle', s);
 export const useSpinStyle = () => useSyncExternalStore(subscribe, getSpinStyle, () => 'random' as SpinStyle);
 
+// --- Favorites: how much more likely a starred piece is to come up (1 = no extra chance) -----
+export const FAVORITE_BOOSTS = [1, 2, 3, 5] as const;
+export type FavoriteBoost = (typeof FAVORITE_BOOSTS)[number];
+export const getFavoriteBoost = (): FavoriteBoost => {
+  const n = Number(read('edc.favoriteBoost'));
+  return (FAVORITE_BOOSTS as readonly number[]).includes(n) ? (n as FavoriteBoost) : 2;
+};
+export const setFavoriteBoost = (n: FavoriteBoost) => write('edc.favoriteBoost', String(n));
+export const useFavoriteBoost = () => useSyncExternalStore(subscribe, getFavoriteBoost, () => 2 as FavoriteBoost);
+
 // --- AI permission: null = not asked yet ------------------------------------------
 export type AiConsent = 'allowed' | 'declined' | null;
 export const getAiConsent = (): AiConsent => {
