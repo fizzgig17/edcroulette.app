@@ -15,6 +15,7 @@ import type { IconName } from '@/constants/icons';
 import { lift, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { tap } from '@/lib/haptics';
+import { useLayoutMode } from '@/lib/layout-mode';
 import { SpinDockProvider, useSpinDock } from '@/lib/spin-dock';
 
 const TAB = 44;
@@ -72,9 +73,14 @@ function Bar() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  // On an iPad everything is on one screen, so only the Spin button is docked.
+  const { dashboard } = useLayoutMode();
   return (
     <View pointerEvents="box-none" style={[styles.barWrap, { bottom: Math.max(insets.bottom, 12) - 4, paddingHorizontal: width > 700 ? width * 0.2 : Spacing.three }]}>
       <View style={styles.row} pointerEvents="box-none">
+        {dashboard ? (
+          <View style={styles.flexSpace} />
+        ) : (
         <View style={[styles.pill, lift(theme.shadow, 3), { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <TabTrigger name="index" asChild>
             <MetalTab icon="spin" label="Spin" />
@@ -86,6 +92,7 @@ function Bar() {
             <MetalTab icon="settings" label="Settings" />
           </TabTrigger>
         </View>
+        )}
         <SpinDock />
       </View>
     </View>
@@ -116,4 +123,5 @@ const styles = StyleSheet.create({
   tab: { alignItems: 'center', gap: 3, minWidth: 64 },
   tabLabel: { fontSize: 10, lineHeight: 12, letterSpacing: 0.4 },
   hidden: { display: 'none' },
+  flexSpace: { flex: 1 },
 });

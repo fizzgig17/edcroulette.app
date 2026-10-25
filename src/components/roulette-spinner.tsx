@@ -12,7 +12,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -36,6 +36,7 @@ import { ensureAiConsent } from '@/lib/ai-consent';
 import { pickCoordinated } from '@/lib/api';
 import { useGear } from '@/lib/gear';
 import { select, success } from '@/lib/haptics';
+import { useLayoutMode } from '@/lib/layout-mode';
 import { PORTRAIT_WHEELS } from '@/lib/limits';
 import { useMetalId, useSpinStyle } from '@/lib/preferences';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
@@ -43,6 +44,8 @@ import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const VISIBLE_ROWS = 3; // one above the payline, the payline, one below
 const BASE_MS = 2200;
+const WHEEL_WIDTH = 118; // about a phone's wheel, upright
+const REEL_GAP = 8; // Spacing.two
 const STAGGER_MS = 500;
 
 type Phase = 'idle' | 'choosing' | 'spinning' | 'done';
@@ -155,6 +158,7 @@ function Reel({
   speed,
   rowHeight,
   wide,
+  width,
   busy,
   onSettled,
   onPlan,
@@ -175,6 +179,8 @@ function Reel({
   rowHeight: number;
   /** Sideways: thumbnail beside the name instead of above it. */
   wide: boolean;
+  /** Big windows: every wheel is this wide (px), whatever the window. */
+  width?: number;
   busy: boolean;
   onSettled: (slotIndex: number) => void;
   /** Tells the screen how far this wheel will turn, so the sound can follow it. */
@@ -283,7 +289,7 @@ function Reel({
   const thumb = Math.round(rowHeight * (wide ? 0.6 : 0.4));
 
   return (
-    <View style={styles.reelCol}>
+    <View style={[styles.reelCol, width ? { width, flex: 0 } : null]}>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.center}>
         {slot.category}
       </ThemedText>
@@ -350,14 +356,16 @@ export interface SpinControl {
 
 export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => void }) {
   const theme = useTheme();
-  const { width, height } = useWindowDimensions();
-  const landscape = width > height;
+  const { height, landscape, big } = useLayoutMode();
+  // Big windows (iPad, open foldable) always show every wheel, at one size, in the middle.
+  const [boxWidth, setBoxWidth] = useState(0);
   const { items, slots, itemById, setLock, recordSpin, lastSpin } = useGear();
   const spinStyle = useSpinStyle();
 
-  const visibleCount = landscape ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
+  const visibleCount = landscape || big ? slots.length : Math.min(slots.length, PORTRAIT_WHEELS);
   const hiddenCount = slots.length - visibleCount;
-  const rowHeight = landscape ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
+  const rowHeight = landscape && !big ? Math.max(56, Math.min(68, Math.round((height - 250) / VISIBLE_ROWS))) : 100;
+  const reelWidth = big ? Math.max(84, Math.min(WHEEL_WIDTH, boxWidth ? Math.floor((boxWidth - REEL_GAP * (visibleCount - 1)) / Math.max(1, visibleCount)) : WHEEL_WIDTH)) : undefined;
 
   const candidates = useMemo(() => {
     const m = new Map<number, GearItem[]>();
@@ -556,14 +564,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   }, [label, caption, spinStyle, busy, empty, onControl]);
 
   return (
-    <View style={styles.machine}>
+    <View style={styles.machine} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
       {hiddenCount > 0 ? (
         <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
           {hiddenCount === 1 ? '1 more wheel' : `${hiddenCount} more wheels`} when sideways
         </ThemedText>
       ) : null}
 
-      <View style={styles.reels}>
+      <View style={[styles.reels, big && styles.reelsCentered]}>
         {slots.slice(0, visibleCount).map((s, i) => {
           const locked = lockedBySlot.get(s.slotIndex) ?? null;
           const list = candidates.get(s.slotIndex) ?? [];
@@ -581,7 +589,8 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               durationMs={durations[s.slotIndex] ?? BASE_MS + i * STAGGER_MS}
               speed={speeds[s.slotIndex] ?? 1}
               rowHeight={rowHeight}
-              wide={landscape}
+              wide={landscape && !big}
+              width={reelWidth}
               busy={busy}
               onSettled={settled}
               onPlan={planned}
@@ -617,6 +626,7 @@ const styles = StyleSheet.create({
   machine: { gap: Spacing.three },
   flex: { flex: 1 },
   reels: { flexDirection: 'row', gap: Spacing.two },
+  reelsCentered: { justifyContent: 'center' },
   reelCol: { flex: 1, gap: Spacing.two, alignItems: 'stretch' },
   bezel: { borderRadius: Radius.large, padding: 5 },
   bezelMetal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.large, overflow: 'hidden' },

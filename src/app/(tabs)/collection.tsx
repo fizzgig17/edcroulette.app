@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear } from '@/lib/gear';
+import { useContentWidth, useEmbedded } from '@/lib/pane';
 import { select, success, tap } from '@/lib/haptics';
 import { setCollectionView, useCollectionView, type CollectionView } from '@/lib/preferences';
 import { CATEGORIES, type GearItem } from '@/types/models';
@@ -114,7 +115,8 @@ export default function CollectionScreen() {
   // Leaving the tab makes the removal final.
   useFocusEffect(useCallback(() => flushPending, [flushPending]));
   // An unfolded Fold, an iPad or a big window: two columns of rows.
-  const wide = useWindowDimensions().width >= 840;
+  const wide = useContentWidth() >= 840;
+  const embedded = useEmbedded();
   const view = useCollectionView();
   const full = ownCount >= maxItems;
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
@@ -259,7 +261,7 @@ export default function CollectionScreen() {
       tab
       footer={
         undoFor || selecting ? (
-          <View style={[styles.floating, { bottom: insets.bottom + 84 }]} pointerEvents="box-none">
+          <View style={[styles.floating, { bottom: embedded ? Spacing.two : insets.bottom + 84 }]} pointerEvents="box-none">
             {undoFor ? <UndoBar text={undoFor.length === 1 ? 'Piece removed' : `${undoFor.length} pieces removed`} onUndo={undoRemove} /> : null}
             {selecting ? (
               <Button
