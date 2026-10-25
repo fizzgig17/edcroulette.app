@@ -26,8 +26,8 @@ import type { GearItem } from '@/types/models';
 const MAX_PIECES = 6;
 const PAD = 18;
 const GAP = 8;
-const GRID_TOP = 96;
-const GRID_H = 296; // room for the tiles between the title and the footer
+const GRID_TOP = 112;
+const GRID_H = 288; // room for the tiles between the title and the footer
 // The card is laid out at 360 x 450 and saved at three times that (1080 x 1350, the 4:5 feed size).
 const W = 360;
 const H = 450;
@@ -111,6 +111,8 @@ function ShareKitSheet({ todays, onClose }: { todays: GearItem[]; onClose: () =>
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(false);
+  const [openCats, setOpenCats] = useState<string[]>([]);
+  const flip = (cat: string) => setOpenCats((o) => (o.includes(cat) ? o.filter((c) => c !== cat) : [...o, cat]));
   const limitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pieces = manual ? chosen.map((id) => items.find((g) => g.id === id)).filter((g): g is GearItem => !!g) : todays.slice(0, MAX_PIECES);
@@ -206,26 +208,44 @@ function ShareKitSheet({ todays, onClose }: { todays: GearItem[]; onClose: () =>
                       </ThemedText>
                     </View>
                   ) : null}
-                  {byCategory.map(([cat, list]) => (
-                    <View key={cat} style={sheet.group}>
-                      <ThemedText type="caption" themeColor="textSecondary" style={sheet.caps}>{cat}</ThemedText>
-                      {list.map((g) => {
-                        const on = chosen.includes(g.id);
-                        return (
-                          <Pressable
-                            key={g.id}
-                            onPress={() => toggle(g.id)}
-                            accessibilityRole="checkbox"
-                            accessibilityState={{ checked: on }}
-                            style={[sheet.pick, { backgroundColor: theme.background, borderColor: on ? theme.accent : theme.border }]}>
-                            <GearThumb item={g} size={36} />
-                            <ThemedText numberOfLines={1} style={sheet.pickName}>{g.name}</ThemedText>
-                            {on ? <Icon name="check" size={18} color={theme.accent} /> : null}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ))}
+                  {byCategory.map(([cat, list]) => {
+                    const isOpen = openCats.includes(cat);
+                    const picked = list.filter((g) => chosen.includes(g.id)).length;
+                    return (
+                      <View key={cat} style={sheet.group}>
+                        <Pressable
+                          onPress={() => flip(cat)}
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: isOpen }}
+                          accessibilityLabel={`${cat}, ${list.length} pieces${picked ? `, ${picked} picked` : ''}`}
+                          style={sheet.groupHead}>
+                          <ThemedText type="smallBold" style={sheet.flex}>
+                            {cat} ({list.length}){picked ? <ThemedText type="small" style={{ color: theme.accent }}>{`  ${picked} picked`}</ThemedText> : null}
+                          </ThemedText>
+                          <View style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }}>
+                            <Icon name="chevron" size={14} color={theme.textSecondary} />
+                          </View>
+                        </Pressable>
+                        {isOpen
+                          ? list.map((g) => {
+                              const on = chosen.includes(g.id);
+                              return (
+                                <Pressable
+                                  key={g.id}
+                                  onPress={() => toggle(g.id)}
+                                  accessibilityRole="checkbox"
+                                  accessibilityState={{ checked: on }}
+                                  style={[sheet.pick, { backgroundColor: theme.background, borderColor: on ? theme.accent : theme.border }]}>
+                                  <GearThumb item={g} size={36} />
+                                  <ThemedText numberOfLines={1} style={sheet.pickName}>{g.name}</ThemedText>
+                                  {on ? <Icon name="check" size={18} color={theme.accent} /> : null}
+                                </Pressable>
+                              );
+                            })
+                          : null}
+                      </View>
+                    );
+                  })}
                   <Pressable onPress={() => { setManual(false); setChosen([]); }} accessibilityRole="button" hitSlop={8} style={sheet.reset}>
                     <ThemedText type="small" style={{ color: theme.accent }}>Use today's carry instead</ThemedText>
                   </Pressable>
@@ -241,12 +261,12 @@ function ShareKitSheet({ todays, onClose }: { todays: GearItem[]; onClose: () =>
 
 const card = StyleSheet.create({
   root: { width: W, height: H, backgroundColor: '#14161A', overflow: 'hidden' },
-  band: { position: 'absolute', left: 0, top: 0, width: W, height: 78 },
-  bandFade: { position: 'absolute', left: 0, top: 0, width: W, height: 78, backgroundColor: 'rgba(20,22,26,0.45)' },
+  band: { position: 'absolute', left: 0, top: 0, width: W, height: 100 },
+  bandFade: { position: 'absolute', left: 0, top: 0, width: W, height: 100, backgroundColor: 'rgba(20,22,26,0.45)' },
   brand: { position: 'absolute', left: PAD, top: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
   icon: { width: 28, height: 28, borderRadius: 7 },
   brandName: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', letterSpacing: 3 },
-  titleBox: { position: 'absolute', left: PAD, right: PAD, top: 52 },
+  titleBox: { position: 'absolute', left: PAD, right: PAD, top: 50 },
   title: { color: '#F2F3F5', fontSize: 34, fontWeight: '800', letterSpacing: 0.5, lineHeight: 38 },
   grid: { position: 'absolute', left: PAD, right: PAD, top: GRID_TOP, height: GRID_H, gap: GAP, justifyContent: 'center' },
   row: { flexDirection: 'row', gap: GAP, justifyContent: 'center' },
@@ -273,6 +293,7 @@ const sheet = StyleSheet.create({
   panelBody: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.three, gap: Spacing.two },
   note: { borderRadius: Radius.small, padding: 10 },
   group: { gap: 6 },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 8 },
   caps: { fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
   pick: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderWidth: 1.5, borderRadius: Radius.medium, padding: 8 },
   pickName: { flex: 1, fontSize: 15 },
