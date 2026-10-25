@@ -16,6 +16,9 @@ export function SiteFooter() {
           © {new Date().getFullYear()} EDC Roulette · {SUPPORT_EMAIL}
         </ThemedText>
         <View style={styles.nav}>
+          <Link href="/manual">
+            <ThemedText type="small" themeColor="textSecondary">Manual</ThemedText>
+          </Link>
           <Link href="/privacy">
             <ThemedText type="small" themeColor="textSecondary">Privacy</ThemedText>
           </Link>

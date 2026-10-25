@@ -507,7 +507,8 @@ export default function SettingsScreen() {
           </ThemedText>
         </Card>
         <Card padded={false}>
-          <LinkRow first label="Privacy policy" href="/privacy" />
+          <LinkRow first label="User manual" href="/manual" />
+          <LinkRow label="Privacy policy" href="/privacy" />
           <LinkRow label="Terms of use" href="/terms" />
           <LinkRow label="Help and support" href="/support" />
         </Card>
