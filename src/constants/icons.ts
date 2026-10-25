@@ -13,6 +13,8 @@ export const Icons = {
   lock: icon('lock.fill', 'lock'),
   unlock: icon('lock.open', 'lock_open'),
   add: icon('plus', 'add'),
+  help: icon('questionmark.circle', 'help'),
+  helpOn: icon('questionmark.circle.fill', 'help'),
   camera: icon('camera', 'photo_camera'),
   photo: icon('photo', 'image'),
   trash: icon('trash', 'delete'),
