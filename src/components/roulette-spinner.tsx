@@ -53,7 +53,7 @@ import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
 
 const BASE_MS = 2200;
 const GAP = 10; // between wheels, sideways and down
-const LABEL_H = 22; // the category name and lock above each window
+const LABEL_H = 26; // the category name and lock above each window
 const BEZEL = 4; // the metal trim around a window
 const PLUS_ID = 999; // the empty slot shown while editing
 const STAGGER_MS = 500;
@@ -307,11 +307,11 @@ function Reel({
           <Pressable
             onPress={() => onToggleLock(slot.slotIndex, isLocked ? null : shown)}
             disabled={!canLock}
-            hitSlop={10}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={isLocked ? `Unlock ${slot.category}` : `Lock ${shown?.name ?? slot.category}`}
-            style={({ pressed }) => [!canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
-            <Icon name={isLocked ? 'lock' : 'unlock'} size={15} color={isLocked ? theme.accent : theme.textSecondary} />
+            style={({ pressed }) => [styles.lockHit, !canLock && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}>
+            <Icon name={isLocked ? 'lock' : 'unlock'} size={18} color={isLocked ? theme.accent : theme.textSecondary} />
           </Pressable>
         ) : null}
       </View>
@@ -1052,6 +1052,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   cell: { position: 'absolute' },
   labelRow: { height: LABEL_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 3 },
+  lockHit: { width: 40, height: 36, marginRight: -10, marginVertical: -6, alignItems: 'center', justifyContent: 'center' },
   labelText: { flex: 1, fontSize: 10, lineHeight: 12, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
   rowTile: { paddingHorizontal: 5, gap: 3 },
   remove: { position: 'absolute', left: -6, top: LABEL_H - 8, width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
