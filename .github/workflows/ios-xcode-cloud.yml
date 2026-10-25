@@ -45,6 +45,10 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: app.json
+          sparse-checkout-cone-mode: false
       - name: Start the Xcode Cloud build
         id: start
         run: |
