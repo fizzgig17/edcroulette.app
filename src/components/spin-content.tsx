@@ -62,7 +62,7 @@ export function SpinContent() {
       <RouletteSpinner onControl={setControl} />
       {big ? (
         <View style={styles.spinRow}>
-          <SpinButton size={112} inline />
+          <SpinButton size={240} height={64} inline />
         </View>
       ) : null}
       {wideKit ? null : emptyCard}

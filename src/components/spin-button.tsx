@@ -9,7 +9,7 @@ import { useSpinDock } from '@/lib/spin-dock';
  * The round metal Spin button. Docked in the tab bar on phones; on bigger windows it sits just
  * under the wheels instead (`inline`), where it can't be missed.
  */
-export function SpinButton({ size = 84, inline }: { size?: number; inline?: boolean }) {
+export function SpinButton({ size = 84, height, inline }: { size?: number; height?: number; inline?: boolean }) {
   const { control, scrollToTop } = useSpinDock();
   const pathname = usePathname();
   const onSpinTab = inline || pathname === '/' || pathname === '/index';
@@ -27,8 +27,8 @@ export function SpinButton({ size = 84, inline }: { size?: number; inline?: bool
       accessibilityLabel={control?.label ?? 'Spin'}
       accessibilityState={{ disabled: off, busy: !!control?.busy }}
       style={({ pressed }) => [off && { opacity: 0.55 }, pressed && { transform: [{ scale: 0.96 }] }]}>
-      <MetalDisc size={size} turning={!!control?.busy}>
-        <DiscLabel icon={control?.icon === 'sparkle' ? 'sparkle' : undefined} label="Spin" size={size} />
+      <MetalDisc size={size} height={height} turning={!!control?.busy}>
+        <DiscLabel icon={control?.icon === 'sparkle' ? 'sparkle' : undefined} label="Spin" size={height ?? size} />
       </MetalDisc>
     </Pressable>
   );

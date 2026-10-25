@@ -97,7 +97,7 @@ export function Dashboard() {
     <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
-          <Pane flex={1.15} centered topSignal={topSignal}>
+          <Pane flex={1} centered topSignal={topSignal}>
             <SpinContent />
           </Pane>
           <SideTabs />
