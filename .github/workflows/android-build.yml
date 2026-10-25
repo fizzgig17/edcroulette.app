@@ -220,6 +220,7 @@ jobs:
       # Remember this release so the next one that day gets the next number.
       - name: Tag the release
         if: steps.play.outputs.go == 'true'
+        continue-on-error: true
         run: |
           git tag "android-$ANDROID_VERSION"
           git push origin "android-$ANDROID_VERSION"
