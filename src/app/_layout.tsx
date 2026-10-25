@@ -6,7 +6,8 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
+import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DevBanner } from '@/components/dev-banner';
@@ -42,6 +43,15 @@ function HideSplashWhenLoaded() {
 export default function RootLayout() {
   const [fatal, setFatal] = useState<Error | null>(lastFatalError);
   useEffect(() => onFatalError(setFatal), []);
+  // Android no longer lets you switch the home-screen icon. A phone that still has one of the old metal icons switched on goes back to the four-metal icon, once.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !supportsAlternateIcons) return;
+    try {
+      if (getAppIconName()) void setAlternateAppIcon(null).catch(() => undefined);
+    } catch {
+      // Nothing to reset.
+    }
+  }, []);
   useEffect(() => {
     if (fatal) SplashScreen.hideAsync();
   }, [fatal]);
