@@ -2,9 +2,8 @@ import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
-import { Alert, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
-import { DragReorder } from '@/components/drag-reorder';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -14,9 +13,8 @@ import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
-import { useGear, type SlotDraft } from '@/lib/gear';
+import { useGear } from '@/lib/gear';
 import { select } from '@/lib/haptics';
-import { MIN_SLOTS, PORTRAIT_WHEELS } from '@/lib/limits';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
@@ -24,118 +22,9 @@ import { useUpdate } from '@/lib/update-context';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
-import { CATEGORIES } from '@/types/models';
 
 const STYLES: Record<string, SpinStyle> = { Random: 'random', Coordinated: 'coordinated' };
 const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'light', Dark: 'dark' };
-
-function WheelsEditor({ onDragChange }: { onDragChange: (dragging: boolean) => void }) {
-  const theme = useTheme();
-  const { slots, saveSlots, maxSlots } = useGear();
-  const [picking, setPicking] = useState<number | null>(null);
-
-  const apply = async (next: SlotDraft[]) => {
-    const r = await saveSlots(next);
-    if (!r.ok) Alert.alert('Wheels', r.error);
-  };
-  const current = (): SlotDraft[] => slots.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex }));
-
-  function add() {
-    select();
-    const used = new Set(slots.map((s) => s.category));
-    void apply([...current(), { category: CATEGORIES.find((c) => !used.has(c)) ?? 'Other', lockedItemId: null }]);
-  }
-  function removeAt(i: number) {
-    select();
-    void apply(current().filter((_, k) => k !== i));
-  }
-  function choose(category: string) {
-    if (picking === null) return;
-    select();
-    void apply(current().map((d, k) => (k === picking ? { ...d, category } : d)));
-    setPicking(null);
-  }
-
-  return (
-    <Card>
-      <View style={styles.stepper}>
-        <View style={styles.flex}>
-          <ThemedText type="smallBold">Wheels</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Upright shows the first {PORTRAIT_WHEELS}; sideways shows all. Drag ≡ to reorder.
-          </ThemedText>
-        </View>
-        <View style={styles.inline}>
-          <SmallIcon icon="minus" label="Fewer wheels" onPress={() => removeAt(slots.length - 1)} disabled={slots.length <= MIN_SLOTS} />
-          <ThemedText type="heading" style={styles.count}>
-            {slots.length}
-          </ThemedText>
-          <SmallIcon icon="add" label="More wheels" onPress={add} disabled={slots.length >= maxSlots} />
-        </View>
-      </View>
-      <DragReorder
-        onDragChange={onDragChange}
-        items={slots}
-        keyOf={(s) => String(s.slotIndex)}
-        direction="column"
-        itemSize={56}
-        gap={8}
-        onReorder={(next) => void apply(next.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex })))}
-        renderItem={(s, i, grip) => (
-          <View style={[styles.wheel, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-            <View {...grip} accessibilityRole="adjustable" accessibilityLabel={`${s.category} wheel. Drag to reorder.`} style={styles.gripArea}>
-              <Icon name="grip" size={20} color={theme.textSecondary} />
-            </View>
-            <Pressable
-              onPress={() => setPicking(i)}
-              accessibilityRole="button"
-              accessibilityLabel={`${s.category}. Change what this wheel spins.`}
-              style={({ pressed }) => [styles.wheelName, pressed && { opacity: 0.6 }]}>
-              <View style={styles.flex}>
-                <ThemedText type="smallBold" style={styles.wheelTitle}>
-                  {s.category}
-                </ThemedText>
-                {i >= PORTRAIT_WHEELS ? (
-                  <ThemedText type="caption" themeColor="textSecondary" style={styles.sub}>
-                    Sideways only
-                  </ThemedText>
-                ) : null}
-              </View>
-              <View style={[styles.swap, { backgroundColor: theme.accentSoft }]}>
-                <Icon name="swap" size={15} color={theme.accent} />
-              </View>
-            </Pressable>
-            <SmallIcon icon="trash" label={`Remove ${s.category} wheel`} onPress={() => removeAt(i)} disabled={slots.length <= MIN_SLOTS} />
-          </View>
-        )}
-      />
-      <Modal visible={picking !== null} transparent animationType="fade" onRequestClose={() => setPicking(null)}>
-        <Pressable style={styles.scrim} onPress={() => setPicking(null)} accessibilityLabel="Close">
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => undefined}>
-            <ThemedText type="heading">What does this wheel spin?</ThemedText>
-            <View style={styles.tiles}>
-              {CATEGORIES.map((c) => {
-                const on = picking !== null && slots[picking]?.category === c;
-                return (
-                  <Pressable
-                    key={c}
-                    onPress={() => choose(c)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    style={({ pressed }) => [styles.tile, { backgroundColor: on ? theme.accent : theme.backgroundElement, borderColor: on ? theme.accent : theme.border }, pressed && { opacity: 0.7 }]}>
-                    <ThemedText type="smallBold" style={{ color: on ? theme.onAccent : theme.text }}>
-                      {c}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </Card>
-  );
-}
 
 /** A small "?" in a circle that shows or hides a plain explanation. */
 function InfoDot({ on, onPress, label }: { on: boolean; onPress: () => void; label: string }) {
@@ -228,15 +117,6 @@ function Section({ title, summary, info, defaultOpen, children }: { title: strin
   );
 }
 
-function SmallIcon({ icon, label, onPress, disabled }: { icon: 'up' | 'down' | 'trash' | 'minus' | 'add'; label: string; onPress: () => void; disabled?: boolean }) {
-  const theme = useTheme();
-  return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} hitSlop={6} style={[styles.small, { backgroundColor: theme.backgroundElement }, disabled && { opacity: 0.3 }]}>
-      <Icon name={icon} size={14} color={theme.text} />
-    </Pressable>
-  );
-}
-
 function LinkRow({ label, href, first }: { label: string; href: Href; first?: boolean }) {
   const theme = useTheme();
   return (
@@ -256,7 +136,6 @@ export default function SettingsScreen() {
   const spinStyle = useSpinStyle();
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
-  const [holding, setHolding] = useState(false);
   const notes = useTrainingNotes();
   const [noteText, setNoteText] = useState('');
   const [noteKey, setNoteKey] = useState(0);
@@ -308,15 +187,7 @@ export default function SettingsScreen() {
   const themeName = Object.keys(THEMES).find((k) => THEMES[k] === pref) ?? 'Match phone';
 
   return (
-    <Screen title="Settings" tab scrollEnabled={!holding}>
-      <Section
-        title="Wheels"
-        defaultOpen
-        summary="Add, remove and reorder"
-        info="Each wheel picks one piece from a category when you spin. Add or remove wheels, drag the grip to reorder them, tap a wheel's category to change it, and lock a wheel to keep its piece through spins.">
-        <WheelsEditor onDragChange={setHolding} />
-      </Section>
-
+    <Screen title="Settings" tab>
       <Section title="Spinning" summary={`${styleName} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, and whether it makes noise.">
         <Card padded={false}>
           <View style={styles.pad}>

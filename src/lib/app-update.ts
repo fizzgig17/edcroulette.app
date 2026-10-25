@@ -1,17 +1,28 @@
 /**
  * "Is there a newer version?" for the store builds (TestFlight on iOS, Google Play on Android).
- * Neither store has a public lookup, so each production build publishes a GitHub release
- * (ios-prod-latest / android-prod-latest) whose body has "build: <number>" and "version: <x>" lines.
- * The app compares that build number with its own. Development builds never check.
+ * Android asks Google Play directly (a small native module, plugins/with-play-update.js), so it
+ * only says "update" when Play really has a newer build for this install.
+ * TestFlight has no public lookup, so each iOS production build publishes a GitHub release
+ * (ios-prod-latest) whose body has "build: <number>" and "version: <x>" lines. The app compares
+ * that build number with its own. Development builds never check.
  */
 import Constants from 'expo-constants';
-import { Linking, Platform } from 'react-native';
+import { Linking, NativeModules, Platform } from 'react-native';
 
 import { IS_DEV_BUILD } from '@/lib/env';
 
 const REPO = 'fizzgig17/edcroulette.app';
-const TAG = Platform.OS === 'ios' ? 'ios-prod-latest' : 'android-prod-latest';
-/** The release is published when the build starts or uploads; the store needs a while to offer it. */
+const TAG = 'ios-prod-latest';
+
+interface PlayAnswer {
+  available: boolean;
+  versionCode: number;
+  installedVersionCode: number;
+}
+const play: { checkForUpdate: () => Promise<PlayAnswer> } | undefined = Platform.OS === 'android' ? NativeModules.InAppUpdate : undefined;
+/**
+ * The release is published when the build starts or uploads; the store needs a while to offer it
+ */
 const STORE_DELAY_MS = 30 * 60 * 1000;
 
 export interface UpdateInfo {
@@ -28,7 +39,7 @@ export function installedBuild(): number {
 }
 
 /** Production installs from a store that know their own build number. */
-export const updatesSupported = (Platform.OS === 'ios' || Platform.OS === 'android') && !IS_DEV_BUILD && installedBuild() > 0;
+export const updatesSupported = (Platform.OS === 'ios' || (Platform.OS === 'android' && !!play)) && !IS_DEV_BUILD && installedBuild() > 0;
 
 export function parseRelease(rel: { name?: string; body?: string } | null): { build: number; version: string } | null {
   const text = `${rel?.name ?? ''}\n${rel?.body ?? ''}`;
@@ -40,6 +51,16 @@ export function parseRelease(rel: { name?: string; body?: string } | null): { bu
 
 export async function checkForUpdate(): Promise<UpdateInfo> {
   const installed = installedBuild();
+  if (Platform.OS === 'android') {
+    if (!play) throw new Error('Updates are managed by Google Play.');
+    try {
+      const r = await play.checkForUpdate();
+      return { available: !!r.available, latest: r.versionCode || 0, version: '', installed: r.installedVersionCode || installed };
+    } catch {
+      // Play only answers for installs that came from Google Play.
+      throw new Error('Google Play has no update information for this install.');
+    }
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12000);
   try {
