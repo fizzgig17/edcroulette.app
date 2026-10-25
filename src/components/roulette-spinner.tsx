@@ -2,7 +2,7 @@
  * The wheels: one vertical wheel per slot, up to six. Locked wheels never turn
  * and always land on their locked piece. Unlocked wheels land on a random piece
  * of their category, or on a set that goes well together when the spin style is
- * "Coordinated" (an AI picks; see lib/api.ts). They stop left to right with soft
+ * "Coordinated" (an AI picks; see lib/api.ts). They stop in a random order with soft
  * tick sounds, and the result is recorded as today's carry.
  *
  * Portrait shows the first three wheels; sideways shows them all. Wheels that
@@ -72,7 +72,7 @@ export const OVERSHOOT = 0.16; // rows past the stop before it settles back, lik
 export const SETTLE_MS = 240;
 const TICK_ROWS = 10; // the fewest rows a wheel travels
 const ROWS_PER_MS = 0.0047; // about the same speed on every wheel
-/** How long one wheel turns: left to right, but each with its own friction, so they never stop in lockstep. */
+/** How long one wheel turns: a random place in the stopping order, each with its own friction, so they never stop in lockstep. */
 const turnMs = (index: number) => (BASE_MS + index * STAGGER_MS) * (0.88 + Math.random() * 0.24);
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -482,8 +482,10 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     });
     pending.current = new Set(moving);
     const times: Record<number, number> = {};
-    slots.forEach((s, index) => {
-      times[s.slotIndex] = turnMs(index);
+    // Each turning wheel gets a random place in the stopping order, not left to right.
+    const places = shuffle(moving.map((_, k) => k));
+    moving.forEach((slotIndex, k) => {
+      times[slotIndex] = turnMs(places[k] ?? k);
     });
     setDurations(times);
     plans.current.clear();
@@ -500,7 +502,6 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
     // The wheels tick as they turn. If one never reports back (the app was
     // backgrounded, say), land everything once the longest turn should be over.
-    const lastIndex = Math.max(0, slots.findIndex((s) => s.slotIndex === moving[moving.length - 1]));
     timers.current.forEach(clearTimeout);
     timers.current = [
       setTimeout(() => {
@@ -508,7 +509,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         setSnap((n) => n + 1);
         stopAllSounds();
         void finish();
-      }, Math.max(...moving.map((m) => times[m] ?? 0), BASE_MS + lastIndex * STAGGER_MS) + SETTLE_MS + 1800),
+      }, Math.max(...moving.map((m) => times[m] ?? 0)) + SETTLE_MS + 1800),
     ];
   }, [phase, spinStyle, items.length, slots, lockedBySlot, candidates, visibleCount, finish]);
 
