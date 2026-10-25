@@ -1019,7 +1019,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
         </View>
       ) : !empty ? (
         <ThemedText type="caption" themeColor="textSecondary" style={[styles.center, styles.tiny]}>
-          Press and hold a wheel to change, reorder or remove it
+          Tap a wheel to lock it. Press and hold to change, reorder or remove.
         </ThemedText>
       ) : null}
       <CategoryPicker
