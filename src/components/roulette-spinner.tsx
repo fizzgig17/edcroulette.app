@@ -372,6 +372,7 @@ function Cell({
   onTap,
   onToggle,
   onRemove,
+  version,
   onDragStart,
   onDragMove,
   onDrop,
@@ -388,6 +389,8 @@ function Cell({
   plus?: boolean;
   canRemove: boolean;
   canHold: boolean;
+  /** Changes whenever the saved wheels are renumbered (a wheel's contents move to a different cell). */
+  version: number;
   children: ReactNode;
   onHold: () => void;
   onTap: (id: number) => void;
@@ -415,16 +418,28 @@ function Cell({
   slotY.value = target.y;
 
   // Slide to a new place when the order changes (not the one being dragged, which follows the finger).
+  // When the wheels are saved they are renumbered, so this cell now holds a different wheel that already sits where
+  // it was dropped: jump straight to the place instead of sliding across the others.
+  const seenVersion = useRef(version);
+  const renumbered = seenVersion.current !== version;
+  seenVersion.current = version;
   useEffect(() => {
     if (first.current) {
       first.current = false;
+      return;
+    }
+    if (renumbered) {
+      cancelAnimation(x);
+      cancelAnimation(y);
+      x.value = target.x;
+      y.value = target.y;
       return;
     }
     if (lift.value) return;
     x.value = withTiming(target.x, { duration: 200 });
     y.value = withTiming(target.y, { duration: 200 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.x, target.y]);
+  }, [target.x, target.y, renumbered]);
 
   // Wiggle like a home-screen icon, each wheel a little out of step.
   useEffect(() => {
@@ -586,8 +601,8 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
 
   const { saveSlots, maxSlots } = useGear();
   const [editing, setEditing] = useState(false);
-  const [order, setOrder] = useState<number[]>([]);
-  const orderRef = useRef<number[]>([]);
+  const [order, setOrder] = useState<number[]>(() => slots.map((_, i) => i));
+  const orderRef = useRef<number[]>(order);
   const savingOrder = useRef('');
   const [picker, setPicker] = useState<{ mode: 'change'; slotIndex: number } | { mode: 'add' } | null>(null);
   const [fullWidth, setFullWidth] = useState(0);
@@ -828,6 +843,13 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   // --- Rearranging the wheels ------------------------------------------------------------
   const slotsRef = useRef(slots);
   slotsRef.current = slots;
+  // Counts each time the saved wheels change, so the cells know their contents were renumbered.
+  const slotsSeen = useRef(slots);
+  const slotsVersion = useRef(0);
+  if (slotsSeen.current !== slots) {
+    slotsSeen.current = slots;
+    slotsVersion.current += 1;
+  }
   const counts = useMemo(() => {
     const m = new Map<string, number>();
     for (const g of items) m.set(g.category, (m.get(g.category) ?? 0) + 1);
@@ -872,11 +894,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     [commitOrder],
   );
   // Whenever the wheels change, the editing order starts over from them.
-  useEffect(() => {
+  // (Done during the render itself, so the wheels never draw one frame with new contents in the old order.)
+  const [orderFor, setOrderFor] = useState(slots);
+  if (orderFor !== slots) {
     const o = slots.map((_, i) => i);
     orderRef.current = o;
+    setOrderFor(slots);
     setOrder(o);
-  }, [slots]);
+  }
   useEffect(() => () => setScrollLocked(false), []);
   const startEditing = useCallback(() => {
     tap();
@@ -963,6 +988,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               editing={editing}
               canRemove={count > MIN_SLOTS}
               canHold={!busy}
+              version={slotsVersion.current}
               onHold={startEditing}
               onTap={onTapCell}
               onToggle={toggleSlot}
@@ -991,7 +1017,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} version={slotsVersion.current} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
