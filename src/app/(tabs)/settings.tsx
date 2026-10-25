@@ -150,10 +150,8 @@ function InfoDot({ on, onPress, label }: { on: boolean; onPress: () => void; lab
       accessibilityRole="button"
       accessibilityLabel={`About ${label}`}
       accessibilityState={{ expanded: on }}
-      style={[styles.dot, { borderColor: on ? theme.accent : theme.textSecondary, backgroundColor: on ? theme.accent : 'transparent' }]}>
-      <ThemedText type="caption" style={{ color: on ? '#FFFFFF' : theme.textSecondary, fontSize: 11, fontWeight: '600', lineHeight: 14 }}>
-        ?
-      </ThemedText>
+      style={styles.dot}>
+      <Icon name={on ? 'helpOn' : 'help'} size={19} color={on ? theme.accent : theme.textSecondary} />
     </Pressable>
   );
 }
@@ -529,7 +527,7 @@ const styles = StyleSheet.create({
   sectionTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 36, justifyContent: 'flex-end' },
   sectionBody: { gap: Spacing.three },
   summary: { flex: 1, textAlign: 'right' },
-  dot: { width: 17, height: 17, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   infoBox: { padding: Spacing.two, borderRadius: Radius.medium },
   labelWrap: { gap: Spacing.two },
   note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.one },
