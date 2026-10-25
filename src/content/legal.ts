@@ -42,6 +42,7 @@ export const PRIVACY: Section[] = [
     title: 'What we don’t do',
     body: [
       'The current version has no account and no sign-in. It has no advertising, no analytics or tracking, and we do not sell or share data.',
+      'Share kit makes a picture on your phone and hands it to the share sheet. It is sent only where you choose, by you; we never receive it.',
     ],
   },
   {

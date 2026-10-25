@@ -14,6 +14,7 @@ export const Icons = {
   unlock: icon('lock.open', 'lock_open'),
   add: icon('plus', 'add'),
   help: icon('questionmark.circle', 'help'),
+  share: icon('square.and.arrow.up', 'share'),
   helpOn: icon('questionmark.circle.fill', 'help'),
   camera: icon('camera', 'photo_camera'),
   photo: icon('photo', 'image'),

@@ -36,6 +36,7 @@ export const MANUAL: Section[] = [
     title: 'Today’s carry',
     body: [
       'Under the wheels, Today’s carry lists the pieces from your last spin, and the app remembers it until you spin again. Tap a piece to see its details. If you haven’t spun yet it says so; if pieces from the last spin were removed from your collection it asks you to spin again.',
+      'Share kit (iPhone and Android) turns the kit into a picture card with your metal across the top, ready for social media. Tap Share kit, then Share picture and choose where it goes. Choose pieces lets you put together your own kit from your collection (up to six) instead of using the last spin. The card is made on your phone; nothing is sent anywhere until you pick a place in the share sheet.',
     ],
   },
   {

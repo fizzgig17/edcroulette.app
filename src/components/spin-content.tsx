@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { GearThumb } from '@/components/gear-thumb';
 import { SpinButton } from '@/components/spin-button';
+import { ShareKitButton } from '@/components/share-kit';
 import { RouletteSpinner } from '@/components/roulette-spinner';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -77,6 +78,7 @@ export function SpinContent() {
               {when(lastSpin.spunAt)}
             </ThemedText>
           </View>
+          <ShareKitButton todays={lastSpin.picks.map((p) => itemById(p.itemId)).filter((g): g is GearItem => !!g)} />
           <View style={styles.grid}>
             {rowsOf(lastSpin.picks, wideKit).map((row, r) => (
               <View key={r} style={styles.gridRow}>
