@@ -151,7 +151,7 @@ function InfoDot({ on, onPress, label }: { on: boolean; onPress: () => void; lab
       accessibilityLabel={`About ${label}`}
       accessibilityState={{ expanded: on }}
       style={[styles.dot, { borderColor: on ? theme.accent : theme.textSecondary, backgroundColor: on ? theme.accent : 'transparent' }]}>
-      <ThemedText type="caption" style={{ color: on ? '#FFFFFF' : theme.textSecondary, fontWeight: '700', lineHeight: 15 }}>
+      <ThemedText type="caption" style={{ color: on ? '#FFFFFF' : theme.textSecondary, fontSize: 11, fontWeight: '600', lineHeight: 14 }}>
         ?
       </ThemedText>
     </Pressable>
@@ -200,19 +200,18 @@ function Section({ title, summary, info, defaultOpen, children }: { title: strin
   const theme = useTheme();
   const [open, setOpen] = useState(!!defaultOpen);
   const [help, setHelp] = useState(false);
+  const toggle = () => {
+    select();
+    setOpen((o) => !o);
+  };
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <Pressable
-          onPress={() => {
-            select();
-            setOpen((o) => !o);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={title}
-          accessibilityState={{ expanded: open }}
-          style={styles.sectionTitle}>
+        <Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ expanded: open }} hitSlop={{ top: 8, bottom: 8 }}>
           <ThemedText type="heading">{title}</ThemedText>
+        </Pressable>
+        {info ? <InfoDot on={help} onPress={() => setHelp((v) => !v)} label={title} /> : null}
+        <Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={`${title} ${open ? 'collapse' : 'expand'}`} style={styles.sectionTitle}>
           {!open && summary ? (
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.summary}>
               {summary}
@@ -224,7 +223,6 @@ function Section({ title, summary, info, defaultOpen, children }: { title: strin
             <Icon name="chevron" size={14} color={theme.textSecondary} />
           </View>
         </Pressable>
-        {info ? <InfoDot on={help} onPress={() => setHelp((v) => !v)} label={title} /> : null}
       </View>
       {help && info ? <InfoBox text={info} /> : null}
       {open ? <View style={styles.sectionBody}>{children}</View> : null}
@@ -281,7 +279,10 @@ export default function SettingsScreen() {
   const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
   const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
-  const version = `${Constants.expoConfig?.version ?? '?'} (${Constants.expoConfig?.ios?.buildNumber ?? 'dev'})`;
+  const builtOn = Constants.expoConfig?.extra?.buildDate as string | undefined;
+  const builtText = builtOn && /^\d{4}-\d{2}-\d{2}$/.test(builtOn) ? new Date(`${builtOn}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+  const buildNo = Platform.OS === 'ios' ? (Constants.expoConfig?.ios?.buildNumber ?? 'dev') : (Constants.expoConfig?.android?.versionCode ?? 'dev');
+  const version = `${Constants.expoConfig?.version ?? '?'} (${buildNo})${builtText ? ` · Built ${builtText}` : ''}`;
 
   function erase() {
     Alert.alert('Erase everything?', `This deletes all ${items.length} items, their photos, your wheels and spin history from this phone. It can't be undone.`, [
@@ -524,11 +525,11 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   section: { gap: Spacing.two },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  sectionTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 36 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  sectionTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 36, justifyContent: 'flex-end' },
   sectionBody: { gap: Spacing.three },
   summary: { flex: 1, textAlign: 'right' },
-  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 17, height: 17, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   infoBox: { padding: Spacing.two, borderRadius: Radius.medium },
   labelWrap: { gap: Spacing.two },
   note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.one },

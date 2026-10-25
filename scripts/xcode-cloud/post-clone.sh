@@ -47,6 +47,8 @@ node -e '
   const ios = (app.expo.ios = app.expo.ios || {});
   if (process.env.CI_BUILD_NUMBER) ios.buildNumber = String(process.env.CI_BUILD_NUMBER);
   if (process.env.CI_TEAM_ID) ios.appleTeamId = process.env.CI_TEAM_ID;
+  // Shown next to the build number in Settings (US Eastern date of the build).
+  app.expo.extra = { ...(app.expo.extra || {}), buildDate: new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }) };
   if (process.argv[1] !== "production") {
     // Only the display name: changing expo.name would rename the Xcode project
     // the Xcode Cloud workflow points at.
