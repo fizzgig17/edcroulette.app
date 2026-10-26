@@ -95,3 +95,23 @@ export function ensureCategories(names: readonly string[]) {
   for (const n of names) if (!PRESETS.includes(n) && !custom.some((c) => same(c, n)) && s.list.length + custom.length - s.custom.length < MAX_CATEGORIES) custom.push(n);
   if (hidden.length !== s.hidden.length || custom.length !== s.custom.length) save({ hidden, custom });
 }
+
+/** Brings back every built-in category the person removed. Their own categories stay. */
+export function restoreCategories() {
+  const s = current();
+  if (s.hidden.length) save({ hidden: [], custom: s.custom });
+}
+
+/** Removes the built-in categories nothing uses (no pieces, no wheels). Returns how many went. */
+export function removeUnusedBuiltIns(inUse: (name: string) => boolean): number {
+  const s = current();
+  const drop = PRESETS.filter((c) => c !== 'Other' && !s.hidden.includes(c) && !inUse(c));
+  if (drop.length) save({ hidden: [...s.hidden, ...drop], custom: s.custom });
+  return drop.length;
+}
+
+/** Back to the built-in list: every built-in returns, and the person's own go unless pieces or wheels use them. */
+export function resetCategories(inUse: (name: string) => boolean) {
+  const s = current();
+  save({ hidden: [], custom: s.custom.filter(inUse) });
+}

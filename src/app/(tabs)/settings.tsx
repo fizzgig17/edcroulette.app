@@ -21,7 +21,7 @@ import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { SAMPLE_GEAR } from '@/content/sample-gear';
-import { addCategory, ensureCategories, MAX_CATEGORY_CHARS, removeCategory, useCategories, useRemovedCategories } from '@/lib/categories';
+import { addCategory, ensureCategories, isBuiltIn, MAX_CATEGORY_CHARS, removeCategory, removeUnusedBuiltIns, resetCategories, restoreCategories, useCategories, useRemovedCategories } from '@/lib/categories';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 
@@ -92,6 +92,13 @@ function CategoriesEditor() {
     const r = removeCategory(c, { pieces: pieces.get(c) ?? 0, wheels: slots.filter((s) => s.category === c).length });
     setError(r.ok ? null : r.error);
   };
+  const inUse = (c: string) => (pieces.get(c) ?? 0) > 0 || slots.some((s) => s.category === c);
+  const customInUnused = cats.some((c) => !isBuiltIn(c) && !inUse(c));
+  const dropStarters = () => {
+    select();
+    const n = removeUnusedBuiltIns(inUse);
+    setError(n ? null : 'Every starter category is in use by a piece or a wheel, so none can be removed yet.');
+  };
   const add = () => {
     const r = addCategory(text);
     if (r.ok) {
@@ -103,7 +110,7 @@ function CategoriesEditor() {
   };
   return (
     <Card>
-      <Label text="Your categories" info="These are the choices for a piece’s category and for what a wheel spins. Remove the ones you don’t use, or add your own. A category can only be removed once no pieces or wheels use it. Other always stays." />
+      <Label text="Your categories" info="These are the choices for a piece’s category and for what a wheel spins. Remove the ones you don’t use (even the starter ones), or add your own. Restore starters brings the starter ones back; Reset also drops your own categories that nothing uses. A category can only be removed once no pieces or wheels use it. Other always stays." />
       <View style={styles.cats}>
         {cats.map((c) => (
           <View key={c} style={[styles.catChip, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -143,6 +150,11 @@ function CategoriesEditor() {
           </View>
         </>
       ) : null}
+      <View style={styles.cats}>
+        {cats.some((c) => isBuiltIn(c) && c !== 'Other' && !inUse(c)) ? <Button label="Remove unused starters" variant="secondary" onPress={dropStarters} /> : null}
+        {removed.length > 0 ? <Button label="Restore starters" variant="secondary" onPress={() => { select(); restoreCategories(); setError(null); }} /> : null}
+        {removed.length > 0 || customInUnused ? <Button label="Reset categories" variant="secondary" onPress={() => { select(); resetCategories(inUse); setError(null); }} /> : null}
+      </View>
     </Card>
   );
 }
