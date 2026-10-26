@@ -25,6 +25,13 @@ export const MANUAL: Section[] = [
     ],
   },
   {
+    title: 'Cutout photos',
+    body: [
+      'When a photo has one clear item, EDC Roulette can show it cut out and set at an angle on a plain background, so every piece looks alike. Settings → Photos picks the default style, the angle (diagonal, upright or as photographed) and the background color.',
+      'To change a single item, open it: choose Original or Cutout, and use Turn left, Turn right and Reset to fine-tune the angle. The cutting and turning happen on your phone and your original photo is never changed.',
+    ],
+  },
+  {
     title: 'The wheels and spinning',
     body: [
       'Tap Spin to turn the wheels. Each wheel stops at its own time and a little different speed. While they turn the Spin button says Stop; tap it to land every wheel on this spin’s result right away.',

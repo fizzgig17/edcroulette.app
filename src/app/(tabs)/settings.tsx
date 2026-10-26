@@ -20,6 +20,7 @@ import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'exp
 import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
+import { setCutoutBg, setCutoutLook, setPhotoStyle, useCutoutBg, useCutoutLook, usePhotoStyle } from '@/lib/preferences';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { SAMPLE_GEAR } from '@/content/sample-gear';
 import { addCategory, ensureCategories, isBuiltIn, MAX_CATEGORY_CHARS, removeCategory, removeUnusedBuiltIns, resetCategories, restoreCategories, useCategories, useRemovedCategories } from '@/lib/categories';
@@ -27,6 +28,9 @@ import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 
 const STYLES: Record<string, SpinStyle> = { Random: 'random', Coordinated: 'coordinated' };
+const PHOTO_STYLES: Record<string, 'cutout' | 'original'> = { Cutout: 'cutout', Original: 'original' };
+const CUT_LOOKS: Record<string, 'diagonal' | 'upright' | 'asis'> = { Diagonal: 'diagonal', Upright: 'upright', 'As photographed': 'asis' };
+const CUT_BGS: Record<string, 'gray' | 'charcoal' | 'light'> = { Gray: 'gray', Charcoal: 'charcoal', Light: 'light' };
 const BOOSTS: Record<string, FavoriteBoost> = { Off: 1, Light: 2, Medium: 3, Strong: 5 };
 const THEMES: Record<string, ThemePref> = { 'Match phone': 'system', Light: 'light', Dark: 'dark' };
 
@@ -225,6 +229,12 @@ export default function SettingsScreen() {
   const pref = useThemePref();
   const spinStyle = useSpinStyle();
   const boost = useFavoriteBoost();
+  const photoStyle = usePhotoStyle();
+  const cutLook = useCutoutLook();
+  const cutBg = useCutoutBg();
+  const photoStyleName = Object.keys(PHOTO_STYLES).find((k) => PHOTO_STYLES[k] === photoStyle) ?? 'Cutout';
+  const cutLookName = Object.keys(CUT_LOOKS).find((k) => CUT_LOOKS[k] === cutLook) ?? 'Diagonal';
+  const cutBgName = Object.keys(CUT_BGS).find((k) => CUT_BGS[k] === cutBg) ?? 'Gray';
   const boostName = Object.keys(BOOSTS).find((k) => BOOSTS[k] === boost) ?? 'Light';
   const sound = useSoundOn();
   const metal = metalById(useMetalId());
@@ -347,6 +357,23 @@ export default function SettingsScreen() {
               if (v) landSound();
             }}
           />
+        </Card>
+      </Section>
+
+      <Section title="Photos" summary={`${photoStyleName}${photoStyle === 'cutout' ? ` · ${cutLookName.toLowerCase()}` : ''}`} info="How item photos are shown. Cutout shows just the item, set at an angle on a plain background, so everything looks alike. You can change any single item on its edit screen.">
+        <Card padded={false}>
+          <View style={styles.pad}>
+            <Label text="Photo style" info="Cutout shows an item cut out from its photo when the photo has one clear item. Original always shows the whole photo." />
+            <ChipGroup options={Object.keys(PHOTO_STYLES)} value={photoStyleName} onChange={(v) => v && setPhotoStyle(PHOTO_STYLES[v] ?? 'cutout')} />
+          </View>
+          <View style={styles.pad}>
+            <Label text="Cutout angle" info="How items are turned. Diagonal sets each one at a slant, upright stands it up, as photographed keeps your angle. Fine-tune any item on its edit screen." />
+            <ChipGroup options={Object.keys(CUT_LOOKS)} value={cutLookName} onChange={(v) => v && setCutoutLook(CUT_LOOKS[v] ?? 'diagonal')} />
+          </View>
+          <View style={styles.pad}>
+            <Label text="Cutout background" info="The plain color behind a cutout." />
+            <ChipGroup options={Object.keys(CUT_BGS)} value={cutBgName} onChange={(v) => v && setCutoutBg(CUT_BGS[v] ?? 'gray')} />
+          </View>
         </Card>
       </Section>
 

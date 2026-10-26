@@ -5,12 +5,13 @@
  */
 import * as Crypto from 'expo-crypto';
 import { log } from '@/lib/log';
+import type { Cutout } from '@/lib/cutout';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig, type SpinPick, type SpinRecord } from '@/types/models';
 
 export const DATABASE_NAME = 'edc-roulette.db';
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 export async function migrate(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -68,6 +69,11 @@ export async function migrate(db: SQLiteDatabase) {
     await db.execAsync('ALTER TABLE gear_items ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
     version = 3;
   }
+  if (version === 3) {
+    // Photos shown cut out on a plain background: a per-piece choice and the outline.
+    await db.execAsync('ALTER TABLE gear_items ADD COLUMN photo_style TEXT; ALTER TABLE gear_items ADD COLUMN cutout TEXT;');
+    version = 4;
+  }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
@@ -89,8 +95,21 @@ interface GearRow {
   image_uri: string | null;
   is_sample: number;
   favorite: number;
+  photo_style: string | null;
+  cutout: string | null;
   created_at: number;
   updated_at: number;
+}
+
+function parseCutout(raw: string | null): Cutout | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as { outline?: unknown; turn?: unknown };
+    const ok = Array.isArray(v.outline) && v.outline.length >= 4 && v.outline.every((p) => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number');
+    return ok ? { outline: v.outline as [number, number][], turn: typeof v.turn === 'number' ? v.turn : 0 } : null;
+  } catch {
+    return null;
+  }
 }
 
 const toGear = (r: GearRow): GearItem => ({
@@ -107,6 +126,8 @@ const toGear = (r: GearRow): GearItem => ({
   imageUri: r.image_uri,
   isSample: r.is_sample === 1,
   favorite: r.favorite === 1,
+  photoStyle: r.photo_style === 'original' || r.photo_style === 'cutout' ? r.photo_style : null,
+  cutout: parseCutout(r.cutout),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -124,11 +145,11 @@ export async function countGear(db: SQLiteDatabase): Promise<number> {
 
 export async function insertGear(db: SQLiteDatabase, draft: GearDraft): Promise<GearItem> {
   const now = Date.now();
-  const item: GearItem = { ...draft, isSample: draft.isSample ?? false, favorite: draft.favorite ?? false, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
+  const item: GearItem = { ...draft, isSample: draft.isSample ?? false, favorite: draft.favorite ?? false, photoStyle: draft.photoStyle ?? null, cutout: draft.cutout ?? null, id: Crypto.randomUUID(), createdAt: now, updatedAt: now };
   await db.runAsync(
-    `INSERT INTO gear_items (id, name, brand, model, category, material, finish, primary_color, weight_grams, notes, image_uri, is_sample, favorite, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    item.id, item.name, item.brand, item.model, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, item.isSample ? 1 : 0, item.favorite ? 1 : 0, now, now,
+    `INSERT INTO gear_items (id, name, brand, model, category, material, finish, primary_color, weight_grams, notes, image_uri, is_sample, favorite, photo_style, cutout, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    item.id, item.name, item.brand, item.model, item.category, item.material, item.finish, item.primaryColor, item.weightGrams, item.notes, item.imageUri, item.isSample ? 1 : 0, item.favorite ? 1 : 0, item.photoStyle, item.cutout ? JSON.stringify(item.cutout) : null, now, now,
   );
   return item;
 }
@@ -136,9 +157,9 @@ export async function insertGear(db: SQLiteDatabase, draft: GearDraft): Promise<
 export async function updateGear(db: SQLiteDatabase, id: string, draft: GearDraft): Promise<void> {
   await db.runAsync(
     // Editing a sample piece makes it the person's own (it stays when samples are removed).
-    `UPDATE gear_items SET name = ?, brand = ?, model = ?, category = ?, material = ?, finish = ?, primary_color = ?, weight_grams = ?, notes = ?, image_uri = ?, is_sample = 0, updated_at = ?
+    `UPDATE gear_items SET name = ?, brand = ?, model = ?, category = ?, material = ?, finish = ?, primary_color = ?, weight_grams = ?, notes = ?, image_uri = ?, photo_style = ?, cutout = ?, is_sample = 0, updated_at = ?
      WHERE id = ?`,
-    draft.name, draft.brand, draft.model, draft.category, draft.material, draft.finish, draft.primaryColor, draft.weightGrams, draft.notes, draft.imageUri, Date.now(), id,
+    draft.name, draft.brand, draft.model, draft.category, draft.material, draft.finish, draft.primaryColor, draft.weightGrams, draft.notes, draft.imageUri, draft.photoStyle ?? null, draft.cutout ? JSON.stringify(draft.cutout) : null, Date.now(), id,
   );
 }
 

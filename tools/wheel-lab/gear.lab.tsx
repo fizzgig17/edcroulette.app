@@ -11,7 +11,7 @@ import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig
 export type Result = { ok: true } | { ok: false; error: string };
 export type SlotDraft = { category: string; lockedItemId: string | null; from?: number };
 
-const ITEMS: GearItem[] = SAMPLE_GEAR.map((d, i) => ({ ...d, id: `lab-${i}`, isSample: true, favorite: false, createdAt: i, updatedAt: i }) as GearItem);
+const ITEMS: GearItem[] = SAMPLE_GEAR.map((d, i) => ({ ...d, id: `lab-${i}`, isSample: true, favorite: false, photoStyle: null, cutout: null, createdAt: i, updatedAt: i }) as GearItem);
 
 const Ctx = createContext<ReturnType<typeof build> | null>(null);
 

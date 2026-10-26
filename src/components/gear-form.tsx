@@ -28,7 +28,7 @@ import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
 import { PhotoFlow } from '@/components/photo-flow';
 import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
-import { useAiConsent } from '@/lib/preferences';
+import { useAiConsent, usePhotoStyle } from '@/lib/preferences';
 import { getCategories, useCategories } from '@/lib/categories';
 import { log, logError } from '@/lib/log';
 import { FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
@@ -44,6 +44,15 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const theme = useTheme();
   const { addItem, updateItem, removeItem } = useGear();
   const aiConsent = useAiConsent();
+  const defaultPhotoStyle = usePhotoStyle();
+  const turnCutout = (by: number, reset = false) => {
+    setDraft((d) => {
+      if (!d.cutout) return d;
+      const t = reset ? 0 : (((d.cutout.turn + by) % 360) + 360) % 360;
+      return { ...d, cutout: { ...d.cutout, turn: t > 180 ? t - 360 : t } };
+    });
+    log('photo.cutout.turn', { reset });
+  };
   const categories = useCategories();
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
@@ -121,6 +130,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     }
     if (stale()) return;
     log('photo.lookup', { found: found.length });
+    // One clean object: it can be shown cut out right away (the photo is already framed on it).
+    if (found.length === 1 && found[0]?.outline) setDraft((d) => (d.imageUri === stored ? { ...d, cutout: { outline: found[0]!.outline as [number, number][], turn: 0 } } : d));
     if (found.length > 1) {
       setBatch({ stored, items: found, done: [], current: null });
       setPicking(true);
@@ -190,6 +201,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
 
   /** The photo of just one item from a multi-item photo: cropped, with the others blurred. Made once, then kept. */
   const crops = useRef(new Map<number, Promise<string | null>>());
+  // Each item's outline in its own cropped photo (for showing it cut out), made along with the crop.
+  const cropOutlines = useRef(new Map<number, [number, number][] | null>());
   function cropFor(index: number, dims: { width: number; height: number }): Promise<string | null> {
     const c = batch;
     const it = c?.items[index];
@@ -204,6 +217,11 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       const size = Math.min(Math.min(dims.width, dims.height), Math.max(w * dims.width, h * dims.height) * 1.15);
       const crop = { originX: (x + w / 2) * dims.width - size / 2, originY: (y + h / 2) * dims.height - size / 2, size };
       const stored = await savePhoto({ uri, width: dims.width, height: dims.height }, crop, 720);
+      // Where the crop really landed (it can't hang over the photo's edge), to move the outline into the cropped photo.
+      const cs = Math.max(1, Math.round(Math.min(crop.size, dims.width, dims.height)));
+      const cx = Math.max(0, Math.min(dims.width - cs, Math.round(crop.originX)));
+      const cy = Math.max(0, Math.min(dims.height - cs, Math.round(crop.originY)));
+      cropOutlines.current.set(index, it.outline && it.tight && it.outlineSource === 'object finder' ? it.outline.map(([ox, oy]) => [(ox * dims.width - cx) / cs, (oy * dims.height - cy) / cs] as [number, number]) : null);
       setNewPhotos((p) => [...p, stored]);
       // The other items are blurred (the background stays sharp), before the photo is shown,
       // or a copy already on screen would stay as it was.
@@ -237,7 +255,9 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     let own: string = c.stored;
     try {
       own = (await cropFor(index, dims)) ?? c.stored;
-      set('imageUri', own);
+      const outline = own === c.stored ? null : (cropOutlines.current.get(index) ?? null);
+      setDraft((d) => ({ ...d, imageUri: own, cutout: outline ? { outline, turn: 0 } : null, photoStyle: null }));
+      log('photo.cutout', { has: !!outline });
     } finally {
       setPreparing(false);
     }
@@ -335,7 +355,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       try {
         const stored = await savePhoto(photo, crop);
         setNewPhotos((p) => [...p, stored]);
-        set('imageUri', stored);
+        setDraft((d) => ({ ...d, imageUri: stored, cutout: null, photoStyle: null }));
         void runIdentify(stored, { own: true, picker: false });
       } catch (e) {
         Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
@@ -358,7 +378,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         return;
       }
       setNewPhotos((p) => [...p, stored]);
-      set('imageUri', stored);
+      setDraft((d) => ({ ...d, imageUri: stored, cutout: null, photoStyle: null }));
       void startLookup(stored);
     } catch (e) {
       logError('photo.save.fail', e);
@@ -480,7 +500,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       />
 
       <View style={styles.photo}>
-        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri }} size={132} />
+        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri, cutout: draft.cutout, photoStyle: draft.photoStyle }} size={132} />
         <View style={styles.photoButtons}>
           <Button label="Take photo" icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} style={styles.flex} />
           <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} style={styles.flex} />
@@ -488,7 +508,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         {draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
           <View style={styles.photoButtons}>
             {aiConsent !== 'declined' ? <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!, { own: true, picker: false })} disabled={identify.state === 'working'} style={styles.flex} /> : null}
-            <Button label="Remove photo" icon="close" variant="ghost" onPress={() => set('imageUri', null)} style={styles.flex} />
+            <Button label="Remove photo" icon="close" variant="ghost" onPress={() => setDraft((d) => ({ ...d, imageUri: null, cutout: null, photoStyle: null }))} style={styles.flex} />
           </View>
         ) : (
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
@@ -497,6 +517,23 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
               : 'Start with a photo and EDC Roulette fills in the type, brand, model, material and color for you to check.'}
           </ThemedText>
         )}
+        {draft.cutout && draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
+          <View style={styles.photoStyle}>
+            <ChipGroup
+              options={STYLE_LABELS}
+              value={draft.photoStyle === 'original' ? 'Original' : draft.photoStyle === 'cutout' ? 'Cutout' : 'Default'}
+              onChange={(v) => v && setDraft((d) => ({ ...d, photoStyle: v === 'Original' ? 'original' : v === 'Cutout' ? 'cutout' : null }))}
+              small
+            />
+            {(draft.photoStyle ?? defaultPhotoStyle) === 'cutout' ? (
+              <View style={styles.photoButtons}>
+                <Button label="Turn left" variant="ghost" onPress={() => turnCutout(-15)} style={styles.flex} />
+                <Button label="Turn right" variant="ghost" onPress={() => turnCutout(15)} style={styles.flex} />
+                <Button label="Reset" variant="ghost" onPress={() => turnCutout(0, true)} style={styles.flex} />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         {isDemo ? (
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
             Demo photo: the answers are ready-made. Nothing is sent anywhere and nothing is saved to your collection.
@@ -621,10 +658,13 @@ function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPre
   );
 }
 
+const STYLE_LABELS = ['Default', 'Original', 'Cutout'] as const;
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center' },
   photo: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
+  photoStyle: { alignSelf: 'stretch', gap: Spacing.two },
   photoButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   banner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },

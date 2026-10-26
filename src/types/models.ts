@@ -1,3 +1,5 @@
+import type { Cutout, PhotoStyle } from '@/lib/cutout';
+
 /**
  * Data shapes shared by the phone database, the screens and (later) the cloud
  * sync. Keep them backend-agnostic: the SQLite rows and the Supabase `edc`
@@ -34,11 +36,15 @@ export interface GearItem {
   isSample: boolean;
   /** Starred by the person: listed first, and a little more likely to come up in a spin. */
   favorite: boolean;
+  /** How this piece's photo is shown: null follows the default chosen in Settings. */
+  photoStyle: PhotoStyle | null;
+  /** Its outline, for showing the piece cut out on a plain background (null when there is no clean outline). */
+  cutout: Cutout | null;
   createdAt: number;
   updatedAt: number;
 }
 
-export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt' | 'isSample' | 'favorite'> & { isSample?: boolean; favorite?: boolean };
+export type GearDraft = Omit<GearItem, 'id' | 'createdAt' | 'updatedAt' | 'isSample' | 'favorite' | 'photoStyle' | 'cutout'> & { isSample?: boolean; favorite?: boolean; photoStyle?: PhotoStyle | null; cutout?: Cutout | null };
 
 export interface SlotConfig {
   slotIndex: number;
