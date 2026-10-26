@@ -18,12 +18,12 @@ const MAX_ZOOM = 5;
 export function PhotoCropper({ photo, onCancel, onDone }: { photo: PickedPhoto | null; onCancel: () => void; onDone: (photo: PickedPhoto, crop: PhotoCrop) => void }) {
   return (
     <Modal visible={!!photo} animationType="slide" onRequestClose={onCancel}>
-      <GestureHandlerRootView style={styles.root}>{photo ? <Cropper photo={photo} onCancel={onCancel} onDone={onDone} /> : null}</GestureHandlerRootView>
+      <GestureHandlerRootView style={styles.root}>{photo ? <CropperView photo={photo} onCancel={onCancel} onDone={onDone} /> : null}</GestureHandlerRootView>
     </Modal>
   );
 }
 
-function Cropper({ photo, onCancel, onDone }: { photo: PickedPhoto; onCancel: () => void; onDone: (photo: PickedPhoto, crop: PhotoCrop) => void }) {
+export function CropperView({ photo, onCancel, onDone }: { photo: PickedPhoto; onCancel: () => void; onDone: (photo: PickedPhoto, crop: PhotoCrop) => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const view = Math.min(width - Spacing.three * 2, 420);

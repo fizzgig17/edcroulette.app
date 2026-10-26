@@ -37,14 +37,14 @@ export function ItemPicker({
 }) {
   return (
     <Modal visible={!!uri && !!items} animationType="slide" onRequestClose={onCancel}>
-      {uri && items ? <Picker uri={uri} items={items} done={done} onCancel={onCancel} onChoose={onChoose} onPreview={onPreview} /> : null}
+      {uri && items ? <PickerView uri={uri} items={items} done={done} onCancel={onCancel} onChoose={onChoose} onPreview={onPreview} /> : null}
     </Modal>
   );
 }
 
 const label = (it: Identified) => [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category;
 
-function Picker({ uri, items, done, onCancel, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
+export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
