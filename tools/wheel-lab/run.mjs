@@ -99,7 +99,7 @@ const centre = async (loc) => {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width, h: b.height };
 };
 
-// Screenshots at every size, with the default four wheels and with six.
+// Screenshots at every size, with the default three wheels and with six.
 const SIZES = [
   { name: 'phone', width: 390, height: 844 },
   { name: 'phone-landscape', width: 844, height: 390 },
@@ -121,7 +121,7 @@ for (const size of SIZES) {
 const phone = SIZES[0];
 {
   const { ctx, page } = await open(phone);
-  check('four starting wheels', (await wheels(page).count()) === 4, (await order(page)).join(', '));
+  check('three starting wheels', (await wheels(page).count()) === 3, (await order(page)).join(', '));
 
   // Tap a wheel to lock it, again to unlock.
   const first = wheels(page).first();
@@ -168,7 +168,7 @@ const phone = SIZES[0];
   await page.mouse.up();
   await page.waitForTimeout(400);
   const removes = await page.locator('[aria-label="Remove this wheel"]').count();
-  check('press and hold starts editing (x on every wheel)', removes === 4, `${removes} x buttons`);
+  check('press and hold starts editing (x on every wheel)', removes === 3, `${removes} x buttons`);
   check('a + appears for the next empty slot', (await page.getByText('Add a wheel').count()) > 0);
   await page.screenshot({ path: `${SHOTS}/phone-editing.png` });
 
@@ -202,7 +202,7 @@ const phone = SIZES[0];
   check('each wheel keeps its piece when rearranged', Object.keys(spun).every((k) => afterMove[k] === spun[k]), JSON.stringify(Object.keys(spun).filter((k) => afterMove[k] !== spun[k])));
 
   // Edit again: change a wheel's category, remove one, add one.
-  c = await centre(wheels(page).nth(3));
+  c = await centre(wheels(page).nth(2));
   await page.mouse.move(c.x, c.y);
   await page.mouse.down();
   await page.waitForTimeout(800);
@@ -216,9 +216,9 @@ const phone = SIZES[0];
 
   await page.locator('[aria-label="Remove this wheel"]').first().click({ force: true });
   await page.waitForTimeout(700);
-  check('x removes a wheel', (await wheels(page).count()) === 3, `${await wheels(page).count()} wheels`);
+  check('x removes a wheel', (await wheels(page).count()) === 2, `${await wheels(page).count()} wheels`);
 
-  for (const cat of ['Watch', 'Keychain', 'Pry bar']) {
+  for (const cat of ['Watch', 'Multi-tool', 'Pry bar', 'Flashlight']) {
     await page.getByText('Add a wheel').first().click({ force: true });
     await page.waitForTimeout(400);
     if (!(await page.getByRole('button', { name: new RegExp(`^${cat}`) }).count())) await page.screenshot({ path: `${SHOTS}/debug-add-${cat}.png` });

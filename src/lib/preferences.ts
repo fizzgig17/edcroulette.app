@@ -32,6 +32,10 @@ function write(key: string, value: string | null) {
   listeners.forEach((l) => l());
 }
 
+/** For other small stores that live beside the preferences (see lib/categories.ts). */
+export const readPref = read;
+export const writePref = write;
+
 const subscribe = (cb: () => void) => {
   listeners.add(cb);
   return () => listeners.delete(cb);
@@ -136,3 +140,5 @@ export const useTourSeen = () => useSyncExternalStore(subscribe, getTourSeen, ()
 export const getUpdateDismissed = () => parseInt(read('edc.updateDismissed') ?? '0', 10) || 0;
 export const setUpdateDismissed = (build: number) => write('edc.updateDismissed', String(build));
 export const useUpdateDismissed = () => useSyncExternalStore(subscribe, getUpdateDismissed, () => 0);
+
+export { subscribe as subscribePrefs };

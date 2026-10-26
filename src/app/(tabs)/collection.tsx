@@ -21,7 +21,8 @@ import { useGear } from '@/lib/gear';
 import { useContentWidth, useEmbedded } from '@/lib/pane';
 import { select, success, tap } from '@/lib/haptics';
 import { setCollectionView, useCollectionView, type CollectionView } from '@/lib/preferences';
-import { CATEGORIES, type GearItem } from '@/types/models';
+import { useCategories } from '@/lib/categories';
+import type { GearItem } from '@/types/models';
 
 type Source = 'all' | 'mine' | 'samples';
 type Sort = 'category' | 'name' | 'brand' | 'newest' | 'lightest';
@@ -131,7 +132,8 @@ export default function CollectionScreen() {
   const [sort, setSort] = useState<Sort>('category');
   const [sheet, setSheet] = useState(false);
 
-  const categories = useMemo(() => [...CATEGORIES.filter((c) => items.some((g) => g.category === c)), ...uniq(items.map((g) => g.category)).filter((c) => !(CATEGORIES as readonly string[]).includes(c))], [items]);
+  const myCategories = useCategories();
+  const categories = useMemo(() => [...myCategories.filter((c) => items.some((g) => g.category === c)), ...uniq(items.map((g) => g.category)).filter((c) => !myCategories.includes(c))], [items, myCategories]);
   const materials = useMemo(() => uniq(items.map((g) => g.material)), [items]);
   const finishes = useMemo(() => uniq(items.map((g) => g.finish)), [items]);
   const brands = useMemo(() => uniq(items.map((g) => g.brand)), [items]);

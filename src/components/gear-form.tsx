@@ -1,5 +1,5 @@
 import { router, Stack } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Buffer } from 'buffer';
 import { File, Paths } from 'expo-file-system';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
@@ -29,7 +29,8 @@ import { ItemPicker } from '@/components/item-picker';
 import { PhotoCropper } from '@/components/photo-cropper';
 import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
-import { CATEGORIES, FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
+import { getCategories, useCategories } from '@/lib/categories';
+import { FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
 const EMPTY: GearDraft = { name: '', brand: null, model: null, category: 'Knife', material: null, finish: null, primaryColor: null, weightGrams: null, notes: null, imageUri: null };
 
@@ -42,7 +43,16 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const theme = useTheme();
   const { addItem, updateItem, removeItem } = useGear();
   const aiConsent = useAiConsent();
-  const [draft, setDraft] = useState<GearDraft>(() => (item ? { ...item } : { ...EMPTY, category: defaultCategory ?? EMPTY.category }));
+  const categories = useCategories();
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+  const [draft, setDraft] = useState<GearDraft>(() => {
+    if (item) return { ...item };
+    // A new piece starts in the category you came from, or the first one you have.
+    const start = defaultCategory ?? EMPTY.category;
+    return { ...EMPTY, category: getCategories().includes(start) ? start : (getCategories()[0] ?? 'Other') };
+  });
+  const categoryOptions = useMemo(() => (categories.includes(draft.category) ? categories : [...categories, draft.category]), [categories, draft.category]);
   const [weightText, setWeightText] = useState(item?.weightGrams != null ? String(item.weightGrams) : '');
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -189,7 +199,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     };
     const next: GearDraft = {
       ...d,
-      category: (CATEGORIES as readonly string[]).includes(r.category) ? r.category : d.category,
+      // The photo check names one of the built-in categories; if the person removed it, it goes under Other.
+      category: categoriesRef.current.includes(r.category) ? r.category : 'Other',
       brand: fill('brand', brandText),
       model: fill('model', text(r.model)),
       material: fill('material', r.material),
@@ -421,7 +432,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       ) : null}
 
       <Field label="Category">
-        <ChipGroup options={CATEGORIES} value={draft.category as (typeof CATEGORIES)[number]} onChange={(v) => v && set('category', v)} small />
+        <ChipGroup options={categoryOptions} value={draft.category} onChange={(v) => v && set('category', v)} small />
       </Field>
       <Field label="Brand">
         <BrandPicker initial={draft.brand ?? ''} resetKey={formKey} category={draft.category} onChange={(b) => setBrandOrModel({ brand: b })} />

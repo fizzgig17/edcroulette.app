@@ -25,11 +25,11 @@ const IP_LIMIT = Number(Deno.env.get('EDC_AI_IP_DAILY') ?? '150');
 const GLOBAL_LIMIT = Number(Deno.env.get('EDC_AI_GLOBAL_DAILY') ?? '3000');
 const MAX_IMAGE_CHARS = 2_000_000; // base64 characters, about 1.5 MB
 
-const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Other'];
-const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood'];
-const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated'];
+const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Sunglasses', 'Fidget spinner', 'Bag', 'Beads', 'Coin', 'Other'];
+const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood', 'Bronze', 'Silver', 'Nickel', 'Glass', 'Stone', 'Resin', 'Acetate', 'Plastic', 'Leather', 'Nylon', 'Canvas', 'Bone'];
+const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated', 'Brushed', 'Matte', 'Glossy', 'Hammered'];
 
-const SYSTEM = `You help people catalog their everyday-carry (EDC) gear from a photo: pocket knives, flashlights, pens, multi-tools, watches, wallets and keychain items.
+const SYSTEM = `You help people catalog their everyday-carry (EDC) gear from a photo: pocket knives, flashlights, pens, multi-tools, watches, wallets, keychain items, pry bars, sunglasses, fidget spinners, bags, beads (lanyard or paracord beads) and coins (including challenge coins).
 Always answer by calling the report_item tool, once, with one entry in "items" for each separate everyday-carry item you can clearly see (at most three, the most prominent first).
 
 Rules:

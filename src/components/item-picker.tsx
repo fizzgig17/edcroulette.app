@@ -113,6 +113,11 @@ function Picker({ uri, items, done, onCancel, onChoose, onPreview }: { uri: stri
             </Pressable>
           ))}
         </View>
+        {IS_DEV_BUILD && items.some((it) => it.outlineNote) ? (
+          <ThemedText type="small" style={{ color: '#FFFFFF', paddingHorizontal: Spacing.three }}>
+            {`Object finder: ${items.find((it) => it.outlineNote)?.outlineNote}`}
+          </ThemedText>
+        ) : null}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) + Spacing.two }]}>
         <Button label="Use this item" icon="check" big disabled={selected === null || !dims} onPress={() => selected !== null && dims && onChoose(selected, dims)} />
