@@ -49,7 +49,7 @@ function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = tr
 }
 
 /** Sideways, the right-hand side shows Collection or Settings, one at a time. */
-function SideTabs() {
+function SideTabs({ basis }: { basis: number }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
   const [tab, setTab] = useState<'collection' | 'settings'>('collection');
@@ -57,7 +57,7 @@ function SideTabs() {
   const collectionTab = useTourTarget('tab-collection');
   const settingsTab = useTourTarget('tab-settings');
   return (
-    <View style={[styles.side, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
+    <View style={[styles.side, { width: basis, flexGrow: 0, flexShrink: 0 }, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
       <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: `${metal.line}66` }]} accessibilityRole="tablist">
         {(['collection', 'settings'] as const).map((t) => {
           const on = tab === t;
@@ -97,14 +97,16 @@ export function Dashboard() {
   const { width, height } = useWindowDimensions();
   const { topSignal } = useSpinDock();
   const landscape = width > height;
+  // Sideways, the two halves are exactly equal: the window less the padding and the gap between them.
+  const half = Math.floor((width - Spacing.two * 3) / 2);
   return (
     <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
-          <Pane centered topSignal={topSignal}>
+          <Pane centered topSignal={topSignal} basis={half}>
             <SpinContent />
           </Pane>
-          <SideTabs />
+          <SideTabs basis={half} />
         </View>
       ) : (
         <View style={styles.col}>
@@ -138,7 +140,7 @@ const styles = StyleSheet.create({
   tabOn: { color: '#FFFFFF' },
   content: { padding: Spacing.three, paddingBottom: Spacing.six },
   column: { gap: Spacing.three, width: '100%' },
-  centered: { maxWidth: 760, alignSelf: 'center' },
+  centered: { maxWidth: 900, alignSelf: 'center' },
   side: { flex: 1 },
   hidden: { display: 'none' },
   tabs: { flexDirection: 'row', margin: Spacing.three, marginBottom: 0, padding: 3, borderRadius: Radius.medium, borderWidth: 1, gap: 3 },
