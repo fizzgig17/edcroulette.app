@@ -37,7 +37,7 @@ function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = tr
   }, [topSignal]);
   const value = useMemo(() => ({ width: Math.max(0, width - Spacing.three * 2), setOverlay, setScrollEnabled }), [width]);
   return (
-    <View style={[styles.pane, fit ? styles.fit : basis ? { width: basis, flexGrow: 0, flexShrink: 0 } : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View style={[styles.pane, fit ? styles.fit : basis ? { width: basis, flexBasis: basis, flexGrow: 0, flexShrink: 0 } : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <PaneContext.Provider value={value}>
         <ScrollView ref={scroll} style={fit ? styles.fitScroll : undefined} alwaysBounceVertical={false} scrollEnabled={scrollEnabled} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={[styles.column, centered && styles.centered]}>{children}</View>
@@ -57,7 +57,7 @@ function SideTabs({ basis }: { basis: number }) {
   const collectionTab = useTourTarget('tab-collection');
   const settingsTab = useTourTarget('tab-settings');
   return (
-    <View style={[styles.side, { width: basis, flexGrow: 0, flexShrink: 0 }, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
+    <View style={[styles.side, { width: basis, flexBasis: basis, flexGrow: 0, flexShrink: 0 }, styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]}>
       <View style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: `${metal.line}66` }]} accessibilityRole="tablist">
         {(['collection', 'settings'] as const).map((t) => {
           const on = tab === t;
