@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 
+import { log } from '@/lib/log';
 import { readPref, subscribePrefs, writePref } from '@/lib/preferences';
 import { CATEGORIES } from '@/types/models';
 
@@ -41,7 +42,10 @@ function current(): State {
   return state;
 }
 
-const save = (s: Stored) => writePref(KEY, JSON.stringify(s));
+const save = (s: Stored) => {
+  log('categories.save', { removedStarters: s.hidden.length, own: s.custom.length });
+  writePref(KEY, JSON.stringify(s));
+};
 
 /** The categories to offer, in order. */
 export const getCategories = () => current().list;

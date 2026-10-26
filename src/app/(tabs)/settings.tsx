@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
-import { Alert, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, useWindowDimensions, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -12,7 +12,8 @@ import { Card, Input } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { IS_DEV_BUILD } from '@/lib/env';
+import { IS_DEV_BUILD, SUPPORT_EMAIL } from '@/lib/env';
+import { log, logTail } from '@/lib/log';
 import { useGear } from '@/lib/gear';
 import { select } from '@/lib/haptics';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
@@ -246,7 +247,9 @@ export default function SettingsScreen() {
   const follows = useIconFollowsMetal();
   const iconId = appIcon ? appIcon.toLowerCase() : 'mixed';
   const ai = useAiConsent();
-  const { eraseEverything, items, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
+  const { eraseEverything, items, slots, addSamples, removeSamples, sampleCount, ownCount, maxItems } = useGear();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const cats = useCategories();
   const builtOn = Constants.expoConfig?.extra?.buildDate as string | undefined;
   const builtText = builtOn && /^\d{4}-\d{2}-\d{2}$/.test(builtOn) ? new Date(`${builtOn}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
   const buildNo = Platform.OS === 'ios' ? (Constants.expoConfig?.ios?.buildNumber ?? 'dev') : (Constants.expoConfig?.android?.versionCode ?? 'dev');
@@ -255,7 +258,14 @@ export default function SettingsScreen() {
   function erase() {
     Alert.alert('Erase everything?', `This deletes all ${items.length} items, their photos, your wheels and spin history from this phone. It can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Erase', style: 'destructive', onPress: () => void eraseEverything() },
+      {
+        text: 'Erase',
+        style: 'destructive',
+        onPress: () => {
+          log('settings.erase');
+          void eraseEverything();
+        },
+      },
     ]);
   }
 
@@ -265,6 +275,7 @@ export default function SettingsScreen() {
   async function loadSamples() {
     // The samples bring their categories back if you had removed them.
     ensureCategories([...new Set(SAMPLE_GEAR.map((g) => g.category))]);
+    log('settings.samples.load');
     const n = await addSamples();
     Alert.alert('Sample gear', n > 0 ? `Added ${n} sample pieces. They don't count toward your ${maxItems} items, and you can remove them here any time.` : 'The sample gear is already loaded.');
   }
@@ -272,8 +283,30 @@ export default function SettingsScreen() {
   function dropSamples() {
     Alert.alert('Remove sample gear?', `This removes the ${sampleCount} sample pieces. Anything you added yourself, or edited, stays.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => void removeSamples() },
+      { text: 'Remove', style: 'destructive', onPress: () => {
+          log('settings.samples.remove');
+          void removeSamples();
+        },
+      },
     ]);
+  }
+
+  /** Opens the phone's own email app with a message to support: a short summary, then the recent log (no photos, no names of gear). */
+  async function sendLog() {
+    log('log.send');
+    const summary = [
+      `App: EDC Roulette ${version}${IS_DEV_BUILD ? ' (development build)' : ''}`,
+      `Phone: ${Platform.OS} ${String(Platform.Version)}${Platform.OS === 'ios' && Platform.isPad ? ' (iPad)' : ''}, window ${Math.round(winW)}x${Math.round(winH)}`,
+      `Pieces: ${ownCount} own, ${sampleCount} samples. Wheels: ${slots.length}. Categories: ${cats.length}`,
+      `Spin: ${styleName}, favorites ${boost === 1 ? 'off' : `${boost}x`}, sound ${sound ? 'on' : 'off'}. AI help: ${ai === 'allowed' ? 'on' : 'off'}`,
+    ].join('\n');
+    const body = `Please send this email as it is. It has no photos and no names of your gear. You can add a line about what went wrong at the top.\n\n${summary}\n\n--- recent log ---\n${logTail()}`;
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`EDC Roulette log ${version}`)}&body=${encodeURIComponent(body)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('No email app', `Set up an email app on this phone, or write to ${SUPPORT_EMAIL}.`);
+    }
   }
 
   const styleName = Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random';
@@ -384,7 +417,10 @@ export default function SettingsScreen() {
             label="Allow AI help"
             info="Used to identify gear from a photo you choose and to pick coordinated sets. Photos and item details are sent to an AI service (Anthropic’s Claude) and aren’t stored by EDC Roulette. Off by default until you say yes."
             value={ai === 'allowed'}
-            onValueChange={(v) => setAiConsent(v ? 'allowed' : 'declined')}
+            onValueChange={(v) => {
+              log('settings.ai', v ? 'on' : 'off');
+              setAiConsent(v ? 'allowed' : 'declined');
+            }}
           />
         </Card>
 
@@ -490,6 +526,13 @@ export default function SettingsScreen() {
           <LinkRow label="Privacy policy" href="/privacy" />
           <LinkRow label="Terms of use" href="/terms" />
           <LinkRow label="Help and support" href="/support" />
+        </Card>
+        <Card>
+          <Label text="Send log" info="If something isn't working, this opens your email app with a message to support and the app's recent activity (what you did and any errors) filled in. It has no photos and no names of your gear. Nothing is sent until you press send in your email app." />
+          <ThemedText type="small" themeColor="textSecondary">
+            Having a problem? Send support a log. It opens your email app with the message ready.
+          </ThemedText>
+          <Button label="Send log" icon="share" variant="secondary" onPress={() => void sendLog()} />
         </Card>
       </Section>
 

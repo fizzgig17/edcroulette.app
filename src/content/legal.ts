@@ -35,6 +35,7 @@ export const PRIVACY: Section[] = [
       'Identify from a photo (asks first, can be turned off in Settings): the photo you chose, along with any short notes you wrote under “Teach the photo check” in Settings, is sent to our server, which passes it to an AI service (Anthropic’s Claude) to work out what the item is, and sends back the type, brand, model, material, finish and color. We do not store the photo or the answer. We keep only a daily count per random device number and per network address (both scrambled so they can’t be read back) to stop abuse.',
       'Coordinated spins (asks first, can be turned off in Settings): when you choose the “Coordinated” spin style, the text details of the pieces in your wheels (names, brands, models, materials, finishes and colors, no photos) are sent the same way so the AI can pick pieces that go well together. Nothing is stored.',
       'Update check: the store versions of the app ask GitHub (api.github.com) for a short note holding the newest build number, so the app can tell you when an update is available. Nothing about you or your collection is sent with that request, but, as with any request, GitHub can see the phone’s network address. Development builds never do this.',
+      'Activity log (only if you choose “Send log” in Settings): the app keeps a short log on your phone of what happened recently (steps like adding a photo or spinning, counts, and any errors; never photos or the names, brands or notes of your gear). It stays on your phone. If you tap “Send log”, your own email app opens with the recent part of the log and a short summary (app version, phone type, how many pieces and wheels you have) written into a message to ' + SUPPORT_EMAIL + '. It is sent only if you press send in your email app, and we use it only to work out what went wrong.',
       'The AI service handles what it receives under its own terms and privacy policy. If you decline or turn AI help off, no photos or item details leave your phone, and spins are random.',
     ],
   },
@@ -144,7 +145,7 @@ export const SUPPORT: Section[] = [
   },
   {
     title: 'Something isn’t working',
-    body: [`Email ${SUPPORT_EMAIL} with your phone model and what happened. Screenshots help.`],
+    body: [`Email ${SUPPORT_EMAIL} with your phone model and what happened. Screenshots help. In the app, Settings, Help and about, Send log opens your email app with a recent activity log ready to send.`],
   },
 ];
 

@@ -4,6 +4,7 @@
  * step that has shipped.
  */
 import * as Crypto from 'expo-crypto';
+import { log } from '@/lib/log';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { DEFAULT_SLOT_CATEGORIES, type GearDraft, type GearItem, type SlotConfig, type SpinPick, type SpinRecord } from '@/types/models';
@@ -14,7 +15,11 @@ const DATABASE_VERSION = 3;
 export async function migrate(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
-  if (version >= DATABASE_VERSION) return;
+  if (version >= DATABASE_VERSION) {
+    log('db.open', { version });
+    return;
+  }
+  log('db.migrate', { from: version, to: DATABASE_VERSION });
 
   if (version === 0) {
     await db.execAsync(`

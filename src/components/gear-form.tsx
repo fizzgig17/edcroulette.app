@@ -30,6 +30,7 @@ import { PhotoFlow } from '@/components/photo-flow';
 import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
 import { getCategories, useCategories } from '@/lib/categories';
+import { log, logError } from '@/lib/log';
 import { FINISHES, MATERIALS, type GearDraft, type GearItem } from '@/types/models';
 
 const EMPTY: GearDraft = { name: '', brand: null, model: null, category: 'Knife', material: null, finish: null, primaryColor: null, weightGrams: null, notes: null, imageUri: null };
@@ -119,6 +120,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       if (IS_DEV_BUILD) Alert.alert('Object finder', e instanceof Error ? e.message : String(e));
     }
     if (stale()) return;
+    log('photo.lookup', { found: found.length });
     if (found.length > 1) {
       setBatch({ stored, items: found, done: [], current: null });
       setPicking(true);
@@ -139,6 +141,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     if (!own) setFinding({ uri: photoUri(stored) });
     try {
       if (!(await ensureAiConsent('photo'))) {
+        log('photo.identify.skipped', 'ai off');
         if (!stale()) setIdentify({ state: 'idle' });
         return;
       }
@@ -179,6 +182,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
 
   /** Cancel while the items are being found: back to the form with the photo, nothing filled in. */
   function cancelLookup() {
+    log('photo.lookup.cancel');
     lookup.current += 1;
     setFinding(null);
     setIdentify({ state: 'idle' });
@@ -219,6 +223,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   /** The person tapped an item: fill in its details and keep just that item in the photo. */
   async function chooseItem(index: number, dims: { width: number; height: number }) {
     const c = batch;
+    log('photo.choose', { index: index + 1, of: c?.items.length, local: !!c?.items[index]?.local });
     setPicking(false);
     const it = c?.items[index];
     if (!c || !it) return;
@@ -313,14 +318,17 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   async function getPhoto(source: PhotoSource) {
     try {
       const picked = await pickPhoto(source);
+      log('photo.pick', { source, got: !!picked, w: picked?.width, h: picked?.height });
       if (picked) setCropping(picked);
     } catch (e) {
+      logError('photo.pick.fail', e);
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not get the photo.');
     }
   }
 
   async function usePhoto(photo: PickedPhoto, crop: PhotoCrop) {
     setCropping(null);
+    log('photo.framed', { replacing: !!item });
     // Replacing the photo of a piece already in the collection: no object finding, just the new photo (and the AI, if allowed).
     if (item) {
       setPreparing(true);
@@ -344,6 +352,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     setPreparing(true);
     try {
       const stored = await savePhoto(photo, crop);
+      log('photo.saved');
       if (lookup.current !== token) {
         deletePhoto(stored);
         return;
@@ -352,6 +361,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       set('imageUri', stored);
       void startLookup(stored);
     } catch (e) {
+      logError('photo.save.fail', e);
       setFinding(null);
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
     } finally {
@@ -375,6 +385,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       notes: draft.notes?.trim() || null,
       weightGrams: weight,
     };
+    log('form.save', { mode: item ? 'edit' : 'new', photo: !!clean.imageUri, batch: batch ? `${batch.done.length + 1}/${batch.items.length}` : undefined });
     setBusy(true);
     // A sample piece keeps its drawing when edited (older samples find it by name).
     if (item?.isSample && !clean.imageUri && !item.imageUri) clean.imageUri = `sample:${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
@@ -408,6 +419,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   function cancel() {
+    log('form.leave');
     for (const uri of newPhotos) deletePhoto(uri);
     router.back();
   }
@@ -450,11 +462,13 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
                 done: batch.done,
                 // Cancel: back on the add screen with the photo. "Done" after adding some of the items: leave the screen.
                 onCancel: () => {
+                  log('photo.pick.cancel', { added: batch.done.length });
                   setPicking(false);
                   if (batch.done.length > 0) cancel();
                 },
                 // Use the entire photo: back on the add screen, and the AI (if allowed) looks at the whole photo.
                 onUseWhole: () => {
+                  log('photo.useWhole');
                   setPicking(false);
                   if (batch.items[0]?.local) void runIdentify(batch.stored, { own: true, picker: false });
                 },

@@ -4,6 +4,7 @@
  * items and FREE_MAX_SLOTS slots.
  */
 import { useSQLiteContext } from 'expo-sqlite';
+import { log, logError } from '@/lib/log';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { SAMPLE_GEAR } from '@/content/sample-gear';
@@ -45,6 +46,28 @@ const GearContext = createContext<GearState | null>(null);
 const sortGear = (list: GearItem[]) =>
   [...list].sort((a, b) => a.category.localeCompare(b.category) || Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
+/** Records every change to the collection and wheels in the log: what ran and whether it worked (never names or photos). */
+const LOGGED = ['addSamples', 'removeSamples', 'addItem', 'updateItem', 'removeItem', 'toggleFavorite', 'setLock', 'saveSlots', 'recordSpin', 'eraseEverything'];
+function withLog(state: GearState): GearState {
+  const out = { ...state } as Record<string, unknown>;
+  for (const name of LOGGED) {
+    const fn = out[name];
+    if (typeof fn !== 'function') continue;
+    out[name] = async (...args: unknown[]) => {
+      try {
+        const r = await (fn as (...a: unknown[]) => Promise<unknown>)(...args);
+        const res = r as { ok?: boolean; error?: string } | number | undefined;
+        log(`db.${name}`, typeof res === 'object' && res && 'ok' in res ? { ok: res.ok, error: res.ok ? undefined : res.error } : typeof res === 'number' ? { n: res } : undefined);
+        return r;
+      } catch (e) {
+        logError(`db.${name}.fail`, e);
+        throw e;
+      }
+    };
+  }
+  return out as unknown as GearState;
+}
+
 export function GearProvider({ children }: { children: ReactNode }) {
   const sqlite = useSQLiteContext();
   const [loading, setLoading] = useState(true);
@@ -69,7 +92,7 @@ export function GearProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<GearState>(() => {
     const byId = new Map(items.map((i) => [i.id, i]));
-    return {
+    const raw: GearState = {
       loading,
       items,
       slots,
@@ -163,6 +186,7 @@ export function GearProvider({ children }: { children: ReactNode }) {
         await reload();
       },
     };
+    return withLog(raw);
   }, [items, slots, last, loading, maxItems, maxSlots, reload, sqlite]);
 
   return <GearContext.Provider value={value}>{children}</GearContext.Provider>;
