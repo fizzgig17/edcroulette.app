@@ -20,7 +20,7 @@ import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear } from '@/lib/gear';
 import { useContentWidth, useEmbedded } from '@/lib/pane';
 import { select, success, tap } from '@/lib/haptics';
-import { setCollectionView, useCollectionView, type CollectionView } from '@/lib/preferences';
+import { setCollectionView, setFoldedCategories, useCollectionView, useFoldedCategories, type CollectionView } from '@/lib/preferences';
 import { useCategories } from '@/lib/categories';
 import type { GearItem } from '@/types/models';
 
@@ -119,6 +119,7 @@ export default function CollectionScreen() {
   const wide = useContentWidth() >= 840;
   const embedded = useEmbedded();
   const view = useCollectionView();
+  const folded = useFoldedCategories();
   const full = ownCount >= maxItems;
   const lockedIds = new Set(slots.map((s) => s.lockedItemId).filter(Boolean));
 
@@ -429,11 +430,25 @@ export default function CollectionScreen() {
           {groups.map(([name, list]) => (
             <View key={name || 'all'} style={styles.group}>
               {name ? (
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {name} · {list.length}
-                </ThemedText>
+                <Pressable
+                  onPress={() => {
+                    select();
+                    setFoldedCategories(folded.includes(name) ? folded.filter((c) => c !== name) : [...folded, name]);
+                  }}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: !folded.includes(name) }}
+                  accessibilityLabel={`${name}, ${list.length} ${list.length === 1 ? 'piece' : 'pieces'}. ${folded.includes(name) ? 'Tap to show' : 'Tap to hide'}`}
+                  style={styles.groupHead}>
+                  <View style={{ transform: [{ rotate: folded.includes(name) ? '0deg' : '90deg' }] }}>
+                    <Icon name="chevron" size={14} color={theme.textSecondary} />
+                  </View>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {name} · {list.length}
+                  </ThemedText>
+                </Pressable>
               ) : null}
-              {view === 'grid' ? (
+              {name && folded.includes(name) ? null : view === 'grid' ? (
                 <View style={styles.grid}>
                   {list.map((g) => (
                     <Pressable
@@ -576,6 +591,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: Spacing.two, paddingRight: Spacing.three },
   found: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   group: { gap: Spacing.two },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   rowCompact: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 8, paddingHorizontal: Spacing.three },
   flex: { flex: 1 },
