@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -24,7 +24,7 @@ type Step = {
 
 const STEPS: Step[] = [
   { id: 'welcome', title: 'Welcome to EDC Roulette', body: 'Keep a list of the things you carry, then let the wheels pick today’s everyday carry. This takes about a minute.', route: '/' },
-  { id: 'wheels', title: 'Your wheels', body: 'Each square is a wheel for one category: knife, flashlight, pen and so on. Tap a wheel to lock what’s on it, or double-tap it to choose the exact piece. Press and hold a wheel and they all wiggle: tap one to change what it spins, drag to reorder, tap the x to remove it, or tap + to add another.', route: '/', target: 'wheels' },
+  { id: 'wheels', title: 'Your wheels', body: 'Each wheel is for one category: knife, flashlight, pen and so on. Tap a wheel to lock it, or double-tap to choose the exact piece. Press and hold to edit: tap a wheel to change it, drag to reorder, tap the x to remove it, or tap + to add another.', route: '/', target: 'wheels' },
   { id: 'spin', title: 'Try a spin', body: 'Tap Spin. The wheels stop at different times, and tapping Stop lands them right away.', route: '/', target: 'spin', expect: 'spin' },
   { id: 'kit', title: 'Today’s carry', body: 'Your result lands here and is remembered. Tap any piece to see its details.', route: '/', target: 'kit' },
   { id: 'tab-collection', title: 'Open your collection', body: 'Tap Collection to see everything you own.', target: 'tab-collection', expect: 'tab-collection' },
@@ -139,6 +139,8 @@ export function TourOverlay() {
   const cx = hole ? hole.x + hole.w / 2 : width / 2;
   const left = Math.max(Spacing.three, Math.min(cx - bubbleW / 2, width - Spacing.three - bubbleW));
   const arrowLeft = Math.max(18, Math.min(cx - left - ARROW / 2, bubbleW - 18 - ARROW));
+  // The bubble gets only the room on its side of the spotlight; a long message scrolls inside it so the buttons stay on screen.
+  const room = hole ? (below ? height - (hole.y + hole.h) : hole.y) - ARROW - 28 : height * 0.68;
   const place = hole ? (below ? { top: hole.y + hole.h + ARROW * 0.7 } : { bottom: height - hole.y + ARROW * 0.7 }) : { top: height * 0.28 };
   const body = step.id === 'done' && usedSamples ? 'The sample gear can be removed any time in Settings. Replay this tour from Settings: Show the tour again.' : step.body;
   const dim = hole ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.7)';
@@ -156,7 +158,7 @@ export function TourOverlay() {
       ) : (
         <View style={[styles.dim, StyleSheet.absoluteFill, { backgroundColor: dim }]} />
       )}
-      <View style={[styles.bubble, place, { left, width: bubbleW, opacity: ready ? 1 : 0 }]} pointerEvents={ready ? 'auto' : 'none'}>
+      <View style={[styles.bubble, place, { left, width: bubbleW, maxHeight: Math.max(220, room), opacity: ready ? 1 : 0 }]} pointerEvents={ready ? 'auto' : 'none'}>
         {hole ? <View style={[styles.arrow, below ? { top: -ARROW / 2 + 1 } : { bottom: -ARROW / 2 + 1 }, { left: arrowLeft }]} /> : null}
         <ThemedText type="small" style={styles.kicker}>
           {first ? 'Quick tour' : `Step ${index} of ${STEPS.length - 1}`}
@@ -164,7 +166,9 @@ export function TourOverlay() {
         <ThemedText type="heading" style={styles.white}>
           {step.title}
         </ThemedText>
-        <ThemedText style={styles.soft}>{body}</ThemedText>
+        <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false} bounces={false}>
+          <ThemedText style={styles.soft}>{body}</ThemedText>
+        </ScrollView>
         {first ? (
           <View style={styles.stack}>
             {items.length === 0 ? (
@@ -214,6 +218,7 @@ function Pill({ label, onPress, primary, disabled }: { label: string; onPress: (
 
 const styles = StyleSheet.create({
   dim: { position: 'absolute' },
+  bodyScroll: { flexShrink: 1 },
   bubble: { position: 'absolute', gap: Spacing.two, padding: Spacing.three, borderRadius: 20, backgroundColor: BUBBLE, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)' },
   arrow: { position: 'absolute', width: ARROW, height: ARROW, backgroundColor: BUBBLE, transform: [{ rotate: '45deg' }], borderRadius: 3 },
   kicker: { color: 'rgba(255,255,255,0.6)' },
