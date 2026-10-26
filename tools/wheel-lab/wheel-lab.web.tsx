@@ -20,7 +20,7 @@ export default function WheelLab() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#F4F5F7' }}>
       <TourProvider>
         <GearProvider>
-          <View style={{ flex: 1, padding: 16, gap: 16, maxWidth: 800, width: '100%', alignSelf: 'center' }}>
+          <View style={{ flex: 1, padding: 16, gap: 16, maxWidth: Number(new URLSearchParams(window.location.search).get('w')) || 800, width: '100%', alignSelf: 'center' }}>
             <RouletteSpinner onControl={setControl} />
             <Pressable testID="spin" onPress={() => control?.onPress()} accessibilityRole="button" accessibilityLabel="Spin" style={{ alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 40, borderRadius: 32, backgroundColor: '#444' }}>
               <Text style={{ color: '#fff', fontWeight: '700' }}>{control?.label ?? 'Spin'}</Text>

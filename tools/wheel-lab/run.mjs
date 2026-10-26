@@ -111,7 +111,10 @@ for (const size of SIZES) {
   const { ctx, page } = await open(size);
   await page.screenshot({ path: `${SHOTS}/${size.name}-4.png` });
   const box = await page.locator('[aria-label*=" wheel: "]').first().boundingBox();
-  check(`${size.name}: wheels are square`, !!box && Math.abs(box.width - box.height) < 2, box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'none');
+  // Sideways on a phone the wheels are squares; everywhere else, with three wheels, they are tall (about 1 : 2.7).
+  const wantTall = size.name !== 'phone-landscape';
+  const ratio = box ? box.height / box.width : 0;
+  check(`${size.name}: wheels are ${wantTall ? 'tall' : 'square'}`, !!box && (wantTall ? ratio > 2.3 && ratio < 3 : Math.abs(ratio - 1) < 0.02), box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'none');
   const vw = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   check(`${size.name}: nothing wider than the screen`, vw);
   await ctx.close();
