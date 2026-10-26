@@ -7,6 +7,8 @@
 import { requireOptionalNativeModule } from 'expo';
 import { NativeModules } from 'react-native';
 
+import { log } from '@/lib/log';
+
 type Raw = { width: number; height: number; data: string } | null;
 type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw> };
 const native = requireOptionalNativeModule<Finder>('EdcSubjectMask') ?? ((NativeModules.EdcSubjectMask as Finder | undefined) || null);
@@ -18,8 +20,10 @@ export let lastMaskProblem: string | null = null;
 
 export async function findObjects(uri: string, maxEdge = 480): Promise<InstanceMask | null> {
   lastMaskProblem = null;
+  const t0 = Date.now();
   if (!native) {
     lastMaskProblem = 'no object finder in this build';
+    log('finder.fail', { reason: lastMaskProblem });
     return null;
   }
   try {
@@ -35,9 +39,11 @@ export async function findObjects(uri: string, maxEdge = 480): Promise<InstanceM
       lastMaskProblem = 'wrong size';
       return null;
     }
+    log('finder.ok', { ms: Date.now() - t0, w: r.width, h: r.height });
     return { width: r.width, height: r.height, labels };
   } catch (e) {
     lastMaskProblem = e instanceof Error ? e.message : String(e);
+    log('finder.fail', { reason: lastMaskProblem, ms: Date.now() - t0 });
     return null;
   }
 }

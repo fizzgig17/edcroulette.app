@@ -42,9 +42,9 @@ export function ItemPicker({
   );
 }
 
-const label = (it: Identified) => [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category;
+const label = (it: Identified, i = 0) => (it.local ? `Item ${i + 1}` : [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category);
 
-export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
+export function PickerView({ uri, items, done, onCancel, onUseWhole, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onUseWhole?: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -79,7 +79,7 @@ export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: 
       <View style={styles.top}>
         <Pressable onPress={onCancel} hitSlop={12} accessibilityRole="button">
           <ThemedText type="small" style={styles.light}>
-            {done.length > 0 ? 'Done' : 'Keep whole photo'}
+            {done.length > 0 ? 'Done' : 'Cancel'}
           </ThemedText>
         </Pressable>
       </View>
@@ -87,6 +87,13 @@ export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: 
         <ThemedText type="smallBold" style={[styles.light, styles.title]}>
           {title}
         </ThemedText>
+        {done.length === 0 && onUseWhole ? (
+          <Pressable onPress={onUseWhole} hitSlop={10} accessibilityRole="link" accessibilityLabel="Use the entire photo">
+            <ThemedText type="small" style={styles.link}>
+              Use the entire photo
+            </ThemedText>
+          </Pressable>
+        ) : null}
         <OutlinedPhoto
           uri={uri}
           width={W}
@@ -108,7 +115,7 @@ export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: 
               accessibilityRole="button"
               style={[styles.chip, { backgroundColor: selected === i ? theme.accent : '#FFFFFF22' }]}>
               <ThemedText type="smallBold" numberOfLines={1} style={{ color: selected === i ? theme.onAccent : '#FFFFFF', fontSize: 14 }}>
-                {i + 1} · {label(items[i] as Identified)}{IS_DEV_BUILD && items[i]?.outlineSource ? ` (${items[i]?.outlineSource})` : ''}
+                {i + 1} · {label(items[i] as Identified, i)}{IS_DEV_BUILD && items[i]?.outlineSource ? ` (${items[i]?.outlineSource})` : ''}
               </ThemedText>
             </Pressable>
           ))}
@@ -132,6 +139,7 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
   light: { color: '#FFFFFF', fontSize: 16 },
   title: { fontSize: 16, textAlign: 'center' },
+  link: { color: '#F2B04A', fontSize: 15, textDecorationLine: 'underline' },
   body: { alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingBottom: Spacing.three },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
   chip: { paddingHorizontal: Spacing.three, paddingVertical: 8, borderRadius: Radius.pill, maxWidth: '100%' },

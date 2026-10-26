@@ -5,6 +5,8 @@
  *
  * Imported first by the root layout, so it's installed before anything else runs.
  */
+import { flushLog, logError } from '@/lib/log';
+
 type Listener = (e: Error) => void;
 
 let last: Error | null = null;
@@ -20,6 +22,8 @@ if (EU) {
   const original = EU.getGlobalHandler();
   EU.setGlobalHandler((e, isFatal) => {
     const err = e instanceof Error ? e : new Error(String(e));
+    logError(isFatal ? 'error.fatal' : 'error.js', err);
+    if (isFatal) flushLog();
     if (isFatal) {
       last = err;
       listeners.forEach((l) => l(err));

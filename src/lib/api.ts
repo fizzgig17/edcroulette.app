@@ -5,6 +5,7 @@
  * Plain fetch against Supabase's REST and Functions endpoints (no sign-in yet).
  */
 import { deviceId, getTrainingNotes } from '@/lib/preferences';
+import { log } from '@/lib/log';
 
 const URL_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -80,6 +81,8 @@ export interface Identified {
   outline?: [number, number][] | null;
   /** The outline was fitted to the real picture (use it as it is, not as a rough hull). */
   tight?: boolean;
+  /** Found on the phone by the object finder, with no AI: nothing is known about it yet except where it is. */
+  local?: boolean;
   /** Dev builds only: how the outline was made. */
   outlineSource?: 'object finder' | 'colours' | 'rough';
   /** Dev builds only: why the phone's object finder gave no outline. */
@@ -95,9 +98,14 @@ export async function identifyPhoto(base64: string): Promise<IdentifyResult> {
   try {
     const r = await timed(`${URL_BASE}/functions/v1/edc-identify`, { method: 'POST', headers: headers(), body: JSON.stringify({ image: base64, device: deviceId(), notes: getTrainingNotes() }) }, 45000);
     const body = (await r.json().catch(() => null)) as IdentifyResult | null;
-    if (body && typeof body === 'object' && 'ok' in body) return body;
+    if (body && typeof body === 'object' && 'ok' in body) {
+      log('ai.identify', body.ok ? { ok: true, items: body.items?.length ?? 1, confidence: body.confidence } : { ok: false, code: body.code, detail: body.detail });
+      return body;
+    }
+    log('ai.identify', { ok: false, status: r.status });
     return { ok: false, code: 'error', error: 'Photo identify could not run.', detail: `The server answered ${r.status} without a result.` };
   } catch {
+    log('ai.identify', { ok: false, code: 'offline' });
     return { ok: false, code: 'offline', error: 'Could not reach the server. Check your connection.' };
   }
 }
@@ -117,9 +125,14 @@ export async function pickCoordinated(wheels: PairWheel[]): Promise<PairResult> 
   try {
     const r = await timed(`${URL_BASE}/functions/v1/edc-pair`, { method: 'POST', headers: headers(), body: JSON.stringify({ device: deviceId(), wheels }) }, 15000);
     const body = (await r.json().catch(() => null)) as PairResult | null;
-    if (body && typeof body === 'object' && 'ok' in body) return body;
+    if (body && typeof body === 'object' && 'ok' in body) {
+      log('ai.pair', body.ok ? { ok: true } : { ok: false, code: body.code });
+      return body;
+    }
+    log('ai.pair', { ok: false, status: r.status });
     return { ok: false, code: 'error', error: 'Coordinated spin could not run.' };
   } catch {
+    log('ai.pair', { ok: false, code: 'offline' });
     return { ok: false, code: 'offline', error: 'Could not reach the server.' };
   }
 }

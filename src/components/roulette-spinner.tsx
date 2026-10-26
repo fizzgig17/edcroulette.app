@@ -46,6 +46,7 @@ import { select, success, tap } from '@/lib/haptics';
 import { useLayoutMode } from '@/lib/layout-mode';
 import { setScrollLocked } from '@/lib/scroll-lock';
 import { WheelItemPicker } from '@/components/wheel-item-picker';
+import { log } from '@/lib/log';
 import { useFavoriteBoost, useMetalId, useSpinStyle } from '@/lib/preferences';
 import { ensureCategories, useCategories } from '@/lib/categories';
 import { DEFAULT_SLOT_CATEGORIES } from '@/types/models';
@@ -721,11 +722,13 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     setLanded((prev) => ({ ...prev, ...targetsRef.current }));
     setPhase('done');
     success();
+    log('spin.done', { wheels: picksRef.current.length, empty: picksRef.current.filter((p) => !p.itemId).length });
     await recordSpin(picksRef.current);
   }, [recordSpin]);
 
   const spin = useCallback(async () => {
     if (phase === 'spinning' || phase === 'choosing') return;
+    log('spin.start', { style: spinStyle, wheels: slots.length, locked: slots.filter((s) => lockedBySlot.get(s.slotIndex)).length, pieces: items.length });
     setEditing(false);
     stopAllSounds();
     setWhy(null);
@@ -869,7 +872,13 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const chooseList = chooseSlot ? (candidates.get(chooseSlot.slotIndex) ?? []) : [];
   const chooseShown = chooseSlot ? (lockedBySlot.get(chooseSlot.slotIndex) ?? landed[chooseSlot.slotIndex] ?? restingFromLastSpin.get(chooseSlot.slotIndex) ?? chooseList[0] ?? null) : null;
 
-  const toggleLock = useCallback((slotIndex: number, item: GearItem | null) => void setLock(slotIndex, item?.id ?? null), [setLock]);
+  const toggleLock = useCallback(
+    (slotIndex: number, item: GearItem | null) => {
+      log(item ? 'wheel.lock' : 'wheel.unlock', { slot: slotIndex });
+      void setLock(slotIndex, item?.id ?? null);
+    },
+    [setLock],
+  );
 
   const allLocked = slots.length > 0 && slots.every((s) => lockedBySlot.get(s.slotIndex));
   const empty = items.length === 0;
@@ -911,6 +920,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const draftOf = (list: SlotConfig[]): SlotDraft[] => list.map((s) => ({ category: s.category, lockedItemId: s.lockedItemId, from: s.slotIndex }));
   const apply = useCallback(
     async (next: SlotDraft[]) => {
+      log('wheels.change', { to: next.length });
       const r = await saveSlots(next);
       if (!r.ok) Alert.alert('Wheels', r.error);
     },
@@ -957,10 +967,12 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   }
   useEffect(() => () => setScrollLocked(false), []);
   const startEditing = useCallback(() => {
+    log('wheels.edit.start');
     tap();
     setEditing(true);
   }, []);
   const stopEditing = useCallback(() => {
+    log('wheels.edit.done');
     commitOrder();
     setEditing(false);
     setScrollLocked(false);
