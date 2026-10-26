@@ -32,7 +32,7 @@ export function PhotoFlow({
   finding: { uri: string | null } | null;
   onFindCancel: () => void;
   /** Step 3: choosing among the items found. */
-  pick: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void } | null;
+  pick: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onUseWhole: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void } | null;
 }) {
   const open = !!cropping || !!finding || !!pick;
   const onClose = cropping ? onCropCancel : finding ? onFindCancel : (pick?.onCancel ?? onCropCancel);
@@ -44,7 +44,7 @@ export function PhotoFlow({
         ) : finding ? (
           <Finding uri={finding.uri} onCancel={onFindCancel} />
         ) : pick ? (
-          <PickerView uri={pick.uri} items={pick.items} done={pick.done} onCancel={pick.onCancel} onChoose={pick.onChoose} onPreview={pick.onPreview} />
+          <PickerView uri={pick.uri} items={pick.items} done={pick.done} onCancel={pick.onCancel} onUseWhole={pick.onUseWhole} onChoose={pick.onChoose} onPreview={pick.onPreview} />
         ) : null}
       </GestureHandlerRootView>
     </Modal>

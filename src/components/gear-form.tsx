@@ -320,8 +320,25 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   async function usePhoto(photo: PickedPhoto, crop: PhotoCrop) {
-    // The same window carries on: from framing straight to looking for items.
     setCropping(null);
+    // Replacing the photo of a piece already in the collection: no object finding, just the new photo (and the AI, if allowed).
+    if (item) {
+      setPreparing(true);
+      try {
+        const stored = await savePhoto(photo, crop);
+        setNewPhotos((p) => [...p, stored]);
+        set('imageUri', stored);
+        void runIdentify(stored, { own: true, picker: false });
+      } catch (e) {
+        Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
+      } finally {
+        setPreparing(false);
+      }
+      return;
+    }
+    // A new piece: the same window carries on, from framing straight to looking for items.
+    setBatch(null);
+    crops.current.clear();
     setFinding({ uri: null });
     const token = (lookup.current += 1);
     setPreparing(true);
@@ -431,12 +448,15 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
                 uri: photoUri(batch.stored)!,
                 items: batch.items,
                 done: batch.done,
+                // Cancel: back on the add screen with the photo. "Done" after adding some of the items: leave the screen.
                 onCancel: () => {
                   setPicking(false);
-                  // "Done" after adding some of the items: leave the screen.
                   if (batch.done.length > 0) cancel();
-                  // "Keep whole photo": back on the add screen, the AI (if allowed) looks at the whole photo.
-                  else if (batch.items[0]?.local) void runIdentify(batch.stored, { own: true, picker: false });
+                },
+                // Use the entire photo: back on the add screen, and the AI (if allowed) looks at the whole photo.
+                onUseWhole: () => {
+                  setPicking(false);
+                  if (batch.items[0]?.local) void runIdentify(batch.stored, { own: true, picker: false });
                 },
                 onChoose: (i, d) => void chooseItem(i, d),
                 onPreview: (i, d) => void cropFor(i, d),
@@ -453,7 +473,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         </View>
         {draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
           <View style={styles.photoButtons}>
-            <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!)} disabled={identify.state === 'working'} style={styles.flex} />
+            {aiConsent !== 'declined' ? <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!, { own: true, picker: false })} disabled={identify.state === 'working'} style={styles.flex} /> : null}
             <Button label="Remove photo" icon="close" variant="ghost" onPress={() => set('imageUri', null)} style={styles.flex} />
           </View>
         ) : (
@@ -469,6 +489,9 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           </ThemedText>
         ) : null}
         {!item && !draft.imageUri && !batch ? <Button label="Try the demo photo (3 items)" icon="sparkle" variant="ghost" onPress={() => void startDemo()} /> : null}
+        {batch && batch.current === null && !item && !picking && !!draft.imageUri && draft.imageUri === batch.stored && batch.items.length > 1 ? (
+          <Button label="Find items in this photo again" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
+        ) : null}
         {batch && batch.current !== null && !item && !!draft.imageUri && batch.items.length - batch.done.length > 1 ? (
           <Button label="Pick a different item from the photo" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
         ) : null}
