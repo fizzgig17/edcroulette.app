@@ -80,6 +80,8 @@ export interface Identified {
   outline?: [number, number][] | null;
   /** The outline was fitted to the real picture (use it as it is, not as a rough hull). */
   tight?: boolean;
+  /** Found on the phone by the object finder, with no AI: nothing is known about it yet except where it is. */
+  local?: boolean;
   /** Dev builds only: how the outline was made. */
   outlineSource?: 'object finder' | 'colours' | 'rough';
   /** Dev builds only: why the phone's object finder gave no outline. */

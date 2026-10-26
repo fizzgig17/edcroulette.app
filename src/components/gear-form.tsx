@@ -5,7 +5,8 @@ import { File, Paths } from 'expo-file-system';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
-import { refineItems } from '@/lib/refine-outline';
+import { findItemsOnDevice, refineItems } from '@/lib/refine-outline';
+import { lastMaskProblem } from '@/lib/subject-mask';
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
@@ -103,10 +104,39 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const leftAfter = batch && batch.current !== null && !item ? batch.items.length - batch.done.length - 1 : 0;
   const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
 
-  async function runIdentify(stored: string) {
+  /**
+   * Step one for a new photo, with no AI: the phone's own object finder looks for separate items. Two or more, and the person
+   * taps the one they mean; the AI only sees that item afterwards. Fewer than two, and it carries on as before.
+   */
+  async function startLookup(stored: string) {
     const token = (lookup.current += 1);
     const stale = () => lookup.current !== token;
     setFinding({ uri: photoUri(stored) });
+    let found: Identified[] = [];
+    try {
+      found = await findItemsOnDevice(stored);
+    } catch (e) {
+      if (IS_DEV_BUILD) Alert.alert('Object finder', e instanceof Error ? e.message : String(e));
+    }
+    if (stale()) return;
+    if (found.length > 1) {
+      setBatch({ stored, items: found, done: [], current: null });
+      setPicking(true);
+      setFinding(null);
+      return;
+    }
+    if (IS_DEV_BUILD && lastMaskProblem) Alert.alert('Object finder', lastMaskProblem);
+    // Nothing to choose between on the phone: identify the whole photo (the AI may still see several items).
+    await runIdentify(stored);
+  }
+
+  /** Sends the photo to the AI. `own` = the form's own window (the person is already back on the add screen), `picker` = may open the item picker. */
+  async function runIdentify(stored: string, opts: { own?: boolean; picker?: boolean } = {}) {
+    const own = opts.own ?? false;
+    const allowPicker = opts.picker ?? true;
+    const token = (lookup.current += 1);
+    const stale = () => lookup.current !== token;
+    if (!own) setFinding({ uri: photoUri(stored) });
     try {
       if (!(await ensureAiConsent('photo'))) {
         if (!stale()) setIdentify({ state: 'idle' });
@@ -129,7 +159,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       }
       applyIdentified(r);
       // Several items in the photo: let the person pick which one they mean, in the same window.
-      if (r.items && r.items.length > 1) {
+      if (allowPicker && r.items && r.items.length > 1) {
         // Tighten the rough outlines against the real picture (keeps the rough ones if that fails).
         let items = r.items;
         try {
@@ -143,7 +173,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         setPicking(true);
       }
     } finally {
-      if (!stale()) setFinding(null);
+      if (!own && !stale()) setFinding(null);
     }
   }
 
@@ -193,15 +223,20 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     const it = c?.items[index];
     if (!c || !it) return;
     setBatch({ ...c, current: index });
-    applyIdentified(it);
+    // Items the AI described come with their details; ones found on the phone are described by the AI now, from just that item.
+    if (!it.local) applyIdentified(it);
+    else setIdentify({ state: 'idle' });
     setPreparing(true);
     // Don't show the whole photo while the item's own (blurred) one is made; it would flash clear first.
     set('imageUri', null);
+    let own: string = c.stored;
     try {
-      set('imageUri', (await cropFor(index, dims)) ?? c.stored);
+      own = (await cropFor(index, dims)) ?? c.stored;
+      set('imageUri', own);
     } finally {
       setPreparing(false);
     }
+    if (it.local) void runIdentify(own, { own: true, picker: false });
   }
 
   function applyIdentified(r: Identified) {
@@ -298,7 +333,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       }
       setNewPhotos((p) => [...p, stored]);
       set('imageUri', stored);
-      void runIdentify(stored);
+      void startLookup(stored);
     } catch (e) {
       setFinding(null);
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
@@ -400,6 +435,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
                   setPicking(false);
                   // "Done" after adding some of the items: leave the screen.
                   if (batch.done.length > 0) cancel();
+                  // "Keep whole photo": back on the add screen, the AI (if allowed) looks at the whole photo.
+                  else if (batch.items[0]?.local) void runIdentify(batch.stored, { own: true, picker: false });
                 },
                 onChoose: (i, d) => void chooseItem(i, d),
                 onPreview: (i, d) => void cropFor(i, d),

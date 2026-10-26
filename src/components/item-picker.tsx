@@ -42,7 +42,7 @@ export function ItemPicker({
   );
 }
 
-const label = (it: Identified) => [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category;
+const label = (it: Identified, i = 0) => (it.local ? `Item ${i + 1}` : [it.brand ?? it.brandRead, it.model].filter(Boolean).join(' ') || it.category);
 
 export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: { uri: string; items: Identified[]; done: number[]; onCancel: () => void; onChoose: (index: number, dims: Dims) => void; onPreview?: (index: number, dims: Dims) => void }) {
   const theme = useTheme();
@@ -108,7 +108,7 @@ export function PickerView({ uri, items, done, onCancel, onChoose, onPreview }: 
               accessibilityRole="button"
               style={[styles.chip, { backgroundColor: selected === i ? theme.accent : '#FFFFFF22' }]}>
               <ThemedText type="smallBold" numberOfLines={1} style={{ color: selected === i ? theme.onAccent : '#FFFFFF', fontSize: 14 }}>
-                {i + 1} · {label(items[i] as Identified)}{IS_DEV_BUILD && items[i]?.outlineSource ? ` (${items[i]?.outlineSource})` : ''}
+                {i + 1} · {label(items[i] as Identified, i)}{IS_DEV_BUILD && items[i]?.outlineSource ? ` (${items[i]?.outlineSource})` : ''}
               </ThemedText>
             </Pressable>
           ))}

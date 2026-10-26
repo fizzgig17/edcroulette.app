@@ -278,3 +278,63 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
     return { ...it, outlineSource: exact[i] ? ('object finder' as const) : ('colours' as const), outlineNote: exact[i] ? undefined : note, tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
   });
 }
+
+/**
+ * Finds the separate objects in a photo with the phone's own object finder, with no AI: each comes back as an item with
+ * its outline and place, and nothing else known. Returns [] when the phone has no finder (or it isn't ready yet).
+ */
+export async function findItemsOnDevice(stored: string): Promise<Identified[]> {
+  const uri = photoUri(stored);
+  if (!uri) return [];
+  const mask = await findObjects(uri, 640);
+  if (!mask) return [];
+  const { width: W, height: H, labels } = mask;
+  const stats = new Map<number, { n: number; x0: number; x1: number; y0: number; y1: number }>();
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const l = labels[y * W + x]!;
+      if (!l) continue;
+      const s = stats.get(l);
+      if (!s) stats.set(l, { n: 1, x0: x, x1: x, y0: y, y1: y });
+      else {
+        s.n += 1;
+        if (x < s.x0) s.x0 = x;
+        if (x > s.x1) s.x1 = x;
+        if (y < s.y0) s.y0 = y;
+        if (y > s.y1) s.y1 = y;
+      }
+    }
+  }
+  // Big enough to be a thing (not a speck), not the whole frame; left to right, at most six.
+  const found = [...stats.entries()].filter(([, s]) => s.n >= W * H * 0.015 && s.n <= W * H * 0.85).sort((a, b) => a[1].x0 - b[1].x0).slice(0, 6);
+  const items: Identified[] = [];
+  for (const [label, s] of found) {
+    const poly = rowPolygon((x, y) => labels[y * W + x] === label, s.x0, s.x1, s.y0, s.y1, 0.5, 1.5);
+    if (!poly) continue;
+    const simple = simplify(poly, 0.9);
+    if (simple.length < 4) continue;
+    const outline = simple.map(([x, y]) => [Math.min(1, Math.max(0, x / W)), Math.min(1, Math.max(0, y / H))] as Pt);
+    const xs = outline.map((p) => p[0]);
+    const ys = outline.map((p) => p[1]);
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    items.push({
+      category: 'Other',
+      brand: null,
+      brandRead: null,
+      brandCandidates: [],
+      model: null,
+      confidence: 'low',
+      material: null,
+      finish: null,
+      color: null,
+      notes: null,
+      box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top },
+      outline,
+      tight: true,
+      outlineSource: 'object finder',
+      local: true,
+    });
+  }
+  return items;
+}
