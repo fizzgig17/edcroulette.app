@@ -82,6 +82,8 @@ export interface Identified {
   tight?: boolean;
   /** Dev builds only: how the outline was made. */
   outlineSource?: 'object finder' | 'colours' | 'rough';
+  /** Dev builds only: why the phone's object finder gave no outline. */
+  outlineNote?: string;
 }
 
 /** The main answer, plus every item seen when the photo has several. */

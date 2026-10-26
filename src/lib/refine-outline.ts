@@ -11,7 +11,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { areaOf } from '@/lib/blur-items';
 import { hull } from '@/components/outlined-photo';
 import { decode } from '@/lib/jpeg';
-import { findObjects, type InstanceMask } from '@/lib/subject-mask';
+import { findObjects, lastMaskProblem, type InstanceMask } from '@/lib/subject-mask';
 import { photoUri } from '@/lib/photos';
 import type { Identified } from '@/lib/api';
 
@@ -267,6 +267,7 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
   // The phone's own object finder, where there is one (iPhone): exact, so it wins.
   const objects = await findObjects(uri);
   const exact = objects ? outlinesFromObjects(objects, rough) : [];
+  const note = objects ? undefined : (lastMaskProblem ?? undefined);
   const refined = colour.map((c, i) => exact[i] ?? c);
   return items.map((it, i) => {
     const r = refined[i];
@@ -274,6 +275,6 @@ export async function refineItems(stored: string, items: Identified[]): Promise<
     const xs = r.map((p) => p[0]);
     const ys = r.map((p) => p[1]);
     const left = Math.min(...xs), top = Math.min(...ys);
-    return { ...it, outlineSource: exact[i] ? ('object finder' as const) : ('colours' as const), tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
+    return { ...it, outlineSource: exact[i] ? ('object finder' as const) : ('colours' as const), outlineNote: exact[i] ? undefined : note, tight: true, outline: r, box: { x: left, y: top, w: Math.max(...xs) - left, h: Math.max(...ys) - top } };
   });
 }

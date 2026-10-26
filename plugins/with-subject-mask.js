@@ -22,6 +22,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.uimanager.ViewManager
+import com.google.android.gms.common.moduleinstall.ModuleInstall
+import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
@@ -64,6 +66,51 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
     return Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
   }
 
+  // Labels every pixel with the subject it belongs to, then answers the call. Failures say why, so the app can show it.
+  private fun segment(segmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter, bitmap: Bitmap, promise: Promise) {
+    segmenter
+        .process(InputImage.fromBitmap(bitmap, 0))
+        .addOnSuccessListener { result ->
+          try {
+            val w = bitmap.width
+            val h = bitmap.height
+            val labels = ByteArray(w * h)
+            var n = 0
+            for (subject in result.subjects) {
+              if (n >= 254) break
+              val mask = subject.confidenceMask
+              if (mask == null) continue
+              n += 1
+              for (y in 0 until subject.height) {
+                for (x in 0 until subject.width) {
+                  val px = subject.startX + x
+                  val py = subject.startY + y
+                  if (px < 0 || py < 0 || px >= w || py >= h) continue
+                  if (mask.get(y * subject.width + x) > 0.5f && labels[py * w + px] == 0.toByte()) labels[py * w + px] = n.toByte()
+                }
+              }
+            }
+            if (n == 0) {
+              promise.reject("none", "ML Kit found no objects in the photo")
+            } else {
+              val map = Arguments.createMap()
+              map.putInt("width", w)
+              map.putInt("height", h)
+              map.putString("data", Base64.encodeToString(labels, Base64.NO_WRAP))
+              promise.resolve(map)
+            }
+          } catch (e: Throwable) {
+            promise.reject("read", "Reading the result failed: " + e.toString())
+          } finally {
+            segmenter.close()
+          }
+        }
+        .addOnFailureListener { e ->
+          promise.reject("segment", "Segmentation failed: " + e.toString())
+          segmenter.close()
+        }
+  }
+
   @ReactMethod
   fun instanceMask(uri: String, maxEdge: Int, promise: Promise) {
     Thread {
@@ -71,52 +118,22 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
         // Google recommends at least about 512 pixels for good results.
         val bitmap = load(uri, maxOf(maxEdge, 640))
         if (bitmap == null) {
-          promise.resolve(null)
+          promise.reject("load", "Could not read the photo")
           return@Thread
         }
         val subjectOptions = SubjectSegmenterOptions.SubjectResultOptions.Builder().enableConfidenceMask().build()
         val options = SubjectSegmenterOptions.Builder().enableMultipleSubjects(subjectOptions).build()
         val segmenter = SubjectSegmentation.getClient(options)
-        segmenter
-            .process(InputImage.fromBitmap(bitmap, 0))
-            .addOnSuccessListener { result ->
-              try {
-                val w = bitmap.width
-                val h = bitmap.height
-                val labels = ByteArray(w * h)
-                var n = 0
-                for (subject in result.subjects) {
-                  if (n >= 254) break
-                  val mask = subject.confidenceMask
-                  if (mask == null) continue
-                  n += 1
-                  for (y in 0 until subject.height) {
-                    for (x in 0 until subject.width) {
-                      val px = subject.startX + x
-                      val py = subject.startY + y
-                      if (px < 0 || py < 0 || px >= w || py >= h) continue
-                      if (mask.get(y * subject.width + x) > 0.5f && labels[py * w + px] == 0.toByte()) labels[py * w + px] = n.toByte()
-                    }
-                  }
-                }
-                val map = Arguments.createMap()
-                map.putInt("width", w)
-                map.putInt("height", h)
-                map.putString("data", Base64.encodeToString(labels, Base64.NO_WRAP))
-                promise.resolve(map)
-              } catch (e: Exception) {
-                promise.resolve(null)
-              } finally {
-                segmenter.close()
-              }
-            }
-            .addOnFailureListener {
-              // Most often the model is still being downloaded by Google Play services: the app falls back to colours.
-              promise.resolve(null)
+        // Make sure Google Play services has the model first (it downloads it once, then it is kept).
+        ModuleInstall.getClient(ctx)
+            .installModules(ModuleInstallRequest.newBuilder().addApi(segmenter).build())
+            .addOnSuccessListener { segment(segmenter, bitmap, promise) }
+            .addOnFailureListener { e ->
+              promise.reject("model", "Model not available: " + e.toString())
               segmenter.close()
             }
       } catch (e: Throwable) {
-        promise.resolve(null)
+        promise.reject("error", e.toString())
       }
     }.start()
   }
@@ -156,6 +173,10 @@ module.exports = function withSubjectMask(config) {
 
   config = withAppBuildGradle(config, (cfg) => {
     let src = cfg.modResults.contents;
+    if (!src.includes('play-services-base')) {
+      const marker = 'implementation("com.facebook.react:react-android")';
+      if (src.includes(marker)) src = src.replace(marker, `${marker}\n    implementation("com.google.android.gms:play-services-base:18.5.0")`);
+    }
     if (!src.includes('play-services-mlkit-subject-segmentation')) {
       const marker = 'implementation("com.facebook.react:react-android")';
       if (!src.includes(marker)) throw new Error('with-subject-mask: could not find the dependencies block in app/build.gradle');
