@@ -95,6 +95,24 @@ export const getCollectionView = (): CollectionView => {
 export const setCollectionView = (v: CollectionView) => write('edc.collectionView', v);
 export const useCollectionView = () => useSyncExternalStore(subscribe, getCollectionView, () => 'list' as CollectionView);
 
+// --- Collection categories folded away -----------------------------------------------------------
+let foldedRaw: string | null | undefined;
+let foldedList: string[] = [];
+export const getFoldedCategories = (): string[] => {
+  const raw = read('edc.foldedCategories');
+  if (raw === foldedRaw) return foldedList;
+  foldedRaw = raw;
+  try {
+    const v = JSON.parse(raw ?? '[]') as unknown;
+    foldedList = Array.isArray(v) ? v.filter((c): c is string => typeof c === 'string') : [];
+  } catch {
+    foldedList = [];
+  }
+  return foldedList;
+};
+export const setFoldedCategories = (list: string[]) => write('edc.foldedCategories', JSON.stringify(list));
+export const useFoldedCategories = () => useSyncExternalStore(subscribe, getFoldedCategories, () => [] as string[]);
+
 // --- Whether the app icon follows the chosen metal ---------------------------------------------
 export const getIconFollowsMetal = () => read('edc.iconFollows') !== '0';
 export const setIconFollowsMetal = (on: boolean) => write('edc.iconFollows', on ? '1' : '0');
