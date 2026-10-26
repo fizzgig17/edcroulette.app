@@ -4,14 +4,15 @@
  * tables both map onto these.
  */
 
-export const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Other'] as const;
+/** The built-in categories. A person can remove any of them (except Other) and add their own; see lib/categories.ts. */
+export const CATEGORIES = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch', 'Wallet', 'Keychain', 'Pry bar', 'Sunglasses', 'Fidget spinner', 'Bag', 'Beads', 'Coin', 'Other'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-export const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood'] as const;
-export const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated'] as const;
+export const MATERIALS = ['Titanium', 'Copper', 'Brass', 'Aluminum', 'Steel', 'Damascus', 'Carbon fiber', 'G10', 'Micarta', 'Ultem', 'Delrin', 'Zirconium', 'Wood', 'Bronze', 'Silver', 'Nickel', 'Glass', 'Stone', 'Resin', 'Acetate', 'Plastic', 'Leather', 'Nylon', 'Canvas', 'Bone'] as const;
+export const FINISHES = ['Polished', 'Stonewashed', 'Satin', 'Raw', 'Anodized', 'Blasted', 'Patina', 'Coated', 'Brushed', 'Matte', 'Glossy', 'Hammered'] as const;
 
 /** The default reels for a new install (the spec's four). */
-export const DEFAULT_SLOT_CATEGORIES: Category[] = ['Knife', 'Flashlight', 'Pen', 'Multi-tool'];
+export const DEFAULT_SLOT_CATEGORIES: Category[] = ['Knife', 'Flashlight', 'Pen'];
 
 export interface GearItem {
   id: string;

@@ -22,7 +22,7 @@ export const PRIVACY: Section[] = [
   {
     title: 'What the app stores, and where',
     body: [
-      'Your collection (names, brands, models, categories, materials, finishes, colors, weights, notes and photos), your wheels and locks, your settings and your recent spins are stored only on your phone, in the app’s own storage. Your collection is never uploaded.',
+      'Your collection (names, brands, models, categories, including any you add, materials, finishes, colors, weights, notes and photos), your wheels and locks, your settings and your recent spins are stored only on your phone, in the app’s own storage. Your collection is never uploaded.',
       'Photos you add are copied into the app, resized, and kept on your phone. EDC Roulette asks for camera or photo library access only when you choose to add a photo, and only uses the photos you pick.',
     ],
   },

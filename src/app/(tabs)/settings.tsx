@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Alert, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
@@ -20,6 +20,8 @@ import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
 import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
+import { SAMPLE_GEAR } from '@/content/sample-gear';
+import { addCategory, ensureCategories, MAX_CATEGORY_CHARS, removeCategory, useCategories, useRemovedCategories } from '@/lib/categories';
 import { landSound } from '@/lib/sounds';
 import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
 
@@ -68,6 +70,80 @@ function Label({ text, info }: { text: string; info?: string }) {
       </View>
       {on && info ? <InfoBox text={info} /> : null}
     </View>
+  );
+}
+
+/** Add your own categories, or remove ones you don't use. */
+function CategoriesEditor() {
+  const theme = useTheme();
+  const { items, slots } = useGear();
+  const cats = useCategories();
+  const removed = useRemovedCategories();
+  const [text, setText] = useState('');
+  const [key, setKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const pieces = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of items) m.set(g.category, (m.get(g.category) ?? 0) + 1);
+    return m;
+  }, [items]);
+  const drop = (c: string) => {
+    select();
+    const r = removeCategory(c, { pieces: pieces.get(c) ?? 0, wheels: slots.filter((s) => s.category === c).length });
+    setError(r.ok ? null : r.error);
+  };
+  const add = () => {
+    const r = addCategory(text);
+    if (r.ok) {
+      select();
+      setText('');
+      setKey((k) => k + 1);
+      setError(null);
+    } else setError(r.error);
+  };
+  return (
+    <Card>
+      <Label text="Your categories" info="These are the choices for a piece’s category and for what a wheel spins. Remove the ones you don’t use, or add your own. A category can only be removed once no pieces or wheels use it. Other always stays." />
+      <View style={styles.cats}>
+        {cats.map((c) => (
+          <View key={c} style={[styles.catChip, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <ThemedText type="small">
+              {c}
+              <ThemedText type="small" themeColor="textSecondary">{`  ${pieces.get(c) ?? 0}`}</ThemedText>
+            </ThemedText>
+            {c === 'Other' ? null : (
+              <Pressable onPress={() => drop(c)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove the ${c} category`}>
+                <Icon name="close" size={13} color={theme.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+        ))}
+      </View>
+      {error ? (
+        <ThemedText type="small" style={{ color: theme.danger }}>
+          {error}
+        </ThemedText>
+      ) : null}
+      <Input key={`cat-${key}`} placeholder="New category, like Hat or Lighter" defaultValue="" onChangeText={(t) => { setText(t); setError(null); }} maxLength={MAX_CATEGORY_CHARS} returnKeyType="done" onSubmitEditing={add} />
+      <Button label="Add category" icon="add" variant="secondary" disabled={!text.trim()} onPress={add} />
+      {removed.length > 0 ? (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            Removed. Tap to add one back:
+          </ThemedText>
+          <View style={styles.cats}>
+            {removed.map((c) => (
+              <Pressable key={c} onPress={() => { select(); ensureCategories([c]); }} accessibilityRole="button" accessibilityLabel={`Add ${c} back`} style={[styles.catChip, { borderColor: theme.border }]}>
+                <Icon name="add" size={13} color={theme.accent} />
+                <ThemedText type="small" style={{ color: theme.accent }}>
+                  {c}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+    </Card>
   );
 }
 
@@ -175,6 +251,8 @@ export default function SettingsScreen() {
   const update = useUpdate();
 
   async function loadSamples() {
+    // The samples bring their categories back if you had removed them.
+    ensureCategories([...new Set(SAMPLE_GEAR.map((g) => g.category))]);
     const n = await addSamples();
     Alert.alert('Sample gear', n > 0 ? `Added ${n} sample pieces. They don't count toward your ${maxItems} items, and you can remove them here any time.` : 'The sample gear is already loaded.');
   }
@@ -225,6 +303,10 @@ export default function SettingsScreen() {
             }}
           />
         </Card>
+      </Section>
+
+      <Section title="Categories" summary="Add or remove" info="The kinds of gear you keep: knives, lights, pens and so on. Add your own, or remove the ones you don’t use.">
+        <CategoriesEditor />
       </Section>
 
       <Section title="Look" summary={`${metal.label} · ${themeName}`} info="The metal for the Spin button and wheel trim, and whether the app is light or dark.">
@@ -416,6 +498,8 @@ const styles = StyleSheet.create({
   dot: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   infoBox: { padding: Spacing.two, borderRadius: Radius.medium },
   labelWrap: { gap: Spacing.two },
+  cats: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.one },
   flexText: { flex: 1 },
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },

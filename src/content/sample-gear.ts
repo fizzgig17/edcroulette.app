@@ -1,5 +1,5 @@
 /**
- * A starter collection for trying the app: about ten pieces for each category.
+ * A starter collection for trying the app: ten pieces in each of six categories (Knife, Flashlight, Pen, Multi-tool, Watch and Pry bar).
  * Loaded from Settings ("Load sample gear"), marked as samples, not counted
  * against the free item limit, and removed in one tap.
  */
@@ -81,30 +81,6 @@ export const SAMPLE_GEAR: GearDraft[] = [
     ['Tissot PRX', 'Tissot', 'PRX', 'Steel', 'Satin', '#1F4E5F', 100],
     ['Marathon GSAR', 'Marathon', 'GSAR', 'Steel', 'Blasted', '#1B1C1E', 115],
     ['Luminox Navy SEAL', 'Luminox', 'Navy SEAL', null, 'Coated', '#222428', 95],
-  ]),
-  ...make('Wallet', [
-    ['Ridge Wallet', 'Ridge', 'Ridge Wallet', 'Titanium', 'Stonewashed', '#8C9299', 80],
-    ['Ridge Carbon', 'Ridge', 'Ridge Carbon Fiber', 'Carbon fiber', 'Satin', '#26292D', 55],
-    ['Bellroy Note Sleeve', 'Bellroy', 'Note Sleeve', null, null, '#8A5A3B', 70],
-    ['Bellroy Slim Sleeve', 'Bellroy', 'Slim Sleeve', null, null, '#2C3440', 40],
-    ['Trayvax Contour', 'Trayvax', 'Contour', null, null, '#6B4423', 55],
-    ['Ekster Parliament', 'Ekster', 'Parliament', null, null, '#1F2226', 75],
-    ['Secrid Miniwallet', 'Secrid', 'Miniwallet', 'Aluminum', 'Anodized', '#B33A3A', 60],
-    ['Dango T01', 'Dango', 'T01 Tactical', 'Aluminum', 'Anodized', '#34383D', 110],
-    ['Saddleback Bifold', 'Saddleback Leather', 'Bifold', null, 'Patina', '#7A4A24', 130],
-    ['Ridge Aluminum', 'Ridge', 'Ridge Aluminum', 'Aluminum', 'Anodized', '#3E5C76', 70],
-  ]),
-  ...make('Keychain', [
-    ['KeyBar', 'KeyBar', 'KeyBar', 'Aluminum', 'Anodized', '#4A4F55', 28],
-    ['KeySmart Pro', 'KeySmart', 'Pro', 'Aluminum', 'Anodized', '#1F2226', 35],
-    ['Orbitkey Active', 'Orbitkey', 'Active', null, 'Coated', '#E4572E', 38],
-    ['Nite Ize S-Biner', 'Nite Ize', 'S-Biner', 'Aluminum', 'Anodized', '#D4A017', 14],
-    ['Ti2 Design Clip', 'Ti2 Design', 'Key Clip', 'Titanium', 'Blasted', '#7C8289', 12],
-    ['Big Idea Ti Key Hook', 'Big Idea Design', 'Ti Key Hook', 'Titanium', 'Stonewashed', '#8B9198', 10],
-    ['Tool Logic Credit Card', 'Tool Logic', 'Credit Card Tool', 'Steel', 'Satin', '#9CA2A9', 28],
-    ['Nitecore TUP', 'Nitecore', 'TUP', 'Steel', 'Coated', '#2B2E33', 56],
-    ['Copper Bottle Opener', 'Dango', 'Copper Opener', 'Copper', 'Patina', '#B87333', 30],
-    ['Brass Key Ring', 'Saddleback Leather', 'Brass Ring', 'Brass', 'Polished', '#C9A24B', 18],
   ]),
   ...make('Pry bar', [
     ['Gerber Gator Crate Opener', 'Gerber', 'Gator Crate Opener', 'Steel', 'Coated', '#B33A3A', 150],

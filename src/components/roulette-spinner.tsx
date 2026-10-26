@@ -47,7 +47,8 @@ import { useLayoutMode } from '@/lib/layout-mode';
 import { setScrollLocked } from '@/lib/scroll-lock';
 import { WheelItemPicker } from '@/components/wheel-item-picker';
 import { useFavoriteBoost, useMetalId, useSpinStyle } from '@/lib/preferences';
-import { CATEGORIES, DEFAULT_SLOT_CATEGORIES } from '@/types/models';
+import { ensureCategories, useCategories } from '@/lib/categories';
+import { DEFAULT_SLOT_CATEGORIES } from '@/types/models';
 import { useTourTarget } from '@/lib/tour';
 import { landSound, startSpinSound, stopAllSounds, warmUpSounds } from '@/lib/sounds';
 import type { GearItem, SlotConfig, SpinPick } from '@/types/models';
@@ -569,13 +570,15 @@ function CategoryPicker({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const all = useCategories();
+  const options = current && !all.includes(current) ? [...all, current] : all;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
         <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => undefined}>
           <ThemedText type="heading">{title}</ThemedText>
           <View style={styles.choices}>
-            {CATEGORIES.map((c) => {
+            {options.map((c) => {
               const on = current === c;
               return (
                 <Pressable
@@ -977,13 +980,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
     [apply],
   );
   const resetWheels = () => {
-    Alert.alert('Reset wheels?', 'Go back to the four starting wheels: Knife, Flashlight, Pen and Multi-tool. Locks are cleared. Your collection is not touched.', [
+    Alert.alert('Reset wheels?', 'Go back to the three starting wheels: Knife, Flashlight and Pen. Locks are cleared. Your collection is not touched.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reset',
         style: 'destructive',
         onPress: () => {
           select();
+          ensureCategories(DEFAULT_SLOT_CATEGORIES);
           void apply(DEFAULT_SLOT_CATEGORIES.map((category) => ({ category, lockedItemId: null })));
         },
       },
@@ -1073,7 +1077,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           <ThemedText type="small" themeColor="textSecondary" style={[styles.flex, { fontSize: 12, lineHeight: 16 }]}>
             Tap a wheel to change what it spins. Drag to reorder, or tap the x to remove it.
           </ThemedText>
-          <Pressable onPress={resetWheels} hitSlop={8} accessibilityRole="button" accessibilityLabel="Reset wheels to the starting four">
+          <Pressable onPress={resetWheels} hitSlop={8} accessibilityRole="button" accessibilityLabel="Reset wheels to the starting three">
             <ThemedText type="small" style={{ color: theme.accent }}>
               Reset
             </ThemedText>
