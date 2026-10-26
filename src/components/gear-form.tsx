@@ -25,8 +25,7 @@ import { DEMO_ITEMS, DEMO_SIZE } from '@/content/demo-photo';
 import { DEMO_PHOTO_BASE64 } from '@/content/demo-photo-data';
 import { useGear } from '@/lib/gear';
 import { success } from '@/lib/haptics';
-import { ItemPicker } from '@/components/item-picker';
-import { PhotoCropper } from '@/components/photo-cropper';
+import { PhotoFlow } from '@/components/photo-flow';
 import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
 import { useAiConsent } from '@/lib/preferences';
 import { getCategories, useCategories } from '@/lib/categories';
@@ -62,6 +61,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const [picking, setPicking] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
+  // The framed photo while its items are being found (the photo window stays open, so there is no hop back to the form).
+  const [finding, setFinding] = useState<{ uri: string | null } | null>(null);
+  // Bumped to abandon a lookup that is under way (Cancel while it works).
+  const lookup = useRef(0);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
   // Text fields keep their own text (so typing is never interrupted); this number
   // replaces what they show when the form is filled in from the photo.
@@ -101,36 +104,54 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
 
   async function runIdentify(stored: string) {
-    if (!(await ensureAiConsent('photo'))) {
-      setIdentify({ state: 'idle' });
-      return;
-    }
-    setIdentify({ state: 'working' });
-    const b64 = await photoBase64(stored);
-    if (!b64) {
-      setIdentify({ state: 'failed', message: 'Could not read the photo.' });
-      return;
-    }
-    const r = await identifyPhoto(b64);
-    if (!r.ok) {
-      // Dev builds show why, so a failure can be traced.
-      setIdentify({ state: 'failed', message: IS_DEV_BUILD && r.detail ? `${r.error} (${r.detail})` : r.error });
-      return;
-    }
-    applyIdentified(r);
-    // Several items in the photo: let the person pick which one they mean.
-    if (r.items && r.items.length > 1) {
-      // Tighten the rough outlines against the real picture (keeps the rough ones if that fails).
-      let items = r.items;
-      try {
-        items = await refineItems(stored, items);
-      } catch (e) {
-        // The rough outlines still work. Dev builds say why.
-        if (IS_DEV_BUILD) Alert.alert('Outline', e instanceof Error ? e.message : String(e));
+    const token = (lookup.current += 1);
+    const stale = () => lookup.current !== token;
+    setFinding({ uri: photoUri(stored) });
+    try {
+      if (!(await ensureAiConsent('photo'))) {
+        if (!stale()) setIdentify({ state: 'idle' });
+        return;
       }
-      setBatch({ stored, items, done: [], current: null });
-      setPicking(true);
+      if (stale()) return;
+      setIdentify({ state: 'working' });
+      const b64 = await photoBase64(stored);
+      if (stale()) return;
+      if (!b64) {
+        setIdentify({ state: 'failed', message: 'Could not read the photo.' });
+        return;
+      }
+      const r = await identifyPhoto(b64);
+      if (stale()) return;
+      if (!r.ok) {
+        // Dev builds show why, so a failure can be traced.
+        setIdentify({ state: 'failed', message: IS_DEV_BUILD && r.detail ? `${r.error} (${r.detail})` : r.error });
+        return;
+      }
+      applyIdentified(r);
+      // Several items in the photo: let the person pick which one they mean, in the same window.
+      if (r.items && r.items.length > 1) {
+        // Tighten the rough outlines against the real picture (keeps the rough ones if that fails).
+        let items = r.items;
+        try {
+          items = await refineItems(stored, items);
+        } catch (e) {
+          // The rough outlines still work. Dev builds say why.
+          if (IS_DEV_BUILD) Alert.alert('Outline', e instanceof Error ? e.message : String(e));
+        }
+        if (stale()) return;
+        setBatch({ stored, items, done: [], current: null });
+        setPicking(true);
+      }
+    } finally {
+      if (!stale()) setFinding(null);
     }
+  }
+
+  /** Cancel while the items are being found: back to the form with the photo, nothing filled in. */
+  function cancelLookup() {
+    lookup.current += 1;
+    setFinding(null);
+    setIdentify({ state: 'idle' });
   }
 
   /** The photo of just one item from a multi-item photo: cropped, with the others blurred. Made once, then kept. */
@@ -264,14 +285,22 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   async function usePhoto(photo: PickedPhoto, crop: PhotoCrop) {
+    // The same window carries on: from framing straight to looking for items.
     setCropping(null);
+    setFinding({ uri: null });
+    const token = (lookup.current += 1);
     setPreparing(true);
     try {
       const stored = await savePhoto(photo, crop);
+      if (lookup.current !== token) {
+        deletePhoto(stored);
+        return;
+      }
       setNewPhotos((p) => [...p, stored]);
       set('imageUri', stored);
       void runIdentify(stored);
     } catch (e) {
+      setFinding(null);
       Alert.alert('Photo', e instanceof Error ? e.message : 'Could not save the photo.');
     } finally {
       setPreparing(false);
@@ -355,19 +384,29 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
-      <ItemPicker
-        uri={picking && batch ? photoUri(batch.stored) : null}
-        items={picking && batch ? batch.items : null}
-        done={batch?.done ?? []}
-        onCancel={() => {
-          setPicking(false);
-          // "Done" after adding some of the items: leave the screen.
-          if (batch && batch.done.length > 0) cancel();
-        }}
-        onChoose={(i, d) => void chooseItem(i, d)}
-        onPreview={(i, d) => void cropFor(i, d)}
+      <PhotoFlow
+        cropping={cropping}
+        onCropCancel={() => setCropping(null)}
+        onCropDone={(p, c) => void usePhoto(p, c)}
+        finding={finding}
+        onFindCancel={cancelLookup}
+        pick={
+          picking && batch && photoUri(batch.stored)
+            ? {
+                uri: photoUri(batch.stored)!,
+                items: batch.items,
+                done: batch.done,
+                onCancel: () => {
+                  setPicking(false);
+                  // "Done" after adding some of the items: leave the screen.
+                  if (batch.done.length > 0) cancel();
+                },
+                onChoose: (i, d) => void chooseItem(i, d),
+                onPreview: (i, d) => void cropFor(i, d),
+              }
+            : null
+        }
       />
-      <PhotoCropper photo={cropping} onCancel={() => setCropping(null)} onDone={(p, c) => void usePhoto(p, c)} />
 
       <View style={styles.photo}>
         <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri }} size={132} />

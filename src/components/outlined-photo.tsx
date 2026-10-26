@@ -97,6 +97,8 @@ export function OutlinedPhoto({
   const hide = (selected !== null ? items.map((_, i) => i).filter((i) => i !== selected) : added).filter((i) => paths.has(i));
   const blurred = hide.length > 0;
   const hidePaths = hide.map((i) => paths.get(i)!).join(' ');
+  // A new id (and key) for each set of blurred items: Android kept using the first clip it drew.
+  const clipId = `sharp-${hide.join('_')}`;
 
   return (
     <View style={{ width: W, height: H, borderRadius: Radius.medium, overflow: 'hidden' }}>
@@ -108,16 +110,16 @@ export function OutlinedPhoto({
         onLoad={(e) => onLoad?.({ width: e.source.width, height: e.source.height })}
         accessibilityIgnoresInvertColors
       />
-      <Svg width={W} height={H} style={StyleSheet.absoluteFill}>
+      <Svg key={clipId} width={W} height={H} style={StyleSheet.absoluteFill}>
         {blurred ? (
           <>
             <Defs>
               {/* Everything except the blurred items: the whole picture with those shapes cut out. */}
-              <ClipPath id="sharp">
+              <ClipPath id={clipId}>
                 <Path d={`M 0 0 H ${W} V ${H} H 0 Z ${hidePaths}`} clipRule="evenodd" />
               </ClipPath>
             </Defs>
-            <SvgImage href={{ uri }} x={0} y={0} width={W} height={H} preserveAspectRatio="none" clipPath="url(#sharp)" />
+            <SvgImage href={{ uri }} x={0} y={0} width={W} height={H} preserveAspectRatio="none" clipPath={`url(#${clipId})`} />
           </>
         ) : null}
         {remaining.map((i) => {
