@@ -57,6 +57,7 @@ const BASE_MS = 2200;
 const GAP = 10; // between wheels, sideways and down
 const LABEL_H = 26; // the category name and lock above each window
 const BEZEL = 4; // the metal trim around a window
+const MIN_TALL_WIDTH = 60; // the narrowest a tall wheel gets
 const PLUS_ID = 999; // the empty slot shown while editing
 const STAGGER_MS = 500;
 
@@ -176,6 +177,7 @@ function Reel({
   durationMs,
   speed,
   size,
+  bodyH,
   editing,
   busy,
   onSettled,
@@ -194,8 +196,10 @@ function Reel({
   durationMs: number;
   /** This wheel's speed for this spin, close to 1. */
   speed: number;
-  /** Width of the wheel, trim included (px). The window is square. */
+  /** Width of the wheel, trim included (px). */
   size: number;
+  /** Height of the wheel, trim included (px): the same as the width for a square wheel, taller for a tall one. */
+  bodyH: number;
   /** Wiggling: the lock is hidden while wheels are being rearranged. */
   editing: boolean;
   busy: boolean;
@@ -304,8 +308,11 @@ function Reel({
   const isLocked = !!locked;
   // The window is square: the piece on the payline in the middle, a sliver of its neighbours above and below.
   const win = size - BEZEL * 2;
-  const peek = Math.round(win * 0.13);
-  const rowHeight = win - peek * 2;
+  const winH = bodyH - BEZEL * 2;
+  const tall = bodyH > size + 1;
+  // A tall wheel shows three whole rows (one above the payline, the payline, one below); a square one a sliver of each neighbour.
+  const peek = tall ? Math.round(winH / 3) : Math.round(winH * 0.13);
+  const rowHeight = winH - peek * 2;
   const thumb = Math.round(rowHeight * 0.5);
   const font = Math.max(10, Math.round(win * 0.1));
 
@@ -324,7 +331,7 @@ function Reel({
           <LinearGradient colors={['#FFFFFF59', '#FFFFFF00', '#00000073']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
         </View>
         <View
-          style={[styles.window, { width: win, height: win, backgroundColor: theme.reel }]}
+          style={[styles.window, { width: win, height: winH, backgroundColor: theme.reel }]}
           accessibilityLabel={`${slot.category} wheel: ${shown?.name ?? 'empty'}${isLocked ? ', locked' : ''}`}>
           {ring.map((item, i) => (
             <ReelRow key={`${i}:${item.id}`} item={item} index={i} count={count} pos={pos} rowHeight={rowHeight} top={peek} thumb={thumb} font={font} />
@@ -342,8 +349,8 @@ function Reel({
           <LinearGradient pointerEvents="none" colors={['#FFFFFF00', '#FFFFFF1C', '#FFFFFF00']} style={[styles.shade, { top: peek, height: rowHeight }]} />
           <View pointerEvents="none" style={[styles.line, { top: peek, backgroundColor: metal.line }]} />
           <View pointerEvents="none" style={[styles.line, { top: peek + rowHeight - 1.5, backgroundColor: metal.line }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: win / 2 - 7, borderLeftColor: metal.line }]} />
-          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: win / 2 - 7, borderRightColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerL, { top: winH / 2 - 7, borderLeftColor: metal.line }]} />
+          <View pointerEvents="none" style={[styles.pointer, styles.pointerR, { top: winH / 2 - 7, borderRightColor: metal.line }]} />
           {/* Inner edge, and a diagonal glint on the glass. */}
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium, borderWidth: 1, borderColor: '#000000AA' }]} />
           <LinearGradient pointerEvents="none" colors={['#FFFFFF33', '#FFFFFF08', '#FFFFFF00']} locations={[0, 0.35, 0.6]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.medium }]} />
@@ -358,11 +365,11 @@ function Reel({
  * Where a wheel sits on the grid: `cols` across, a short last row centred.
  * Used both to place wheels and to work out where a dragged one is hovering.
  */
-function cellPosition(index: number, total: number, cols: number, size: number) {
+function cellPosition(index: number, total: number, cols: number, size: number, bodyH: number) {
   const row = Math.floor(index / cols);
   const inRow = Math.min(cols, total - row * cols);
   const offset = ((cols - inRow) * (size + GAP)) / 2;
-  return { x: (index % cols) * (size + GAP) + offset, y: row * (size + LABEL_H + GAP) };
+  return { x: (index % cols) * (size + GAP) + offset, y: row * (bodyH + LABEL_H + GAP) };
 }
 
 /**
@@ -376,6 +383,7 @@ function Cell({
   last,
   cols,
   size,
+  bodyH,
   editing,
   plus,
   canRemove,
@@ -398,6 +406,7 @@ function Cell({
   last: number;
   cols: number;
   size: number;
+  bodyH: number;
   editing: boolean;
   /** The empty slot shown while editing, to add a wheel. */
   plus?: boolean;
@@ -418,7 +427,7 @@ function Cell({
   onDrop: (id: number, to: number) => void;
 }) {
   const theme = useTheme();
-  const target = cellPosition(index, total, cols, size);
+  const target = cellPosition(index, total, cols, size, bodyH);
   const x = useSharedValue(target.x);
   const y = useSharedValue(target.y);
   const lift = useSharedValue(0);
@@ -469,7 +478,7 @@ function Cell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, plus]);
 
-  const cellH = size + LABEL_H;
+  const cellH = bodyH + LABEL_H;
 
   const hold = Gesture.LongPress()
     .minDuration(450)
@@ -639,12 +648,18 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
   const count = slots.length;
   const canAdd = editing && count < maxSlots;
   const total = count + (canAdd ? 1 : 0);
-  const cols = landscape && !big ? Math.max(1, Math.min(6, total)) : 3;
+  // Tall wheels: always on iPad and open foldables (every wheel, up to six, in one line, even while editing); on a phone held
+  // upright while the wheels and the + tile fit three across. Past that (and sideways) the wheels are squares.
+  const tall = big || (!landscape && total <= 3);
+  const cols = big ? Math.max(1, total) : landscape ? Math.max(1, Math.min(6, total)) : 3;
   const rows = Math.max(1, Math.ceil(total / cols));
   const avail = boxWidth || fullWidth || windowWidth - Spacing.three * 2;
-  const maxSize = big ? 190 : landscape ? 132 : 150;
-  const size = Math.max(84, Math.min(maxSize, Math.floor((avail - GAP * (cols - 1)) / cols)));
-  const gridHeight = rows * (size + LABEL_H) + (rows - 1) * GAP;
+  const maxSize = big ? (tall ? 180 : 190) : landscape ? 132 : 150;
+  // On a big window the width always leaves room for the + tile, so wheels keep their size when editing starts.
+  const across = big ? Math.min(maxSlots, count + 1) : cols;
+  const size = Math.max(tall ? MIN_TALL_WIDTH : 84, Math.min(maxSize, Math.floor((avail - GAP * (across - 1)) / across)));
+  const bodyH = tall ? Math.round((size - BEZEL * 2) * 0.9) * 3 + BEZEL * 2 : size;
+  const gridHeight = rows * (bodyH + LABEL_H) + (rows - 1) * GAP;
 
   const candidates = useMemo(() => {
     const m = new Map<number, GearItem[]>();
@@ -1024,6 +1039,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
               last={count - 1}
               cols={cols}
               size={size}
+              bodyH={bodyH}
               editing={editing}
               canRemove={count > MIN_SLOTS}
               canHold={!busy}
@@ -1047,6 +1063,7 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
                 durationMs={durations[s.slotIndex] ?? BASE_MS + s.slotIndex * STAGGER_MS}
                 speed={speeds[s.slotIndex] ?? 1}
                 size={size}
+                bodyH={bodyH}
                 editing={editing}
                 busy={busy}
                 onSettled={settled}
@@ -1057,14 +1074,14 @@ export function RouletteSpinner({ onControl }: { onControl: (c: SpinControl) => 
           );
         })}
         {canAdd ? (
-          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} editing plus canRemove={false} canHold={false} version={slotsVersion.current} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onChoose={onChooseCell} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
+          <Cell id={PLUS_ID} index={count} total={total} last={count - 1} cols={cols} size={size} bodyH={bodyH} editing plus canRemove={false} canHold={false} version={slotsVersion.current} onHold={startEditing} onTap={onTapCell} onToggle={toggleSlot} onChoose={onChooseCell} onRemove={onRemove} onDragStart={onLift} onDragMove={onMove} onDrop={onDrop}>
             <View style={{ width: size }}>
               <View style={styles.labelRow}>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.labelText}>
                   Add a wheel
                 </ThemedText>
               </View>
-              <View style={[styles.plus, { width: size, height: size, borderColor: theme.border }]}>
+              <View style={[styles.plus, { width: size, height: bodyH, borderColor: theme.border }]}>
                 <Icon name="add" size={Math.round(size * 0.3)} color={theme.textSecondary} />
               </View>
             </View>
