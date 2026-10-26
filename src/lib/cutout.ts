@@ -108,7 +108,7 @@ export function cutoutLayout(cutout: Cutout, size: number, look: CutoutLook): Cu
   const s = (FILL * size) / longest;
   const f = (n: number) => n.toFixed(3);
   const half = size / 2;
-  const transform = `translate(${f(half)} ${f(half)}) scale(${f(s)}) translate(${f(c[0] - bc[0])} ${f(c[1] - bc[1])}) rotate(${f(turn)} ${f(c[0])} ${f(c[1])})`;
+  const transform = `translate(${f(half)} ${f(half)}) scale(${f(s)}) translate(${f(-bc[0])} ${f(-bc[1])}) rotate(${f(turn)} ${f(c[0])} ${f(c[1])})`;
   const clip = `${pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${f(x)} ${f(y)}`).join(' ')} Z`;
   const w = b.w * s;
   const h = b.h * s;
