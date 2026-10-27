@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -132,6 +132,10 @@ export default function CollectionScreen() {
   const [lockedOnly, setLockedOnly] = useState(false);
   const [sort, setSort] = useState<Sort>('category');
   const [sheet, setSheet] = useState(false);
+  // The piece whose photo is shown large (tap a photo in the list).
+  const [viewing, setViewing] = useState<GearItem | null>(null);
+  const { width: winW, height: winH } = useWindowDimensions();
+  const bigSize = Math.min(winW - 48, winH - 200, 560);
 
   const myCategories = useCategories();
   const categories = useMemo(() => [...myCategories.filter((c) => items.some((g) => g.category === c)), ...uniq(items.map((g) => g.category)).filter((c) => !myCategories.includes(c))], [items, myCategories]);
@@ -221,7 +225,13 @@ export default function CollectionScreen() {
             {checked ? <Icon name="check" size={13} color={theme.onAccent} /> : null}
           </View>
         ) : null}
-        <GearThumb item={g} size={view === 'compact' ? 30 : 44} />
+        {selecting ? (
+          <GearThumb item={g} size={view === 'compact' ? 30 : 44} />
+        ) : (
+          <Pressable onPress={() => setViewing(g)} hitSlop={4} accessibilityRole="imagebutton" accessibilityLabel={`Show ${g.name} larger`}>
+            <GearThumb item={g} size={view === 'compact' ? 30 : 44} />
+          </Pressable>
+        )}
         <View style={styles.flex}>
           <ThemedText type="smallBold" numberOfLines={1} style={{ fontSize: view === 'compact' ? 14 : 16 }}>
             {g.name}
@@ -490,6 +500,19 @@ export default function CollectionScreen() {
         </>
       )}
 
+      <Modal visible={!!viewing} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
+        <Pressable style={styles.viewer} onPress={() => setViewing(null)} accessibilityRole="button" accessibilityLabel="Close photo">
+          {viewing ? (
+            <>
+              <GearThumb item={viewing} size={bigSize} />
+              <ThemedText type="smallBold" style={styles.viewerName} numberOfLines={2}>
+                {viewing.name}
+              </ThemedText>
+            </>
+          ) : null}
+        </Pressable>
+      </Modal>
+
       <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => setSheet(false)}>
         <Pressable style={styles.scrim} onPress={() => setSheet(false)} accessibilityLabel="Close filters">
           <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => undefined}>
@@ -575,6 +598,8 @@ function Section({ title, count = 0, onClear, limit, children }: { title: string
 }
 
 const styles = StyleSheet.create({
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center', gap: Spacing.three, padding: Spacing.three },
+  viewerName: { color: '#FFFFFF', textAlign: 'center', fontSize: 18 },
   twoCols: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
   add: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   small: { fontSize: 12, lineHeight: 16 },
