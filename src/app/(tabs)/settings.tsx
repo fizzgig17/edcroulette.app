@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
-import { router, type Href } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, useWindowDimensions, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { requestCollapse, useCollapseSignal } from '@/lib/collapse';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
@@ -21,7 +22,7 @@ import { METALS, metalById } from '@/constants/metals';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
 import { setCutoutBg, setCutoutLook, setPhotoStyle, useCutoutBg, useCutoutLook, usePhotoStyle } from '@/lib/preferences';
-import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
+import { addTrainingNote, MAX_TRAINING_NOTE_CHARS, MAX_TRAINING_NOTES, removeTrainingNote, setAiConsent, setIconFollowsMetal, setMetalId, useIconFollowsMetal, useMetalId, setSoundOn, setHapticsOn, useHapticsOn, setSpinStyle, setFavoriteBoost, useFavoriteBoost, type FavoriteBoost, useAiConsent, useSoundOn, useSpinStyle, useTrainingNotes, type SpinStyle } from '@/lib/preferences';
 import { SAMPLE_GEAR } from '@/content/sample-gear';
 import { addCategory, ensureCategories, isBuiltIn, MAX_CATEGORY_CHARS, removeCategory, removeUnusedBuiltIns, resetCategories, restoreCategories, useCategories, useRemovedCategories } from '@/lib/categories';
 import { landSound } from '@/lib/sounds';
@@ -181,6 +182,14 @@ function Section({ title, summary, info, defaultOpen, children }: { title: strin
   const theme = useTheme();
   const [open, setOpen] = useState(!!defaultOpen);
   const [help, setHelp] = useState(false);
+  // Switching to Settings, or pulling the page down, folds every section shut.
+  const collapse = useCollapseSignal();
+  useEffect(() => {
+    if (collapse > 0) {
+      setOpen(false);
+      setHelp(false);
+    }
+  }, [collapse]);
   const toggle = () => {
     select();
     setOpen((o) => !o);
@@ -237,6 +246,7 @@ export default function SettingsScreen() {
   const cutBgName = Object.keys(CUT_BGS).find((k) => CUT_BGS[k] === cutBg) ?? 'Gray';
   const boostName = Object.keys(BOOSTS).find((k) => BOOSTS[k] === boost) ?? 'Light';
   const sound = useSoundOn();
+  const haptics = useHapticsOn();
   const metal = metalById(useMetalId());
   const notes = useTrainingNotes();
   const [noteText, setNoteText] = useState('');
@@ -319,12 +329,14 @@ export default function SettingsScreen() {
     }
   }
 
+  useFocusEffect(useCallback(() => requestCollapse(), []));
+
   const styleName = Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random';
   const themeName = Object.keys(THEMES).find((k) => THEMES[k] === pref) ?? 'Match phone';
 
   return (
-    <Screen title="Settings" tab>
-      <Section title="Spinning" summary={`${styleName} · favorites ${boost === 1 ? 'off' : `${boost}×`} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, how much stars count, and whether it makes noise.">
+    <Screen title="Settings" tab onRefresh={requestCollapse}>
+      <Section title="Spinning" summary={`${styleName} · favorites ${boost === 1 ? 'off' : `${boost}×`} · sound ${sound ? 'on' : 'off'}${haptics ? '' : ' · haptics off'}`} info="How a spin picks its pieces, how much stars count, and whether it makes noise or little taps you can feel.">
         <Card padded={false}>
           <View style={styles.pad}>
             <Label
@@ -357,6 +369,7 @@ export default function SettingsScreen() {
               if (v) landSound();
             }}
           />
+          <ToggleRow label="Haptics" info="Little taps you feel when you press buttons, as the wheels land, and when you pull a page down. Off turns every one of them off." value={haptics} onValueChange={setHapticsOn} />
         </Card>
       </Section>
 

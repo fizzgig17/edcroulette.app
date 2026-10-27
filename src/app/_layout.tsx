@@ -19,6 +19,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { lastFatalError, onFatalError } from '@/lib/crash-catcher';
 import { useGear } from '@/lib/gear';
 import { LocalDataProvider } from '@/lib/local-database';
+import { prepareFinder } from '@/lib/subject-mask';
 import { TourProvider } from '@/lib/tour';
 import { UpdateProvider } from '@/lib/update-context';
 
@@ -43,6 +44,10 @@ function HideSplashWhenLoaded() {
 export default function RootLayout() {
   const [fatal, setFatal] = useState<Error | null>(lastFatalError);
   useEffect(() => onFatalError(setFatal), []);
+  // Android: start downloading the object finder's model the moment the app opens (a one-time download).
+  useEffect(() => {
+    if (Platform.OS === 'android') prepareFinder();
+  }, []);
   // Android no longer lets you switch the home-screen icon. A phone that still has one of the old metal icons switched on goes back to the four-metal icon, once.
   useEffect(() => {
     if (Platform.OS !== 'android' || !supportsAlternateIcons) return;

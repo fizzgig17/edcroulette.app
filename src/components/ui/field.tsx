@@ -1,10 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { lift, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useReveal } from '@/lib/reveal';
 
 /** A labelled form row. */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -25,11 +26,25 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 
 export function Input(props: TextInputProps) {
   const theme = useTheme();
+  const [focused, setFocused] = useState(false);
+  const box = useRef<TextInput>(null);
+  const reveal = useReveal();
   return (
     <TextInput
+      ref={box}
       placeholderTextColor={theme.textSecondary}
       {...props}
-      style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }, props.style]}
+      onFocus={(e) => {
+        setFocused(true);
+        // Scroll so this box sits just above the keyboard.
+        if (reveal && box.current) reveal(box.current as unknown as View);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        props.onBlur?.(e);
+      }}
+      style={[styles.input, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }, focused && { borderColor: theme.accent, borderWidth: 2, paddingHorizontal: Spacing.three - 1 }, props.style]}
     />
   );
 }

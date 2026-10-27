@@ -300,6 +300,7 @@ export default function CollectionScreen() {
     <Screen
       title="Collection"
       tab
+      onRefresh={() => setFoldedCategories(groups.map(([c]) => c))}
       footer={
         undoFor || selecting ? (
           <View style={[styles.floating, { bottom: embedded ? Spacing.two : insets.bottom + 84 }]} pointerEvents="box-none">

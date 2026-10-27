@@ -14,6 +14,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.Arguments
@@ -25,6 +27,8 @@ import com.facebook.react.uimanager.ViewManager
 import com.google.android.gms.common.moduleinstall.ModuleInstall
 import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 
@@ -67,7 +71,7 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
   }
 
   // Labels every pixel with the subject it belongs to, then answers the call. Failures say why, so the app can show it.
-  private fun segment(segmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter, bitmap: Bitmap, promise: Promise) {
+  private fun segment(segmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter, bitmap: Bitmap, promise: Promise, attempt: Int = 0) {
     segmenter
         .process(InputImage.fromBitmap(bitmap, 0))
         .addOnSuccessListener { result ->
@@ -106,9 +110,67 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
           }
         }
         .addOnFailureListener { e ->
-          promise.reject("segment", "Segmentation failed: " + e.toString())
-          segmenter.close()
+          // The first time, Google Play services may still be downloading the model ("waiting for the module to be downloaded"):
+          // wait a few seconds and ask again (up to about a minute) instead of giving up and using the whole photo.
+          val why = e.toString().lowercase()
+          if (attempt < 20 && (why.contains("download") || why.contains("wait") || why.contains("unavailable") || why.contains("module"))) {
+            Handler(Looper.getMainLooper()).postDelayed({ segment(segmenter, bitmap, promise, attempt + 1) }, 3000)
+          } else {
+            promise.reject("segment", "Segmentation failed: " + e.toString())
+            segmenter.close()
+          }
         }
+  }
+
+  // What the photo shows, as labels with a confidence (Google's image labeler, bundled in the app: on the phone, no download, no internet).
+  @ReactMethod
+  fun classify(uri: String, maxEdge: Int, promise: Promise) {
+    Thread {
+      try {
+        val bitmap = load(uri, maxOf(maxEdge, 480))
+        if (bitmap == null) {
+          promise.resolve(Arguments.createArray())
+          return@Thread
+        }
+        val labeler = ImageLabeling.getClient(ImageLabelerOptions.Builder().setConfidenceThreshold(0.15f).build())
+        labeler
+            .process(InputImage.fromBitmap(bitmap, 0))
+            .addOnSuccessListener { labels ->
+              val out = Arguments.createArray()
+              for (l in labels.take(25)) {
+                val m = Arguments.createMap()
+                m.putString("label", l.text)
+                m.putDouble("confidence", l.confidence.toDouble())
+                out.pushMap(m)
+              }
+              promise.resolve(out)
+              labeler.close()
+            }
+            .addOnFailureListener {
+              promise.resolve(Arguments.createArray())
+              labeler.close()
+            }
+      } catch (e: Throwable) {
+        promise.resolve(Arguments.createArray())
+      }
+    }.start()
+  }
+
+  // Starts the model download early (when the add screen opens), so the first photo doesn't wait for it.
+  @ReactMethod
+  fun prepare(promise: Promise) {
+    try {
+      val options = SubjectSegmenterOptions.Builder().enableMultipleSubjects(SubjectSegmenterOptions.SubjectResultOptions.Builder().enableConfidenceMask().build()).build()
+      val segmenter = SubjectSegmentation.getClient(options)
+      ModuleInstall.getClient(ctx)
+          .installModules(ModuleInstallRequest.newBuilder().addApi(segmenter).build())
+          .addOnCompleteListener {
+            segmenter.close()
+            promise.resolve(true)
+          }
+    } catch (e: Throwable) {
+      promise.resolve(false)
+    }
   }
 
   @ReactMethod
@@ -181,6 +243,10 @@ module.exports = function withSubjectMask(config) {
       const marker = 'implementation("com.facebook.react:react-android")';
       if (!src.includes(marker)) throw new Error('with-subject-mask: could not find the dependencies block in app/build.gradle');
       src = src.replace(marker, `${marker}\n    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")`);
+    }
+    if (!src.includes('com.google.mlkit:image-labeling')) {
+      const marker = 'implementation("com.facebook.react:react-android")';
+      src = src.replace(marker, `${marker}\n    implementation("com.google.mlkit:image-labeling:17.0.9")`);
     }
     cfg.modResults.contents = src;
     return cfg;

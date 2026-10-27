@@ -8,6 +8,27 @@ public class EdcSubjectMaskModule: Module {
   public func definition() -> ModuleDefinition {
     Name("EdcSubjectMask")
 
+    // What the photo shows, as labels with a confidence (Apple's built-in classifier, on the phone; no download, no internet).
+    AsyncFunction("classify") { (uri: String, maxEdge: Int) -> [[String: Any]] in
+      guard let url = URL(string: uri),
+            let data = try? Data(contentsOf: url),
+            let source = UIImage(data: data) else { return [] }
+      let longest = max(source.size.width, source.size.height)
+      let scale = min(1, CGFloat(maxEdge) / longest)
+      let size = CGSize(width: source.size.width * scale, height: source.size.height * scale)
+      let format = UIGraphicsImageRendererFormat.default()
+      format.scale = 1
+      let drawn = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+        source.draw(in: CGRect(origin: .zero, size: size))
+      }
+      guard let cgImage = drawn.cgImage else { return [] }
+      let request = VNClassifyImageRequest()
+      let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+      try handler.perform([request])
+      let results = (request.results ?? []).filter { $0.confidence > 0.03 }.prefix(25)
+      return results.map { ["label": $0.identifier, "confidence": Double($0.confidence)] }
+    }
+
     // One byte per pixel: 0 is background, 1, 2, 3... are the objects. Returned as base64.
     AsyncFunction("instanceMask") { (uri: String, maxEdge: Int) -> [String: Any]? in
       guard #available(iOS 17.0, *) else { return nil }

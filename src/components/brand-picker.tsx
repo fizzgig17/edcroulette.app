@@ -10,6 +10,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/field';
+import { PickRow, PickSheet } from '@/components/ui/pick-sheet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { suggestBrand } from '@/lib/api';
@@ -49,6 +50,7 @@ export function BrandPicker({
   const popular = useMemo(() => brands.filter((b) => b.categories.includes(category)).slice(0, 14), [brands, category]);
   const onList = popular.some((b) => brandKey(b.name) === brandKey(typed));
   const [other, setOther] = useState(false);
+  const [open, setOpen] = useState(false);
   const custom = typed && !onList ? typed : null;
 
   function choose(name: string) {
@@ -57,6 +59,7 @@ export function BrandPicker({
     setFieldKey((k) => k + 1000);
     setSent(null);
     setOther(false);
+    setOpen(false);
     onChange(name || null);
   }
 
@@ -78,6 +81,9 @@ export function BrandPicker({
   const notOnList = other && typed.length >= 2 && !exact && matches.length === 0;
 
   return (
+    <>
+      <PickRow label="Brand" value={typed} placeholder="Choose a brand" onPress={() => setOpen(true)} />
+      <PickSheet visible={open} title="Brand" onClose={() => setOpen(false)}>
     <View style={styles.wrap}>
       <View style={styles.chips} accessibilityRole="radiogroup">
         {popular.map((b) => (
@@ -135,6 +141,8 @@ export function BrandPicker({
         </View>
       ) : null}
     </View>
+      </PickSheet>
+    </>
   );
 }
 

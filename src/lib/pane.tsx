@@ -6,7 +6,7 @@ import { useWindowDimensions } from 'react-native';
  * own: the screen then skips its own scrolling and safe-area handling, and sizes itself to the
  * pane's width instead of the window's.
  */
-export const PaneContext = createContext<{ width: number; setOverlay: (node: ReactNode) => void; setScrollEnabled: (on: boolean) => void } | null>(null);
+export const PaneContext = createContext<{ width: number; setOverlay: (node: ReactNode) => void; setScrollEnabled: (on: boolean) => void; setRefresh: (fn: (() => void) | null) => void } | null>(null);
 
 export const usePane = () => useContext(PaneContext);
 export const useEmbedded = () => useContext(PaneContext) !== null;

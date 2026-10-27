@@ -10,7 +10,7 @@ import { NativeModules } from 'react-native';
 import { log } from '@/lib/log';
 
 type Raw = { width: number; height: number; data: string } | null;
-type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw> };
+type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw>; prepare?: () => Promise<boolean>; classify?: (uri: string, maxEdge: number) => Promise<{ label: string; confidence: number }[]> };
 const native = requireOptionalNativeModule<Finder>('EdcSubjectMask') ?? ((NativeModules.EdcSubjectMask as Finder | undefined) || null);
 
 export type InstanceMask = { width: number; height: number; labels: Uint8Array };
@@ -44,6 +44,26 @@ export async function findObjects(uri: string, maxEdge = 480): Promise<InstanceM
   } catch (e) {
     lastMaskProblem = e instanceof Error ? e.message : String(e);
     log('finder.fail', { reason: lastMaskProblem, ms: Date.now() - t0 });
+    return null;
+  }
+}
+
+/** Android: starts downloading the finder's model now, so the first photo doesn't have to wait for it. Harmless elsewhere. */
+export function prepareFinder() {
+  try {
+    void native?.prepare?.().catch(() => {});
+  } catch {
+    // Not available here.
+  }
+}
+
+/** What the phone's own image labeler sees in a photo (on the phone, nothing is sent), or null if this build can't. */
+export async function classifyPhoto(uri: string, maxEdge = 480): Promise<{ label: string; confidence: number }[] | null> {
+  if (!native?.classify) return null;
+  try {
+    return await native.classify(uri, maxEdge);
+  } catch (e) {
+    log('classify.fail', { reason: e instanceof Error ? e.message : String(e) });
     return null;
   }
 }

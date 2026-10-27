@@ -1,7 +1,7 @@
 /**
  * Lets the Spin screen hand its spin action to the button docked in the tab bar.
  */
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import type { SpinControl } from '@/components/roulette-spinner';
 
@@ -22,3 +22,11 @@ export function SpinDockProvider({ children }: { children: ReactNode }) {
 }
 
 export const useSpinDock = () => useContext(DockContext);
+
+/** Pulling the Spin page down spins the wheels (never while they are already turning, or when there is nothing to spin). */
+export function usePullSpin() {
+  const { control } = useSpinDock();
+  return useCallback(() => {
+    if (control && !control.disabled && !control.busy) control.onPress();
+  }, [control]);
+}

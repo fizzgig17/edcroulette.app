@@ -6,7 +6,7 @@
  * Collection and Settings (one at a time). Each pane scrolls on its own, and the Spin button stays docked
  * at the bottom right (see the tab layout).
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,10 +22,12 @@ import { metalById } from '@/constants/metals';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useMetalId } from '@/lib/preferences';
 import { PaneContext } from '@/lib/pane';
-import { useSpinDock } from '@/lib/spin-dock';
+import { usePullRefresh } from '@/components/pull-refresh';
+import { requestCollapse } from '@/lib/collapse';
+import { usePullSpin, useSpinDock } from '@/lib/spin-dock';
 import { useTour, useTourTarget } from '@/lib/tour';
 
-function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = true }: { children: ReactNode; flex?: number; basis?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean }) {
+function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = true, onRefresh }: { children: ReactNode; flex?: number; basis?: number; centered?: boolean; topSignal?: number; fit?: boolean; framed?: boolean; onRefresh?: () => void }) {
   const theme = useTheme();
   const metal = metalById(useMetalId());
   const [width, setWidth] = useState(0);
@@ -35,11 +37,19 @@ function Pane({ children, flex = 1, basis, centered, topSignal, fit, framed = tr
   useEffect(() => {
     if (topSignal) scroll.current?.scrollTo({ y: 0, animated: true });
   }, [topSignal]);
-  const value = useMemo(() => ({ width: Math.max(0, width - Spacing.three * 2), setOverlay, setScrollEnabled }), [width]);
+  // Pulling a pane down: its own action (the Spin pane), or the one the screen inside it asked for.
+  const childRefresh = useRef<(() => void) | null>(null);
+  const [canRefresh, setCanRefresh] = useState(false);
+  const setRefresh = useCallback((fn: (() => void) | null) => {
+    childRefresh.current = fn;
+    setCanRefresh(!!fn);
+  }, []);
+  const refreshControl = usePullRefresh(onRefresh || canRefresh ? () => (onRefresh ?? childRefresh.current)?.() : null);
+  const value = useMemo(() => ({ width: Math.max(0, width - Spacing.three * 2), setOverlay, setScrollEnabled, setRefresh }), [width, setRefresh]);
   return (
     <View style={[styles.pane, fit ? styles.fit : basis ? { width: basis, flexBasis: basis, flexGrow: 0, flexShrink: 0 } : { flex }, framed && [styles.frame, { borderColor: `${metal.line}80`, backgroundColor: theme.background }]]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <PaneContext.Provider value={value}>
-        <ScrollView ref={scroll} style={fit ? styles.fitScroll : undefined} alwaysBounceVertical={false} scrollEnabled={scrollEnabled} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <ScrollView ref={scroll} style={fit ? styles.fitScroll : undefined} alwaysBounceVertical={false} scrollEnabled={scrollEnabled} refreshControl={refreshControl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={[styles.column, centered && styles.centered]}>{children}</View>
         </ScrollView>
         {overlay}
@@ -62,7 +72,7 @@ function SideTabs({ basis }: { basis: number }) {
         {(['collection', 'settings'] as const).map((t) => {
           const on = tab === t;
           return (
-            <Pressable key={t} ref={t === 'collection' ? collectionTab : settingsTab} collapsable={false} onPress={() => { setTab(t); signal(`tab-${t}`); }} accessibilityRole="tab" accessibilityState={{ selected: on }} style={({ pressed }) => [styles.tab, pressed && { opacity: 0.8 }]}>
+            <Pressable key={t} ref={t === 'collection' ? collectionTab : settingsTab} collapsable={false} onPress={() => { setTab(t); signal(`tab-${t}`); if (t === 'settings') requestCollapse(); }} accessibilityRole="tab" accessibilityState={{ selected: on }} style={({ pressed }) => [styles.tab, pressed && { opacity: 0.8 }]}>
               {on ? (
                 <>
                   <LinearGradient colors={[metal.hi, metal.lo, metal.hi]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: Radius.small }]} />
@@ -96,6 +106,7 @@ export function Dashboard() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { topSignal } = useSpinDock();
+  const pullSpin = usePullSpin();
   const landscape = width > height;
   // Sideways, the two halves are exactly equal: the window less the padding and the gap between them.
   const half = Math.floor((width - Spacing.two * 3) / 2);
@@ -103,7 +114,7 @@ export function Dashboard() {
     <ThemedView style={[styles.root, { paddingTop: IS_DEV_BUILD ? 0 : insets.top, backgroundColor: theme.backgroundElement }]}>
       {landscape ? (
         <View style={styles.row}>
-          <Pane centered topSignal={topSignal} basis={half}>
+          <Pane centered topSignal={topSignal} basis={half} onRefresh={pullSpin}>
             <SpinContent />
           </Pane>
           <SideTabs basis={half} />
@@ -111,7 +122,7 @@ export function Dashboard() {
       ) : (
         <View style={styles.col}>
           {/* The top section is as tall as the wheels and today's carry need, so it doesn't scroll after a spin. */}
-          <Pane centered fit>
+          <Pane centered fit onRefresh={pullSpin}>
             <SpinContent />
           </Pane>
           <View style={[styles.row, styles.bottom]}>
