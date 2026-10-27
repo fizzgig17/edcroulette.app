@@ -764,7 +764,7 @@ function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPre
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} disabled={disabled} hitSlop={10} accessibilityRole="button" style={{ opacity: disabled ? 0.4 : 1, paddingHorizontal: Spacing.two }}>
-      <ThemedText type={bold ? 'smallBold' : 'small'} style={{ color: theme.accent, fontSize: 16 }}>
+      <ThemedText type={bold ? 'smallBold' : 'small'} numberOfLines={1} style={{ color: theme.accent, fontSize: 16 }}>
         {label}
       </ThemedText>
     </Pressable>
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
   bar: { paddingBottom: Spacing.two, paddingHorizontal: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, opacity: 0.45, marginBottom: Spacing.two },
   barRow: { flexDirection: 'row', alignItems: 'center' },
-  barSide: { width: 80, alignItems: 'flex-start' },
+  barSide: { minWidth: 96, flexShrink: 0, alignItems: 'flex-start' },
   barTitle: { flex: 1, textAlign: 'center', fontSize: 16 },
   flex: { flex: 1 },
   center: { textAlign: 'center' },
