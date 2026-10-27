@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
 import { findItemsOnDevice, refineItems } from '@/lib/refine-outline';
-import { lastMaskProblem } from '@/lib/subject-mask';
+import { lastMaskProblem, prepareFinder } from '@/lib/subject-mask';
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
 import { ChoiceField } from '@/components/ui/choice-field';
+import { PickRow, PickSheet } from '@/components/ui/pick-sheet';
 import { Card, Field, Input } from '@/components/ui/field';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
@@ -70,10 +71,18 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   // A photo with several items is added one at a time: `done` are the ones already added, `current` the one in the form.
   const [batch, setBatch] = useState<{ stored: string; items: Identified[]; done: number[]; current: number | null } | null>(null);
   const [picking, setPicking] = useState(false);
+  // Which pick-list is open over the form, and a counter that scrolls the form back to the top (when the photo steps finish).
+  const [sheet, setSheet] = useState<null | 'category' | 'material' | 'finish' | 'color' | 'look'>(null);
+  const [topTick, setTopTick] = useState(0);
   const [isDemo, setIsDemo] = useState(false);
   const [cropping, setCropping] = useState<PickedPhoto | null>(null);
   // The framed photo while its items are being found (the photo window stays open, so there is no hop back to the form).
   const [finding, setFinding] = useState<{ uri: string | null } | null>(null);
+  const busyPhoto = picking || !!finding || !!cropping || preparing;
+  useEffect(() => {
+    // Back on the form after any photo step (cropping, finding, choosing an item): start at the top.
+    if (!busyPhoto) setTopTick((t) => t + 1);
+  }, [busyPhoto]);
   // Bumped to abandon a lookup that is under way (Cancel while it works).
   const lookup = useRef(0);
   const [identify, setIdentify] = useState<Identify>({ state: 'idle' });
@@ -241,8 +250,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   /** The person tapped an item: fill in its details and keep just that item in the photo. */
-  async function chooseItem(index: number, dims: { width: number; height: number }) {
-    const c = batch;
+  async function chooseItem(index: number, dims: { width: number; height: number }, from?: NonNullable<typeof batch>) {
+    const c = from ?? batch;
     log('photo.choose', { index: index + 1, of: c?.items.length, local: !!c?.items[index]?.local });
     setPicking(false);
     const it = c?.items[index];
@@ -327,6 +336,11 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       setPreparing(false);
     }
   }
+  // New entries: get the object finder ready now (Android downloads its model the first time).
+  useEffect(() => {
+    if (!item) prepareFinder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const demoStarted = useRef(false);
   useEffect(() => {
     if (demo && !item && !demoStarted.current) {
@@ -423,7 +437,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       for (const uri of newPhotos) if ((isDemo || uri !== clean.imageUri) && uri !== batch.stored) deletePhoto(uri);
       setNewPhotos([batch.stored]);
       crops.current.clear();
-      setBatch({ ...batch, done: [...batch.done, batch.current], current: null });
+      const nextBatch = { ...batch, done: [...batch.done, batch.current], current: null };
+      setBatch(nextBatch);
       setDraft({ ...EMPTY, category: defaultCategory ?? EMPTY.category });
       setWeightText('');
       setIdentify({ state: 'idle' });
@@ -432,7 +447,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       setMaterialOptions([]);
       setFormKey((k) => k + 1);
       success();
-      setPicking(true);
+      // Only one item left in the photo: no need to ask, take it.
+      const remaining = nextBatch.items.map((_, i) => i).filter((i) => !nextBatch.done.includes(i));
+      if (remaining.length === 1) void chooseItem(remaining[0]!, { width: 1, height: 1 }, nextBatch);
+      else setPicking(true);
       return;
     }
     for (const uri of newPhotos) if (isDemo || uri !== clean.imageUri) deletePhoto(uri);
@@ -466,7 +484,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   return (
-    <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false}>
+    <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false} topSignal={topTick}>
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
@@ -501,70 +519,39 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         }
       />
 
-      <View style={styles.photo}>
-        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri, cutout: draft.cutout, photoStyle: draft.photoStyle }} size={132} />
-        <View style={styles.photoButtons}>
-          <Button label="Take photo" icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} style={styles.flex} />
-          <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} style={styles.flex} />
+      <View style={styles.photoRow}>
+        <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, isSample: item?.isSample && draft.imageUri === item.imageUri, cutout: draft.cutout, photoStyle: draft.photoStyle }} size={112} />
+        <View style={styles.photoSide}>
+          <Button label={draft.imageUri ? 'Retake' : 'Take photo'} icon="camera" variant={draft.imageUri ? 'secondary' : 'primary'} onPress={() => void getPhoto('camera')} />
+          <Button label="Choose photo" icon="photo" variant="secondary" onPress={() => void getPhoto('library')} />
         </View>
-        {draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
-          <View style={styles.photoButtons}>
-            {aiConsent !== 'declined' ? <Button label="Identify again" icon="sparkle" variant="ghost" onPress={() => void runIdentify(draft.imageUri!, { own: true, picker: false })} disabled={identify.state === 'working'} style={styles.flex} /> : null}
-            <Button label="Remove photo" icon="close" variant="ghost" onPress={() => setDraft((d) => ({ ...d, imageUri: null, cutout: null, photoStyle: null }))} style={styles.flex} />
-          </View>
-        ) : (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            {aiConsent === 'declined'
-              ? 'Photo identify is off. You can turn it on in Settings.'
-              : 'Start with a photo and EDC Roulette fills in the type, brand, model, material and color for you to check.'}
-          </ThemedText>
-        )}
-        {draft.cutout && draft.imageUri && !draft.imageUri.startsWith('sample:') ? (
-          <View style={styles.photoStyle}>
-            <ChipGroup
-              options={STYLE_LABELS}
-              value={draft.photoStyle === 'original' ? 'Original' : draft.photoStyle === 'cutout' ? 'Cutout' : 'Default'}
-              onChange={(v) => v && setDraft((d) => ({ ...d, photoStyle: v === 'Original' ? 'original' : v === 'Cutout' ? 'cutout' : null }))}
-              small
-            />
-            {(draft.photoStyle ?? defaultPhotoStyle) === 'cutout' ? (
-              <View style={styles.photoButtons}>
-                <Button label="Turn left" variant="ghost" onPress={() => turnCutout(-15)} style={styles.flex} />
-                <Button label="Turn right" variant="ghost" onPress={() => turnCutout(15)} style={styles.flex} />
-                <Button label="Reset" variant="ghost" onPress={() => turnCutout(0, true)} style={styles.flex} />
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-        {isDemo ? (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            Demo photo: the answers are ready-made. Nothing is sent anywhere and nothing is saved to your collection.
-          </ThemedText>
-        ) : null}
-        {!item && !draft.imageUri && !batch ? <Button label="Try the demo photo (3 items)" icon="sparkle" variant="ghost" onPress={() => void startDemo()} /> : null}
-        {batch && batch.current === null && !item && !picking && !!draft.imageUri && draft.imageUri === batch.stored && batch.items.length > 1 ? (
-          <Button label="Find items in this photo again" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
-        ) : null}
-        {batch && batch.current !== null && !item && !!draft.imageUri && batch.items.length - batch.done.length > 1 ? (
-          <Button label="Pick a different item from the photo" icon="swap" variant="ghost" onPress={() => setPicking(true)} />
-        ) : null}
       </View>
-
-      {preparing ? (
-        <Card>
-          <View style={styles.status}>
-            <ActivityIndicator color={theme.accent} />
-            <ThemedText style={styles.flex}>Preparing your photo…</ThemedText>
-          </View>
-        </Card>
+      <View style={styles.links}>
+        {draft.imageUri && !draft.imageUri.startsWith('sample:') && aiConsent !== 'declined' ? <TextLink label="Identify again" onPress={() => void runIdentify(draft.imageUri!, { own: true, picker: false })} disabled={identify.state === 'working'} /> : null}
+        {draft.cutout && draft.imageUri && !draft.imageUri.startsWith('sample:') ? <TextLink label="Photo look" onPress={() => setSheet('look')} /> : null}
+        {batch && batch.current === null && !item && !picking && !!draft.imageUri && draft.imageUri === batch.stored && batch.items.length > 1 ? <TextLink label="Find items again" onPress={() => setPicking(true)} /> : null}
+        {batch && batch.current !== null && !item && !!draft.imageUri && batch.items.length - batch.done.length > 1 ? <TextLink label="Different item" onPress={() => setPicking(true)} /> : null}
+        {draft.imageUri && !draft.imageUri.startsWith('sample:') ? <TextLink label="Remove photo" onPress={() => setDraft((d) => ({ ...d, imageUri: null, cutout: null, photoStyle: null }))} /> : null}
+        {!item && !draft.imageUri && !batch ? <TextLink label="Try the demo photo" onPress={() => void startDemo()} /> : null}
+      </View>
+      {!draft.imageUri ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+          {aiConsent === 'declined' ? 'Photo identify is off. You can turn it on in Settings.' : 'A photo fills in the details for you to check.'}
+        </ThemedText>
       ) : null}
-      {identify.state === 'working' ? (
-        <Card>
-          <View style={styles.status}>
-            <ActivityIndicator color={theme.accent} />
-            <ThemedText style={styles.flex}>Looking at your photo…</ThemedText>
-          </View>
-        </Card>
+      {isDemo ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+          Demo photo: nothing is sent anywhere or saved.
+        </ThemedText>
+      ) : null}
+
+      {preparing || identify.state === 'working' ? (
+        <View style={styles.status}>
+          <ActivityIndicator color={theme.accent} />
+          <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+            {preparing ? 'Preparing your photo…' : 'Looking at your photo…'}
+          </ThemedText>
+        </View>
       ) : null}
       {identify.state === 'done' ? (
         <View style={[styles.banner, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
@@ -572,7 +559,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           <View style={styles.flex}>
             <ThemedText type="smallBold">{identify.summary || 'Nothing recognized'}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {identify.unsure ? 'I’m not sure about the brand or model, so please check them.' : 'Filled in from your photo. Fix anything that’s off.'}
+              {identify.unsure ? 'Not sure about the brand or model, so please check them.' : 'Filled in from your photo. Fix anything that’s off.'}
             </ThemedText>
           </View>
         </View>
@@ -583,12 +570,18 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
         </ThemedText>
       ) : null}
 
-      <Field label="Category">
-        <ChipGroup options={categoryOptions} value={draft.category} onChange={(v) => v && set('category', v)} small />
-      </Field>
-      <Field label="Brand">
-        <BrandPicker initial={draft.brand ?? ''} resetKey={formKey} category={draft.category} onChange={(b) => setBrandOrModel({ brand: b })} />
-      </Field>
+      <View style={styles.pair}>
+        <View style={styles.half}>
+          <Field label="Category">
+            <PickRow label="Category" value={draft.category} onPress={() => setSheet('category')} />
+          </Field>
+        </View>
+        <View style={styles.half}>
+          <Field label="Brand">
+            <BrandPicker initial={draft.brand ?? ''} resetKey={formKey} category={draft.category} onChange={(b) => setBrandOrModel({ brand: b })} />
+          </Field>
+        </View>
+      </View>
       <Field label="Model">
         <Input
           key={`model-${formKey}`}
@@ -600,7 +593,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           autoCorrect={false}
         />
       </Field>
-      <Field label="Name" hint="Fills in from the brand and model. Type your own if you like.">
+      <Field label="Name" hint="Follows the brand and model unless you type your own.">
         <Input
           key={`name-${formKey}-${nameKey}`}
           defaultValue={draft.name}
@@ -614,21 +607,63 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
           autoCorrect={false}
         />
       </Field>
-      <Field label="Material">
-        <ChoiceField key={`material-${formKey}`} options={MATERIALS} value={draft.material} onChange={(v) => set('material', v)} suggestions={materialOptions} otherPlaceholder="Type a material" />
-      </Field>
-      <Field label="Finish">
-        <ChoiceField key={`finish-${formKey}`} options={FINISHES} value={draft.finish} onChange={(v) => set('finish', v)} otherPlaceholder="Type a finish" />
-      </Field>
-      <Field label="Color">
-        <ColorPicker value={draft.primaryColor} onChange={(hex) => set('primaryColor', hex)} />
-      </Field>
-      <Field label="Weight (grams)">
-        <Input defaultValue={weightText} onChangeText={setWeightText} placeholder="Optional" keyboardType="decimal-pad" maxLength={8} />
-      </Field>
+      <View style={styles.pair}>
+        <View style={styles.half}>
+          <Field label="Material">
+            <PickRow label="Material" value={draft.material} placeholder="Optional" onPress={() => setSheet('material')} />
+          </Field>
+        </View>
+        <View style={styles.half}>
+          <Field label="Finish">
+            <PickRow label="Finish" value={draft.finish} placeholder="Optional" onPress={() => setSheet('finish')} />
+          </Field>
+        </View>
+      </View>
+      <View style={styles.pair}>
+        <View style={styles.half}>
+          <Field label="Color">
+            <PickRow label="Color" value={draft.primaryColor} swatch={draft.primaryColor} placeholder="Optional" onPress={() => setSheet('color')} />
+          </Field>
+        </View>
+        <View style={styles.half}>
+          <Field label="Weight (grams)">
+            <Input defaultValue={weightText} onChangeText={setWeightText} placeholder="Optional" keyboardType="decimal-pad" maxLength={8} />
+          </Field>
+        </View>
+      </View>
       <Field label="Notes">
         <Input key={`notes-${formKey}`} defaultValue={draft.notes ?? ''} onChangeText={(t) => set('notes', t || null)} placeholder="Optional" multiline maxLength={1000} style={styles.notes} />
       </Field>
+
+      <PickSheet visible={sheet === 'category'} title="Category" onClose={() => setSheet(null)}>
+        <ChipGroup options={categoryOptions} value={draft.category} onChange={(v) => { if (v) set('category', v); setSheet(null); }} small />
+      </PickSheet>
+      <PickSheet visible={sheet === 'material'} title="Material" onClose={() => setSheet(null)}>
+        <ChoiceField key={`material-${formKey}`} options={MATERIALS} value={draft.material} onChange={(v) => set('material', v)} onPick={() => setSheet(null)} suggestions={materialOptions} otherPlaceholder="Type a material" />
+      </PickSheet>
+      <PickSheet visible={sheet === 'finish'} title="Finish" onClose={() => setSheet(null)}>
+        <ChoiceField key={`finish-${formKey}`} options={FINISHES} value={draft.finish} onChange={(v) => set('finish', v)} onPick={() => setSheet(null)} otherPlaceholder="Type a finish" />
+      </PickSheet>
+      <PickSheet visible={sheet === 'color'} title="Color" onClose={() => setSheet(null)}>
+        <ColorPicker value={draft.primaryColor} onChange={(hex) => set('primaryColor', hex)} onPick={() => setSheet(null)} />
+      </PickSheet>
+      <PickSheet visible={sheet === 'look'} title="Photo look" onClose={() => setSheet(null)}>
+        <View style={styles.lookPreview}>
+          <GearThumb item={{ name: draft.name || '?', imageUri: draft.imageUri, primaryColor: draft.primaryColor, cutout: draft.cutout, photoStyle: draft.photoStyle }} size={160} />
+        </View>
+        <ChipGroup
+          options={STYLE_LABELS}
+          value={draft.photoStyle === 'original' ? 'Original' : draft.photoStyle === 'cutout' ? 'Cutout' : 'Default'}
+          onChange={(v) => v && setDraft((d) => ({ ...d, photoStyle: v === 'Original' ? 'original' : v === 'Cutout' ? 'cutout' : null }))}
+        />
+        {(draft.photoStyle ?? defaultPhotoStyle) === 'cutout' ? (
+          <View style={styles.photoButtons}>
+            <Button label="Turn left" variant="secondary" onPress={() => turnCutout(-15)} style={styles.flex} />
+            <Button label="Turn right" variant="secondary" onPress={() => turnCutout(15)} style={styles.flex} />
+            <Button label="Reset" variant="ghost" onPress={() => turnCutout(0, true)} style={styles.flex} />
+          </View>
+        ) : null}
+      </PickSheet>
 
       <Button
         label={
@@ -649,6 +684,17 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   );
 }
 
+function TextLink({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={8} accessibilityRole="button" style={{ opacity: disabled ? 0.4 : 1 }}>
+      <ThemedText type="smallBold" style={{ color: theme.accent }}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
 function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPress: () => void; bold?: boolean; disabled?: boolean }) {
   const theme = useTheme();
   return (
@@ -665,8 +711,12 @@ const STYLE_LABELS = ['Default', 'Original', 'Cutout'] as const;
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center' },
-  photo: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two },
-  photoStyle: { alignSelf: 'stretch', gap: Spacing.two },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  photoSide: { flex: 1, gap: Spacing.two },
+  links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: Spacing.four, rowGap: Spacing.two },
+  pair: { flexDirection: 'row', gap: Spacing.three },
+  half: { flex: 1 },
+  lookPreview: { alignItems: 'center' },
   photoButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   status: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   banner: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },

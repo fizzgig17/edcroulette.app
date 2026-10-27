@@ -10,7 +10,7 @@ import { NativeModules } from 'react-native';
 import { log } from '@/lib/log';
 
 type Raw = { width: number; height: number; data: string } | null;
-type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw> };
+type Finder = { instanceMask(uri: string, maxEdge: number): Promise<Raw>; prepare?: () => Promise<boolean> };
 const native = requireOptionalNativeModule<Finder>('EdcSubjectMask') ?? ((NativeModules.EdcSubjectMask as Finder | undefined) || null);
 
 export type InstanceMask = { width: number; height: number; labels: Uint8Array };
@@ -45,5 +45,14 @@ export async function findObjects(uri: string, maxEdge = 480): Promise<InstanceM
     lastMaskProblem = e instanceof Error ? e.message : String(e);
     log('finder.fail', { reason: lastMaskProblem, ms: Date.now() - t0 });
     return null;
+  }
+}
+
+/** Android: starts downloading the finder's model now, so the first photo doesn't have to wait for it. Harmless elsewhere. */
+export function prepareFinder() {
+  try {
+    void native?.prepare?.().catch(() => {});
+  } catch {
+    // Not available here.
   }
 }

@@ -12,7 +12,7 @@ import { normalizeHex } from '@/types/models';
 /** Common EDC colors: raw and anodized titanium, copper, brass, black coatings, G10 and anodizing hues. */
 const SWATCHES = ['#8A8D91', '#5E6266', '#B87333', '#B5A642', '#1B1C1E', '#2F3B2E', '#3F4A5A', '#7A1F1F', '#C9A227', '#2563EB', '#7C3AED', '#0F766E', '#D97706', '#E5E7EB'];
 
-export function ColorPicker({ value, onChange }: { value: string | null; onChange: (hex: string | null) => void }) {
+export function ColorPicker({ value, onChange, onPick }: { value: string | null; onChange: (hex: string | null) => void; onPick?: () => void }) {
   const theme = useTheme();
   const [text, setText] = useState(value ?? '');
   const custom = !!value && !SWATCHES.includes(value);
@@ -30,6 +30,7 @@ export function ColorPicker({ value, onChange }: { value: string | null; onChang
               onPress={() => {
                 select();
                 onChange(on ? null : hex);
+                onPick?.();
               }}
               accessibilityRole="radio"
               accessibilityState={{ selected: on }}

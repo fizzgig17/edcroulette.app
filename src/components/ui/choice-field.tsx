@@ -19,6 +19,7 @@ export function ChoiceField({
   suggestionsLabel = 'From your photo',
   otherPlaceholder = 'Type your own',
   maxLength = 40,
+  onPick,
 }: {
   options: readonly string[];
   value: string | null;
@@ -27,6 +28,8 @@ export function ChoiceField({
   suggestionsLabel?: string;
   otherPlaceholder?: string;
   maxLength?: number;
+  /** Called when a chip is tapped (not while typing), e.g. to close the sheet it is in. */
+  onPick?: () => void;
 }) {
   const [typing, setTyping] = useState(false);
   const listed = options.filter((o) => !suggestions.includes(o));
@@ -41,14 +44,14 @@ export function ChoiceField({
           </ThemedText>
           <View style={styles.row}>
             {suggestions.map((s) => (
-              <Chip key={s} small label={s} selected={value === s} onPress={() => onChange(value === s ? null : s)} />
+              <Chip key={s} small label={s} selected={value === s} onPress={() => { onChange(value === s ? null : s); onPick?.(); }} />
             ))}
           </View>
         </View>
       ) : null}
       <View style={styles.row} accessibilityRole="radiogroup">
         {listed.map((o) => (
-          <Chip key={o} small label={o} selected={value === o} onPress={() => onChange(value === o ? null : o)} />
+          <Chip key={o} small label={o} selected={value === o} onPress={() => { onChange(value === o ? null : o); onPick?.(); }} />
         ))}
         {custom && !typing ? <Chip small label={custom} selected onPress={() => onChange(null)} /> : null}
         <Chip small label="+ Other" selected={typing} onPress={() => setTyping((t) => !t)} />

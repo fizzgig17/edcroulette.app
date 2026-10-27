@@ -14,6 +14,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.Arguments
@@ -67,7 +69,7 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
   }
 
   // Labels every pixel with the subject it belongs to, then answers the call. Failures say why, so the app can show it.
-  private fun segment(segmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter, bitmap: Bitmap, promise: Promise) {
+  private fun segment(segmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter, bitmap: Bitmap, promise: Promise, attempt: Int = 0) {
     segmenter
         .process(InputImage.fromBitmap(bitmap, 0))
         .addOnSuccessListener { result ->
@@ -106,9 +108,33 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
           }
         }
         .addOnFailureListener { e ->
-          promise.reject("segment", "Segmentation failed: " + e.toString())
-          segmenter.close()
+          // The first time, Google Play services may still be downloading the model ("waiting for the module to be downloaded"):
+          // wait a few seconds and ask again (up to about a minute) instead of giving up and using the whole photo.
+          val why = e.toString().lowercase()
+          if (attempt < 20 && (why.contains("download") || why.contains("wait") || why.contains("unavailable") || why.contains("module"))) {
+            Handler(Looper.getMainLooper()).postDelayed({ segment(segmenter, bitmap, promise, attempt + 1) }, 3000)
+          } else {
+            promise.reject("segment", "Segmentation failed: " + e.toString())
+            segmenter.close()
+          }
         }
+  }
+
+  // Starts the model download early (when the add screen opens), so the first photo doesn't wait for it.
+  @ReactMethod
+  fun prepare(promise: Promise) {
+    try {
+      val options = SubjectSegmenterOptions.Builder().enableMultipleSubjects(SubjectSegmenterOptions.SubjectResultOptions.Builder().enableConfidenceMask().build()).build()
+      val segmenter = SubjectSegmentation.getClient(options)
+      ModuleInstall.getClient(ctx)
+          .installModules(ModuleInstallRequest.newBuilder().addApi(segmenter).build())
+          .addOnCompleteListener {
+            segmenter.close()
+            promise.resolve(true)
+          }
+    } catch (e: Throwable) {
+      promise.resolve(false)
+    }
   }
 
   @ReactMethod
