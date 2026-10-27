@@ -80,6 +80,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   // Text fields keep their own text (so typing is never interrupted); this number
   // replaces what they show when the form is filled in from the photo.
   const [formKey, setFormKey] = useState(0);
+  // Bumped when the name follows brand/model, so only the Name box is rebuilt (rebuilding the box being typed in closes the keyboard).
+  const [nameKey, setNameKey] = useState(0);
   // Photos taken in this session that end up unused are deleted on leaving.
   const [newPhotos, setNewPhotos] = useState<string[]>([]);
 
@@ -100,7 +102,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     for (const k of Object.keys(patch)) autoFields.current.delete(k as keyof GearDraft);
     const next = { ...draftRef.current, ...patch };
     const name = nameIsAuto.current ? autoName(next.brand, next.model) : next.name;
-    if (nameIsAuto.current && name !== draftRef.current.name) setFormKey((k) => k + 1);
+    if (nameIsAuto.current && name !== draftRef.current.name) setNameKey((k) => k + 1);
     setDraft({ ...next, name });
   }
 
@@ -600,7 +602,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       </Field>
       <Field label="Name" hint="Fills in from the brand and model. Type your own if you like.">
         <Input
-          key={`name-${formKey}`}
+          key={`name-${formKey}-${nameKey}`}
           defaultValue={draft.name}
           onChangeText={(t) => {
             nameIsAuto.current = false;
