@@ -606,7 +606,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       ) : null}
       {guess && identify.state !== 'done' && identify.state !== 'working' && draft.category === guess ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-          Looks like a {guess.toLowerCase()}. Change it if that’s not right.
+          Looks like a {guess.toLowerCase()}.
         </ThemedText>
       ) : null}
       {identify.state === 'failed' ? (
