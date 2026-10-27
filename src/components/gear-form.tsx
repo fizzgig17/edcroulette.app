@@ -6,7 +6,8 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
 import { findItemsOnDevice, refineItems } from '@/lib/refine-outline';
-import { lastMaskProblem, prepareFinder } from '@/lib/subject-mask';
+import { classifyPhoto, lastMaskProblem, prepareFinder } from '@/lib/subject-mask';
+import { categoryFromLabels } from '@/lib/guess-category';
 import { BrandPicker } from '@/components/brand-picker';
 import { ColorPicker } from '@/components/color-picker';
 import { GearThumb } from '@/components/gear-thumb';
@@ -72,6 +73,9 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const [batch, setBatch] = useState<{ stored: string; items: Identified[]; done: number[]; current: number | null } | null>(null);
   const [picking, setPicking] = useState(false);
   // Which pick-list is open over the form, and a counter that scrolls the form back to the top (when the photo steps finish).
+  // The category guessed on the phone from the photo (shown until the person or the AI settles it).
+  const [guess, setGuess] = useState<string | null>(null);
+  const categoryTouched = useRef(false);
   const [sheet, setSheet] = useState<null | 'category' | 'material' | 'finish' | 'color' | 'look'>(null);
   const [topTick, setTopTick] = useState(0);
   const [isDemo, setIsDemo] = useState(false);
@@ -150,8 +154,22 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       return;
     }
     if (IS_DEV_BUILD && lastMaskProblem) Alert.alert('Object finder', lastMaskProblem);
-    // Nothing to choose between on the phone: identify the whole photo (the AI may still see several items).
+    // Nothing to choose between on the phone: guess the kind of item here, then identify the whole photo (the AI may still see several items).
+    await guessType(stored);
+    if (stale()) return;
     await runIdentify(stored);
+  }
+
+  /** New entries: guesses the kind of item from the photo with the phone's own image labeler (nothing leaves the phone). The AI, if used, may overrule it. */
+  async function guessType(stored: string) {
+    if (item) return;
+    const labels = await classifyPhoto(photoUri(stored) ?? stored);
+    const cat = labels ? categoryFromLabels(labels, categoriesRef.current) : null;
+    log('photo.guess', { category: cat ?? 'none', labels: labels?.length ?? 0 });
+    if (!cat || categoryTouched.current) return;
+    autoFields.current.add('category');
+    setGuess(cat);
+    setDraft((d) => ({ ...d, category: cat }));
   }
 
   /** Sends the photo to the AI. `own` = the form's own window (the person is already back on the add screen), `picker` = may open the item picker. */
@@ -272,6 +290,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     } finally {
       setPreparing(false);
     }
+    if (it.local) await guessType(own);
     if (it.local) void runIdentify(own, { own: true, picker: false });
   }
 
@@ -443,6 +462,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       setWeightText('');
       setIdentify({ state: 'idle' });
       autoFields.current.clear();
+      categoryTouched.current = false;
+      setGuess(null);
       nameIsAuto.current = true;
       setMaterialOptions([]);
       setFormKey((k) => k + 1);
@@ -510,7 +531,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
                 onUseWhole: () => {
                   log('photo.useWhole');
                   setPicking(false);
-                  if (batch.items[0]?.local) void runIdentify(batch.stored, { own: true, picker: false });
+                  if (batch.items[0]?.local) {
+                    void guessType(batch.stored);
+                    void runIdentify(batch.stored, { own: true, picker: false });
+                  }
                 },
                 onChoose: (i, d) => void chooseItem(i, d),
                 onPreview: (i, d) => void cropFor(i, d),
@@ -563,6 +587,11 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
             </ThemedText>
           </View>
         </View>
+      ) : null}
+      {guess && identify.state !== 'done' && identify.state !== 'working' && draft.category === guess ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+          Looks like a {guess.toLowerCase()} (guessed on your phone). Change it if that’s not right.
+        </ThemedText>
       ) : null}
       {identify.state === 'failed' ? (
         <ThemedText type="small" style={{ color: theme.danger }}>
@@ -636,7 +665,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       </Field>
 
       <PickSheet visible={sheet === 'category'} title="Category" onClose={() => setSheet(null)}>
-        <ChipGroup options={categoryOptions} value={draft.category} onChange={(v) => { if (v) set('category', v); setSheet(null); }} small />
+        <ChipGroup options={categoryOptions} value={draft.category} onChange={(v) => { if (v) { categoryTouched.current = true; setGuess(null); set('category', v); } setSheet(null); }} small />
       </PickSheet>
       <PickSheet visible={sheet === 'material'} title="Material" onClose={() => setSheet(null)}>
         <ChoiceField key={`material-${formKey}`} options={MATERIALS} value={draft.material} onChange={(v) => set('material', v)} onPick={() => setSheet(null)} suggestions={materialOptions} otherPlaceholder="Type a material" />

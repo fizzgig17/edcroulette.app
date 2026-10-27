@@ -27,6 +27,8 @@ import com.facebook.react.uimanager.ViewManager
 import com.google.android.gms.common.moduleinstall.ModuleInstall
 import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 
@@ -120,6 +122,40 @@ class EdcSubjectMaskModule(private val ctx: ReactApplicationContext) : ReactCont
         }
   }
 
+  // What the photo shows, as labels with a confidence (Google's image labeler, bundled in the app: on the phone, no download, no internet).
+  @ReactMethod
+  fun classify(uri: String, maxEdge: Int, promise: Promise) {
+    Thread {
+      try {
+        val bitmap = load(uri, maxOf(maxEdge, 480))
+        if (bitmap == null) {
+          promise.resolve(Arguments.createArray())
+          return@Thread
+        }
+        val labeler = ImageLabeling.getClient(ImageLabelerOptions.Builder().setConfidenceThreshold(0.15f).build())
+        labeler
+            .process(InputImage.fromBitmap(bitmap, 0))
+            .addOnSuccessListener { labels ->
+              val out = Arguments.createArray()
+              for (l in labels.take(25)) {
+                val m = Arguments.createMap()
+                m.putString("label", l.text)
+                m.putDouble("confidence", l.confidence.toDouble())
+                out.pushMap(m)
+              }
+              promise.resolve(out)
+              labeler.close()
+            }
+            .addOnFailureListener {
+              promise.resolve(Arguments.createArray())
+              labeler.close()
+            }
+      } catch (e: Throwable) {
+        promise.resolve(Arguments.createArray())
+      }
+    }.start()
+  }
+
   // Starts the model download early (when the add screen opens), so the first photo doesn't wait for it.
   @ReactMethod
   fun prepare(promise: Promise) {
@@ -207,6 +243,10 @@ module.exports = function withSubjectMask(config) {
       const marker = 'implementation("com.facebook.react:react-android")';
       if (!src.includes(marker)) throw new Error('with-subject-mask: could not find the dependencies block in app/build.gradle');
       src = src.replace(marker, `${marker}\n    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")`);
+    }
+    if (!src.includes('com.google.mlkit:image-labeling')) {
+      const marker = 'implementation("com.facebook.react:react-android")';
+      src = src.replace(marker, `${marker}\n    implementation("com.google.mlkit:image-labeling:17.0.9")`);
     }
     cfg.modResults.contents = src;
     return cfg;
