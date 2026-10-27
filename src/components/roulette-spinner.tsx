@@ -124,7 +124,7 @@ function expand(ring: GearItem[]): GearItem[] {
   return out;
 }
 
-const ringSignature = (ring: readonly GearItem[]) => ring.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}`).join('|');
+const ringSignature = (ring: readonly GearItem[]) => ring.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}:${g.photoStyle ?? ''}:${g.cutout?.turn ?? ''}`).join('|');
 
 function ReelRow({
   item,
@@ -222,7 +222,7 @@ function Reel({
   const lastSnap = useRef(snapToken);
   const endRef = useRef(0);
   const ringSig = useRef(ringSignature(ring));
-  const candSig = candidates.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}`).join('|');
+  const candSig = candidates.map((g) => `${g.id}:${g.name}:${g.imageUri ?? ''}:${g.photoStyle ?? ''}:${g.cutout?.turn ?? ''}`).join('|');
   const candSigRef = useRef(candSig);
 
   // Standing still: follow lock and collection changes by jumping to the right row.

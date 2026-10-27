@@ -1,20 +1,27 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
+import { CutoutImage } from '@/components/cutout-image';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { sampleImage } from '@/content/sample-images';
 import { photoUri } from '@/lib/photos';
+import { useCutoutBg, useCutoutLook, usePhotoStyle } from '@/lib/preferences';
 import type { GearItem } from '@/types/models';
 
 /** The gear's photo, or a disc in its color with the first letter of its name. */
-export function GearThumb({ item, size = 44 }: { item: (Pick<GearItem, 'name' | 'imageUri' | 'primaryColor'> & { isSample?: boolean }) | null; size?: number }) {
+export function GearThumb({ item, size = 44 }: { item: (Pick<GearItem, 'name' | 'imageUri' | 'primaryColor'> & Partial<Pick<GearItem, 'cutout' | 'photoStyle'>> & { isSample?: boolean }) | null; size?: number }) {
   const theme = useTheme();
+  const defaultStyle = usePhotoStyle();
+  const look = useCutoutLook();
+  const cutBg = useCutoutBg();
   const box = { width: size, height: size, borderRadius: size * 0.28 };
   // Sample pieces loaded by an earlier version have no stored drawing: find it by name.
   const drawn = sampleImage(item?.imageUri) ?? (item?.isSample && !item.imageUri ? sampleImage(`sample:${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`) : null);
   if (drawn) return <Image source={drawn} style={box} contentFit="cover" accessibilityIgnoresInvertColors />;
   const uri = photoUri(item?.imageUri);
+  // A piece with a clean outline can be shown cut out on a plain background (its own choice, else the default in Settings).
+  if (uri && item?.cutout && (item.photoStyle ?? defaultStyle) === 'cutout') return <CutoutImage uri={uri} cutout={item.cutout} size={size} look={look} bg={cutBg} />;
   if (uri) {
     return <Image source={{ uri }} style={[box, { backgroundColor: theme.backgroundElement }]} contentFit="cover" accessibilityIgnoresInvertColors />;
   }

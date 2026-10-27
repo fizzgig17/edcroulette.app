@@ -95,6 +95,24 @@ export const getCollectionView = (): CollectionView => {
 export const setCollectionView = (v: CollectionView) => write('edc.collectionView', v);
 export const useCollectionView = () => useSyncExternalStore(subscribe, getCollectionView, () => 'list' as CollectionView);
 
+// --- Cutout photos: the default style, the angle pieces are set at, and the background ---------------
+import type { CutoutBg, CutoutLook, PhotoStyle } from '@/lib/cutout';
+export const getPhotoStyle = (): PhotoStyle => (read('edc.photoStyle') === 'original' ? 'original' : 'cutout');
+export const setPhotoStyle = (v: PhotoStyle) => write('edc.photoStyle', v);
+export const usePhotoStyle = () => useSyncExternalStore(subscribe, getPhotoStyle, () => 'cutout' as PhotoStyle);
+export const getCutoutLook = (): CutoutLook => {
+  const v = read('edc.cutoutLook');
+  return v === 'upright' || v === 'asis' ? v : 'diagonal';
+};
+export const setCutoutLook = (v: CutoutLook) => write('edc.cutoutLook', v);
+export const useCutoutLook = () => useSyncExternalStore(subscribe, getCutoutLook, () => 'diagonal' as CutoutLook);
+export const getCutoutBg = (): CutoutBg => {
+  const v = read('edc.cutoutBg');
+  return v === 'charcoal' || v === 'light' ? v : 'gray';
+};
+export const setCutoutBg = (v: CutoutBg) => write('edc.cutoutBg', v);
+export const useCutoutBg = () => useSyncExternalStore(subscribe, getCutoutBg, () => 'gray' as CutoutBg);
+
 // --- Collection categories folded away -----------------------------------------------------------
 let foldedRaw: string | null | undefined;
 let foldedList: string[] = [];
