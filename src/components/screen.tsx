@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, ReadableWidth, Spacing } from '@/constants/theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { usePane } from '@/lib/pane';
+import { usePullRefresh } from '@/components/pull-refresh';
 import { RevealContext } from '@/lib/reveal';
 import { useScrollLocked } from '@/lib/scroll-lock';
 
@@ -33,10 +34,12 @@ type ScreenProps = {
   scrollEnabled?: boolean;
   /** Uses the whole width of the screen instead of a centered column (the Spin screen sideways). */
   fullWidth?: boolean;
+  /** Pulling the page down runs this (like pull to refresh). */
+  onRefresh?: () => void;
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled: scrollWanted = true, fullWidth }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled: scrollWanted = true, fullWidth, onRefresh }: ScreenProps) {
   const scrollEnabled = scrollWanted && !useScrollLocked();
   const insets = useSafeAreaInsets();
   const pane = usePane();
@@ -77,6 +80,16 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
     if (topSignal) scroll.current?.scrollTo({ y: 0, animated: true });
   }, [topSignal]);
   // In a pane, a floating footer (like Undo) is shown over the pane instead of at the end of the content.
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
+  const hasRefresh = !!onRefresh;
+  const refreshControl = usePullRefresh(embedded || !hasRefresh ? null : () => onRefreshRef.current?.());
+  const setPaneRefresh = pane?.setRefresh;
+  useEffect(() => {
+    if (!setPaneRefresh || !hasRefresh) return undefined;
+    setPaneRefresh(() => onRefreshRef.current?.());
+    return () => setPaneRefresh(null);
+  }, [setPaneRefresh, hasRefresh]);
   const setOverlay = pane?.setOverlay;
   const setPaneScroll = pane?.setScrollEnabled;
   useEffect(() => {
@@ -113,6 +126,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
         <ScrollView
           ref={scroll}
           scrollEnabled={scrollEnabled}
+          refreshControl={refreshControl}
           contentContainerStyle={[styles.content, wide && !readable && { maxWidth: 1040 }, readable && { maxWidth: ReadableWidth }, fullWidth && { maxWidth: undefined, paddingLeft: Math.max(insets.left, 0) + Spacing.three, paddingRight: Math.max(insets.right, 0) + Spacing.three }, tab && { paddingBottom: insets.bottom + 120 }, Platform.OS === 'android' && keyboardHeight > 0 && { paddingBottom: keyboardHeight + Spacing.four }]}
           onScroll={(e) => {
             scrollY.current = e.nativeEvent.contentOffset.y;

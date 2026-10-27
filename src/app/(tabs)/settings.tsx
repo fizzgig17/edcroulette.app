@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
-import { router, type Href } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Image } from 'expo-image';
 import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, useWindowDimensions, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { requestCollapse, useCollapseSignal } from '@/lib/collapse';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { ChipGroup } from '@/components/ui/chip';
@@ -181,6 +182,14 @@ function Section({ title, summary, info, defaultOpen, children }: { title: strin
   const theme = useTheme();
   const [open, setOpen] = useState(!!defaultOpen);
   const [help, setHelp] = useState(false);
+  // Switching to Settings, or pulling the page down, folds every section shut.
+  const collapse = useCollapseSignal();
+  useEffect(() => {
+    if (collapse > 0) {
+      setOpen(false);
+      setHelp(false);
+    }
+  }, [collapse]);
   const toggle = () => {
     select();
     setOpen((o) => !o);
@@ -319,11 +328,13 @@ export default function SettingsScreen() {
     }
   }
 
+  useFocusEffect(useCallback(() => requestCollapse(), []));
+
   const styleName = Object.keys(STYLES).find((k) => STYLES[k] === spinStyle) ?? 'Random';
   const themeName = Object.keys(THEMES).find((k) => THEMES[k] === pref) ?? 'Match phone';
 
   return (
-    <Screen title="Settings" tab>
+    <Screen title="Settings" tab onRefresh={requestCollapse}>
       <Section title="Spinning" summary={`${styleName} · favorites ${boost === 1 ? 'off' : `${boost}×`} · sound ${sound ? 'on' : 'off'}`} info="How a spin picks its pieces, how much stars count, and whether it makes noise.">
         <Card padded={false}>
           <View style={styles.pad}>
