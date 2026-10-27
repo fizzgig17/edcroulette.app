@@ -1,4 +1,4 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Buffer } from 'buffer';
 import { File, Paths } from 'expo-file-system';
@@ -122,8 +122,6 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
 
   // The header's Cancel always calls the latest cancel(), without new header options each render.
   const cancelRef = useRef<() => void>(() => router.back());
-  // The bar with Cancel is drawn by the form itself (see TopBar), so the system header stays off.
-  const headerOptions = useRef({ headerShown: false });
   const leftAfter = batch && batch.current !== null && !item ? batch.items.length - batch.done.length - 1 : 0;
   const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
 
@@ -527,9 +525,6 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
 
   return (
     <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false} topSignal={topTick} header={<TopBar title={item ? 'Edit gear' : 'Add gear'} grabber={!item} onCancel={() => cancelRef.current()} />}>
-      {/* Header options stay the same on every render: rebuilding header buttons
-          on each keystroke took focus away from the text fields on iOS. */}
-      <Stack.Screen options={headerOptions.current} />
       <PhotoFlow
         cropping={cropping}
         onCropCancel={() => setCropping(null)}
