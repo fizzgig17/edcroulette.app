@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Buffer } from 'buffer';
 import { File, Paths } from 'expo-file-system';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { areaOf, blurAreasInPhoto } from '@/lib/blur-items';
 import { findItemsOnDevice, refineItems } from '@/lib/refine-outline';
@@ -121,11 +122,8 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
 
   // The header's Cancel always calls the latest cancel(), without new header options each render.
   const cancelRef = useRef<() => void>(() => router.back());
-  const headerOptions = useRef({
-    headerShown: true,
-    title: item ? 'Edit gear' : 'Add gear',
-    headerLeft: () => <HeaderButton label="Cancel" onPress={() => cancelRef.current()} />,
-  });
+  // The bar with Cancel is drawn by the form itself (see TopBar), so the system header stays off.
+  const headerOptions = useRef({ headerShown: false });
   const leftAfter = batch && batch.current !== null && !item ? batch.items.length - batch.done.length - 1 : 0;
   const canSave = (draft.name.trim().length > 0 || !!autoName(draft.brand, draft.model)) && !busy && identify.state !== 'working';
 
@@ -165,7 +163,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     if (item) return;
     const labels = await classifyPhoto(photoUri(stored) ?? stored);
     const cat = labels ? categoryFromLabels(labels, categoriesRef.current) : null;
-    log('photo.guess', { category: cat ?? 'none', labels: labels?.length ?? 0 });
+    log('photo.guess', { category: cat ?? 'none', labels: labels?.length ?? 0, top: (labels ?? []).slice(0, 5).map((l) => `${l.label}:${l.confidence.toFixed(2)}`).join(', ') });
     if (!cat || categoryTouched.current) return;
     autoFields.current.add('category');
     setGuess(cat);
@@ -267,6 +265,26 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     return job;
   }
 
+  /** Switching to another item of the photo: what the phone guessed or filled in for the one before doesn't carry over (what the person typed or picked does). */
+  function clearAuto() {
+    const auto = autoFields.current;
+    const resetCategory = !categoryTouched.current;
+    if (auto.size === 0 && !resetCategory) return;
+    const start = defaultCategory && getCategories().includes(defaultCategory) ? defaultCategory : (getCategories()[0] ?? 'Other');
+    setDraft((d) => {
+      const next: GearDraft = { ...d };
+      for (const k of auto) {
+        if (k !== 'category') (next as Record<string, unknown>)[k] = null;
+      }
+      if (resetCategory) next.category = start;
+      if (nameIsAuto.current) next.name = autoName(next.brand, next.model);
+      return next;
+    });
+    auto.clear();
+    setGuess(null);
+    setFormKey((k) => k + 1);
+  }
+
   /** The person tapped an item: fill in its details and keep just that item in the photo. */
   async function chooseItem(index: number, dims: { width: number; height: number }, from?: NonNullable<typeof batch>) {
     const c = from ?? batch;
@@ -277,7 +295,10 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     setBatch({ ...c, current: index });
     // Items the AI described come with their details; ones found on the phone are described by the AI now, from just that item.
     if (!it.local) applyIdentified(it);
-    else setIdentify({ state: 'idle' });
+    else {
+      clearAuto();
+      setIdentify({ state: 'idle' });
+    }
     setPreparing(true);
     // Don't show the whole photo while the item's own (blurred) one is made; it would flash clear first.
     set('imageUri', null);
@@ -505,7 +526,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   }
 
   return (
-    <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false} topSignal={topTick}>
+    <Screen title={item ? 'Edit gear' : 'Add gear'} showTitle={false} topSignal={topTick} header={<TopBar title={item ? 'Edit gear' : 'Add gear'} grabber={!item} onCancel={() => cancelRef.current()} />}>
       {/* Header options stay the same on every render: rebuilding header buttons
           on each keystroke took focus away from the text fields on iOS. */}
       <Stack.Screen options={headerOptions.current} />
@@ -590,7 +611,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       ) : null}
       {guess && identify.state !== 'done' && identify.state !== 'working' && draft.category === guess ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-          Looks like a {guess.toLowerCase()} (guessed on your phone). Change it if that’s not right.
+          Looks like a {guess.toLowerCase()}. Change it if that’s not right.
         </ThemedText>
       ) : null}
       {identify.state === 'failed' ? (
@@ -724,6 +745,26 @@ function TextLink({ label, onPress, disabled }: { label: string; onPress: () => 
   );
 }
 
+/** Cancel and the title, staying put above the form. A new entry slides up as a sheet, so it also shows a small handle to say it can be swiped down. */
+function TopBar({ title, grabber, onCancel }: { title: string; grabber: boolean; onCancel: () => void }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.bar, { paddingTop: (IS_DEV_BUILD ? 0 : insets.top) + Spacing.two, backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+      {grabber ? <View style={[styles.grabber, { backgroundColor: theme.textSecondary }]} accessibilityElementsHidden importantForAccessibility="no" /> : null}
+      <View style={styles.barRow}>
+        <View style={styles.barSide}>
+          <HeaderButton label="Cancel" onPress={onCancel} />
+        </View>
+        <ThemedText type="smallBold" accessibilityRole="header" style={styles.barTitle}>
+          {title}
+        </ThemedText>
+        <View style={styles.barSide} />
+      </View>
+    </View>
+  );
+}
+
 function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPress: () => void; bold?: boolean; disabled?: boolean }) {
   const theme = useTheme();
   return (
@@ -738,6 +779,11 @@ function HeaderButton({ label, onPress, bold, disabled }: { label: string; onPre
 const STYLE_LABELS = ['Default', 'Original', 'Cutout'] as const;
 
 const styles = StyleSheet.create({
+  bar: { paddingBottom: Spacing.two, paddingHorizontal: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, opacity: 0.45, marginBottom: Spacing.two },
+  barRow: { flexDirection: 'row', alignItems: 'center' },
+  barSide: { width: 80, alignItems: 'flex-start' },
+  barTitle: { flex: 1, textAlign: 'center', fontSize: 16 },
   flex: { flex: 1 },
   center: { textAlign: 'center' },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },

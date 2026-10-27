@@ -36,10 +36,12 @@ type ScreenProps = {
   fullWidth?: boolean;
   /** Pulling the page down runs this (like pull to refresh). */
   onRefresh?: () => void;
+  /** A bar that stays put above the scrolling content (Cancel and the title on the add screen). */
+  header?: ReactNode;
 };
 
 /** Standard scrollable screen shell. */
-export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled: scrollWanted = true, fullWidth, onRefresh }: ScreenProps) {
+export function Screen({ title, subtitle, children, showTitle = true, hideTitle, action, readable, tab, footer, topSignal, scrollEnabled: scrollWanted = true, fullWidth, onRefresh, header }: ScreenProps) {
   const scrollEnabled = scrollWanted && !useScrollLocked();
   const insets = useSafeAreaInsets();
   const pane = usePane();
@@ -123,6 +125,7 @@ export function Screen({ title, subtitle, children, showTitle = true, hideTitle,
     <ThemedView style={styles.container}>
       {/* The dev banner already covers the status-bar area. */}
       <SafeAreaView style={styles.flex} edges={showTitle && !IS_DEV_BUILD ? ['top'] : []}>
+        {header}
         <ScrollView
           ref={scroll}
           scrollEnabled={scrollEnabled}

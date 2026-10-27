@@ -42,6 +42,9 @@ const subscribe = (cb: () => void) => {
 };
 
 // --- Sound ------------------------------------------------------------------
+export const getHapticsOn = () => read('edc.haptics') !== '0';
+export const setHapticsOn = (on: boolean) => write('edc.haptics', on ? '1' : '0');
+export const useHapticsOn = () => useSyncExternalStore(subscribe, getHapticsOn, () => true);
 export const getSoundOn = () => read('edc.sound') !== '0';
 export const setSoundOn = (on: boolean) => write('edc.sound', on ? '1' : '0');
 export const useSoundOn = () => useSyncExternalStore(subscribe, getSoundOn, () => true);

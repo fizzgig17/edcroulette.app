@@ -21,24 +21,34 @@ const WORDS: Record<string, string[]> = {
   coin: ['coin', 'coins', 'currency', 'money', 'medal'],
 };
 
+/** Words that only weakly suggest a category (a flashlight looks like a tube or a battery to a general labeler). */
+const WEAK: Record<string, string[]> = {
+  flashlight: ['cylinder', 'tube', 'pipe', 'battery', 'bottle'],
+};
+
+const clean = (t: string) => t.toLowerCase().replace(/[_-]+/g, ' ').trim();
+
 const hit = (label: string, word: string) => {
-  const l = label.toLowerCase();
-  if (word.includes(' ') || word.includes('-')) return l.includes(word);
+  const l = clean(label);
+  word = clean(word);
+  if (word.includes(' ')) return l.includes(word);
   const toks = l.split(/[^a-z]+/);
   return toks.includes(word) || toks.includes(`${word}s`);
 };
 
 /** The category (one of `categories`) the labels point to, or null when nothing is clear enough. */
-export function categoryFromLabels(labels: PhotoLabel[], categories: string[], minScore = 0.2): string | null {
+export function categoryFromLabels(labels: PhotoLabel[], categories: string[], minScore = 0.1): string | null {
   let best: string | null = null;
   let bestScore = 0;
   for (const c of categories) {
     if (c === 'Other') continue;
     const key = c.toLowerCase();
     const words = [...new Set([key, ...(WORDS[key] ?? [])])];
+    const weak = WEAK[key] ?? [];
     let score = 0;
     for (const l of labels) {
       if (words.some((w) => hit(l.label, w))) score = Math.max(score, l.confidence) + (score > 0 ? 0.05 : 0);
+      else if (weak.some((w) => hit(l.label, w))) score = Math.max(score, l.confidence * 0.7);
     }
     if (score > bestScore) {
       bestScore = score;

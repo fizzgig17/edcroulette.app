@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshControl } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
+import { tap } from '@/lib/haptics';
 
 /** A pull-down control for a ScrollView that runs `fn` and shows its spinner for a moment. Undefined when there's nothing to run. */
 export function usePullRefresh(fn: (() => void) | null | undefined) {
@@ -22,6 +23,7 @@ export function usePullRefresh(fn: (() => void) | null | undefined) {
       colors={[theme.accent]}
       onRefresh={() => {
         setRefreshing(true);
+        tap();
         fn();
         timer.current = setTimeout(() => setRefreshing(false), 700);
       }}
