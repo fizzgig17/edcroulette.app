@@ -5,7 +5,12 @@
  */
 import { useState } from 'react';
 import { Asset } from 'expo-asset';
+import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
+
+import { CutoutImage } from '@/components/cutout-image';
+import { ChipGroup } from '@/components/ui/chip';
+import { outlineInSquare, squareAround, type CutoutBg, type CutoutLook } from '@/lib/cutout';
 
 import { OutlinedPhoto } from '@/components/outlined-photo';
 import { ThemedText } from '@/components/themed-text';
@@ -16,6 +21,8 @@ import { DEMO_ITEMS, DEMO_PHOTO, DEMO_SIZE } from '@/content/demo-photo';
 import { useTheme } from '@/hooks/use-theme';
 
 const photoUri: string = Asset.fromModule(DEMO_PHOTO).uri;
+const ANGLES: Record<string, CutoutLook> = { Diagonal: 'diagonal', Upright: 'upright', 'As photographed': 'asis' };
+const BGS: Record<string, CutoutBg> = { Gray: 'gray', Charcoal: 'charcoal', Light: 'light' };
 
 export function PhotoDemo() {
   const theme = useTheme();
@@ -42,11 +49,19 @@ export function PhotoDemo() {
     setSelected(null);
   };
 
+  const [look, setLook] = useState<'Cutout' | 'Original'>('Cutout');
+  const [angle, setAngle] = useState<keyof typeof ANGLES>('Diagonal');
+  const [bg, setBg] = useState<keyof typeof BGS>('Gray');
+  const [turn, setTurn] = useState(0);
+  // The item's own square cut from the photo, and its outline on that square (what the add screen stores).
+  const sq = item?.box ? squareAround(item.box, DEMO_SIZE) : null;
+  const cut = item && sq && item.outline ? { outline: outlineInSquare(item.outline as [number, number][], DEMO_SIZE, sq), turn } : null;
+
   return (
     <Card>
-      <ThemedText type="heading">Snap a photo, it fills in the form</ThemedText>
+      <ThemedText type="heading">Snap a photo, pick the item</ThemedText>
       <ThemedText themeColor="textSecondary">
-        Try the photo check. This photo has three items. Tap one and the others blur, then it is read on its own. This demo uses ready-made answers, so nothing is sent anywhere.
+        Take one photo of everything on the table. Your phone finds and outlines each item on its own, with no AI and no internet. Tap the one you mean and the others blur. This demo uses a ready-made photo, and nothing is sent anywhere.
       </ThemedText>
       <View style={styles.center} onLayout={(e) => setAvail(Math.floor(e.nativeEvent.layout.width))}>
         {remaining.length > 0 ? (
@@ -65,6 +80,35 @@ export function PhotoDemo() {
 
       {item ? (
         <View style={[styles.result, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {sq ? (
+            <View style={styles.lookRow}>
+              <View style={styles.lookPic}>
+                {look === 'Cutout' && cut ? (
+                  <CutoutImage uri={photoUri} region={sq.region} cutout={cut} size={140} look={ANGLES[angle]} bg={BGS[bg]} />
+                ) : (
+                  <View style={styles.crop}>
+                    <Image source={{ uri: photoUri }} contentFit="fill" style={{ position: 'absolute', width: 140 / sq.region.w, height: 140 / sq.region.h, left: (-sq.region.x * 140) / sq.region.w, top: (-sq.region.y * 140) / sq.region.h }} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.lookControls}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Photo look
+                </ThemedText>
+                <ChipGroup options={['Cutout', 'Original'] as const} value={look} onChange={(v) => v && setLook(v)} small />
+                {look === 'Cutout' ? (
+                  <>
+                    <ChipGroup options={Object.keys(ANGLES) as (keyof typeof ANGLES)[]} value={angle} onChange={(v) => { if (v) { setAngle(v); setTurn(0); } }} small />
+                    <ChipGroup options={Object.keys(BGS) as (keyof typeof BGS)[]} value={bg} onChange={(v) => v && setBg(v)} small />
+                    <View style={styles.turns}>
+                      <Button label="Turn left" variant="secondary" onPress={() => setTurn((t) => t - 15)} style={styles.flex} />
+                      <Button label="Turn right" variant="secondary" onPress={() => setTurn((t) => t + 15)} style={styles.flex} />
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
           <ThemedText type="heading">{[item.brand ?? item.brandRead, item.model].filter(Boolean).join(' ') || item.category}</ThemedText>
           <Row k="Category" v={item.category} />
           {item.material ? <Row k="Material" v={item.materialOptions && item.materialOptions.length > 1 ? `${item.material} (also possible: ${item.materialOptions.filter((m) => m !== item.material).join(', ')})` : item.material} /> : null}
@@ -104,6 +148,11 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 const styles = StyleSheet.create({
+  lookRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, alignItems: 'flex-start' },
+  lookPic: { width: 140, height: 140 },
+  crop: { width: 140, height: 140, borderRadius: 40, overflow: 'hidden' },
+  lookControls: { flex: 1, minWidth: 200, gap: Spacing.two },
+  turns: { flexDirection: 'row', gap: Spacing.two },
   center: { alignItems: 'center', gap: Spacing.two },
   result: { gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },

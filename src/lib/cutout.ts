@@ -114,3 +114,19 @@ export function cutoutLayout(cutout: Cutout, size: number, look: CutoutLook): Cu
   const h = b.h * s;
   return { clip, transform, shadow: { cx: half, cy: Math.min(size * 0.93, half + h / 2 - size * 0.01), rx: Math.max(size * 0.12, w * 0.46), ry: size * 0.035 } };
 }
+
+/**
+ * The square cut round an item in a photo (the same cut the add screen makes): in the photo's pixels, and as fractions of
+ * the photo. Used where the photo isn't cropped first (the website demo).
+ */
+export function squareAround(box: { x: number; y: number; w: number; h: number }, dims: { width: number; height: number }) {
+  const size = Math.min(Math.min(dims.width, dims.height), Math.max(box.w * dims.width, box.h * dims.height) * 1.15);
+  const ox = Math.max(0, Math.min(dims.width - size, (box.x + box.w / 2) * dims.width - size / 2));
+  const oy = Math.max(0, Math.min(dims.height - size, (box.y + box.h / 2) * dims.height - size / 2));
+  return { originX: ox, originY: oy, size, region: { x: ox / dims.width, y: oy / dims.height, w: size / dims.width, h: size / dims.height } };
+}
+
+/** An outline given as fractions of a whole photo, as fractions of the square cut from it. */
+export function outlineInSquare(outline: Pt[], dims: { width: number; height: number }, sq: { originX: number; originY: number; size: number }): Pt[] {
+  return outline.map(([x, y]) => [(x * dims.width - sq.originX) / sq.size, (y * dims.height - sq.originY) / sq.size] as Pt);
+}

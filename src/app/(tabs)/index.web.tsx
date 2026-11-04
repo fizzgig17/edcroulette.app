@@ -1,50 +1,116 @@
 import Head from 'expo-router/head';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { router } from 'expo-router';
 
+import { GearThumb } from '@/components/gear-thumb';
 import { PhotoDemo } from '@/components/photo-demo';
+import { RouletteSpinner } from '@/components/roulette-spinner';
+import { SpinButton } from '@/components/spin-button';
 import { SiteFooter } from '@/components/site-footer';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/field';
-import { METALS, metalById } from '@/constants/metals';
+import { METALS } from '@/constants/metals';
 import { IS_DEV_BUILD, SUPPORT_EMAIL } from '@/lib/env';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-
-const SAMPLE = [
-  { slot: 'Knife', name: 'Titanium framelock', detail: 'Titanium · Stonewashed', color: '#8A8D91', locked: true },
-  { slot: 'Flashlight', name: 'Copper 18350 light', detail: 'Copper · Patina', color: '#B87333', locked: false },
-  { slot: 'Pen', name: 'Brass bolt-action', detail: 'Brass · Raw', color: '#B5A642', locked: false },
-];
+import { GearProvider, useGear } from '@/lib/gear';
+import { setMetalId, useMetalId } from '@/lib/preferences';
+import { SpinDockProvider, useSpinDock } from '@/lib/spin-dock';
+import { TourProvider } from '@/lib/tour';
 
 const FEATURES = [
-  { title: 'Your whole rotation', body: 'Add every knife, light, pen, watch and tool with a photo, brand, material, finish and color.' },
-  { title: 'Spin for today', body: 'One wheel per category. They stop one by one at their own speed, each on a random piece from your collection. Tap Stop to land them early.' },
+  { title: 'Your whole rotation', body: 'Add every knife, light, pen, watch and tool with a photo, brand, material, finish and color. Categories fold away, so a big collection stays easy to scan.' },
+  { title: 'Spin for today', body: 'One tall wheel per category. They stop one by one at their own speed, each on a random piece from your collection. Tap Stop to land them early, or just pull the Spin page down.' },
   { title: 'Lock the keepers', body: 'Already know you are carrying that knife? Lock it and spin the rest.' },
-  { title: 'Wheels your way', body: 'Add, remove and reorder up to six wheels, and choose what each one covers.' },
+  { title: 'Wheels your way', body: 'Add, remove and reorder up to six wheels, and choose what each one covers. On tablets and open foldables the wheels stay tall.' },
+  { title: 'A photo that finds the item', body: 'Put several things in one photo. Your phone finds and outlines each one on its own, with no AI and no internet. Tap the one you want and the others blur.' },
+  { title: 'Cutout photos', body: 'Show each piece cut out and set at an angle on a plain background, so the whole collection looks alike. Choose the angle and background in Settings, and fine-tune any single piece.' },
+  { title: 'Quick, tidy entry', body: 'Pick category, brand, material, finish and color from short lists. The phone even guesses the kind of item from the photo, without sending anything anywhere.' },
   { title: 'Pick your metal', body: 'The Spin button and wheel trim are cut from Damascus, Mokume gane, Timascus, Titanium, Zirconium, Copper, Brass or Steel. On iPhone and iPad the home screen icon can match.' },
-  { title: 'Optional AI help', body: 'Identify a piece from its photo, or let a spin pick a set that goes together. It is off until you say yes, and nothing is stored.' },
+  { title: 'Optional AI help', body: 'Identify the one item you picked from its photo, or let a spin pick a set that goes together. It is off until you say yes, and nothing is stored.' },
   { title: 'Phone, iPad and foldables', body: 'Wheels, collection and settings share one screen on tablets and open foldables, and fold down to a phone layout.' },
+  { title: 'Sound and touch, your way', body: 'Spin sounds and the little haptic taps each have a switch in Settings, so it can be as quiet as you like.' },
   { title: 'A guided tour', body: 'The first time you open it, a short tour has you try a spin and shows where everything is. Replay it any time from Settings.' },
   { title: 'Private by default', body: 'The free version keeps everything on your phone. No account needed, no ads, no tracking.' },
 ];
 
 function MetalStrip() {
   const theme = useTheme();
+  const current = useMetalId();
   return (
-    <View style={styles.metals} accessibilityLabel="The eight metals">
-      {METALS.map((m) => (
-        <View key={m.id} style={styles.metal}>
-          <Image source={m.texture} contentFit="cover" style={[styles.metalSwatch, { borderColor: theme.border }]} />
-          <ThemedText type="small" themeColor="textSecondary" style={styles.center} numberOfLines={1}>
-            {m.label}
-          </ThemedText>
+    <View style={styles.metals} accessibilityRole="radiogroup" accessibilityLabel="The eight metals">
+      {METALS.map((m) => {
+        const on = m.id === current;
+        return (
+          <Pressable key={m.id} onPress={() => setMetalId(m.id)} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={m.label} style={styles.metal}>
+            <Image source={m.texture} contentFit="cover" style={[styles.metalSwatch, { borderColor: on ? theme.accent : theme.border, borderWidth: on ? 3 : 1 }]} />
+            <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={[styles.center, on && { color: theme.accent, fontWeight: '700' }]} numberOfLines={1}>
+              {m.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The real wheels, with the sample gear: spin them right on the page. Nothing is saved. */
+function LiveWheels() {
+  // The site is pre-built: draw the wheels in the browser only, so sizes come from the real window.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <View style={styles.liveHolder} />;
+  return (
+    <GestureHandlerRootView style={styles.live}>
+      <TourProvider>
+        <SpinDockProvider>
+          <GearProvider>
+            <LiveInner />
+          </GearProvider>
+        </SpinDockProvider>
+      </TourProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function LiveInner() {
+  const theme = useTheme();
+  const { setControl } = useSpinDock();
+  const { lastSpin, itemById } = useGear();
+  return (
+    <View style={styles.liveInner}>
+      <RouletteSpinner onControl={setControl} />
+      <View style={styles.spinRow}>
+        <SpinButton size={240} height={64} inline />
+      </View>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+        These are the app's real wheels with sample gear. Tap Spin.
+      </ThemedText>
+      {lastSpin ? (
+        <View style={styles.carry}>
+          {lastSpin.picks.map((p) => {
+            const g = itemById(p.itemId);
+            return g ? (
+              <View key={p.slotIndex} style={[styles.carryItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <GearThumb item={g} size={36} />
+                <View style={styles.flex}>
+                  <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                    {p.category}
+                  </ThemedText>
+                  <ThemedText type="smallBold" numberOfLines={1}>
+                    {g.name}
+                  </ThemedText>
+                </View>
+              </View>
+            ) : null;
+          })}
         </View>
-      ))}
+      ) : null}
     </View>
   );
 }
@@ -74,7 +140,6 @@ function AndroidDownload() {
 
 export default function Landing() {
   const theme = useTheme();
-  const metal = metalById('timascus');
   return (
     <ScrollView>
       <View style={styles.page}>
@@ -112,43 +177,14 @@ export default function Landing() {
           </View>
         </Card>
 
-        <View style={[styles.machine, { backgroundColor: theme.surface, borderColor: theme.border }]} accessibilityLabel="Example spin">
-          {SAMPLE.map((s) => (
-            <View key={s.slot} style={styles.reelCol}>
-              <ThemedText type="caption" themeColor="textSecondary" style={styles.center}>
-                {s.slot}
-              </ThemedText>
-              <View style={[styles.reel, { backgroundColor: theme.reel, borderColor: metal.line }]}>
-                <View style={[styles.swatch, { backgroundColor: s.color }]} />
-                <ThemedText type="smallBold" style={[styles.center, { color: theme.reelText }]}>
-                  {s.name}
-                </ThemedText>
-                <ThemedText type="small" style={[styles.center, { color: theme.textSecondary, fontSize: 12 }]}>
-                  {s.detail}
-                </ThemedText>
-              </View>
-              <ThemedText type="smallBold" style={[styles.center, { color: s.locked ? theme.accent : theme.textSecondary, fontSize: 12 }]}>
-                {s.locked ? 'Locked' : 'Spun'}
-              </ThemedText>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.spinRow}>
-          <View style={styles.pill} accessibilityLabel="The Spin button">
-            <Image source={metal.texture} contentFit="cover" style={StyleSheet.absoluteFill} />
-            <ThemedText type="smallBold" style={styles.pillText}>
-              SPIN
-            </ThemedText>
-          </View>
-        </View>
+        <LiveWheels />
 
         <View style={styles.metalBlock}>
           <ThemedText type="heading" style={styles.center}>
             Cut from real metal patterns
           </ThemedText>
           <ThemedText themeColor="textSecondary" style={[styles.center, styles.lead]}>
-            Choose the metal for the Spin button and the trim around the wheels.
+            Tap a metal for the Spin button and the trim around the wheels above.
           </ThemedText>
           <MetalStrip />
         </View>
@@ -187,17 +223,17 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   lead: { maxWidth: 560, fontSize: 18, lineHeight: 28 },
   badge: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: Radius.pill },
-  machine: { flexDirection: 'row', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  reelCol: { flex: 1, gap: Spacing.two },
-  reel: { height: 170, borderRadius: Radius.medium, borderWidth: 2, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.two },
-  swatch: { width: 40, height: 40, borderRadius: 12 },
+  liveHolder: { minHeight: 420 },
+  live: { width: '100%', maxWidth: 640, alignSelf: 'center' },
+  liveInner: { gap: Spacing.three },
+  carry: { gap: Spacing.two },
+  carryItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.two, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
+  flex: { flex: 1 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  spinRow: { alignItems: 'center', marginTop: -Spacing.three },
-  pill: { width: 240, height: 64, borderRadius: 32, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)' },
-  pillText: { color: '#FFFFFF', fontSize: 20, letterSpacing: 5, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+  spinRow: { alignItems: 'center' },
   metalBlock: { gap: Spacing.three, alignItems: 'center' },
   metals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, justifyContent: 'center', maxWidth: 560 },
-  metal: { width: 84, alignItems: 'center', gap: 6 },
+  metal: { width: 96, alignItems: 'center', gap: 6 },
   metalSwatch: { width: 64, height: 64, borderRadius: 32, borderWidth: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   cell: { flexGrow: 1, flexBasis: 360 },

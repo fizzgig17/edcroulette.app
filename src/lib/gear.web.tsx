@@ -1,43 +1,75 @@
 /**
- * Website stand-in for lib/gear.tsx: the same API with an empty collection, so
- * app screens (which Expo Router still bundles for the web, but which redirect
- * home there) compile without pulling in the phone database.
+ * Website stand-in for lib/gear.tsx: the same API, backed by a demo collection (the sample gear) and wheels kept in
+ * memory, so the real wheels can be spun on the landing page. Nothing is stored. Outside a GearProvider (the app's own
+ * screens, which the website only redirects away from) it gives an empty collection.
  */
-import type { ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { FREE_MAX_SLOTS, MAX_ITEMS } from '@/lib/limits';
-import type { GearDraft, GearItem, SlotConfig, SpinPick, SpinRecord } from '@/types/models';
+import { SAMPLE_GEAR } from '@/content/sample-gear';
+import { FREE_MAX_SLOTS, MAX_ITEMS, MIN_SLOTS } from '@/lib/limits';
+import { type GearDraft, type GearItem, type SlotConfig, type SpinPick, type SpinRecord } from '@/types/models';
 
 export type Result = { ok: true } | { ok: false; error: string };
 export type SlotDraft = { category: string; lockedItemId: string | null; from?: number };
 
-const unavailable: Result = { ok: false, error: 'Your collection lives in the EDC Roulette app.' };
+// Five wheels on the website, to show the wheels at their best.
+const SHOWCASE_WHEELS = ['Knife', 'Flashlight', 'Pen', 'Multi-tool', 'Watch'];
 
-const state = {
-  loading: false,
-  items: [] as GearItem[],
-  slots: [] as SlotConfig[],
-  lastSpin: null as SpinRecord | null,
-  maxItems: MAX_ITEMS,
-  maxSlots: FREE_MAX_SLOTS,
-  ownCount: 0,
-  sampleCount: 0,
-  addSamples: async () => 0,
-  removeSamples: async () => {},
-  itemById: (_id: string | null | undefined): GearItem | null => null,
-  addItem: async (_draft: GearDraft): Promise<Result & { item?: GearItem }> => unavailable,
-  updateItem: async (_id: string, _draft: GearDraft): Promise<Result> => unavailable,
-  removeItem: async (_id: string) => {},
-  setLock: async (_slotIndex: number, _itemId: string | null) => {},
-  saveSlots: async (_slots: SlotDraft[]): Promise<Result> => unavailable,
-  recordSpin: async (_picks: SpinPick[]) => {},
-  eraseEverything: async () => {},
-};
+const ITEMS: GearItem[] = SAMPLE_GEAR.map((d, i) => ({ ...d, id: `demo-${i}`, isSample: true, favorite: false, photoStyle: null, cutout: null, createdAt: i, updatedAt: i }) as GearItem);
 
-export function GearProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+const Ctx = createContext<ReturnType<typeof build> | null>(null);
+
+function build(items: GearItem[], slots: SlotConfig[], last: SpinRecord | null, set: { setSlots: (s: SlotConfig[]) => void; setLast: (l: SpinRecord | null) => void }) {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  return {
+    loading: false,
+    items,
+    slots,
+    lastSpin: last,
+    maxItems: MAX_ITEMS,
+    maxSlots: FREE_MAX_SLOTS,
+    ownCount: 0,
+    sampleCount: items.length,
+    addSamples: async () => 0,
+    removeSamples: async () => {},
+    itemById: (id: string | null | undefined) => (id ? (byId.get(id) ?? null) : null),
+    addItem: async (_d: GearDraft): Promise<Result & { item?: GearItem }> => ({ ok: false, error: 'lab' }),
+    updateItem: async (_id: string, _d: GearDraft): Promise<Result> => ({ ok: false, error: 'lab' }),
+    removeItem: async (_id: string) => {},
+    toggleFavorite: async (_id: string) => {},
+    setLock: async (slotIndex: number, itemId: string | null) => set.setSlots(slots.map((s) => (s.slotIndex === slotIndex ? { ...s, lockedItemId: itemId } : s))),
+    saveSlots: async (next: SlotDraft[]): Promise<Result> => {
+      if (next.length < MIN_SLOTS) return { ok: false, error: 'Keep at least one slot.' };
+      if (next.length > FREE_MAX_SLOTS) return { ok: false, error: `The free version has up to ${FREE_MAX_SLOTS} slots.` };
+      const cleaned = next.map((s) => {
+        const locked = s.lockedItemId ? byId.get(s.lockedItemId) : null;
+        return { category: s.category, lockedItemId: locked && locked.category === s.category ? locked.id : null };
+      });
+      if (last) {
+        const kept: SpinPick[] = [];
+        next.forEach((s, i) => {
+          const old = s.from != null ? last.picks.find((p) => p.slotIndex === s.from) : undefined;
+          if (old && old.category === s.category) kept.push({ ...old, slotIndex: i, locked: !!cleaned[i]?.lockedItemId && old.locked });
+        });
+        set.setLast({ ...last, picks: kept });
+      }
+      set.setSlots(cleaned.map((s, i) => ({ slotIndex: i, ...s })));
+      return { ok: true };
+    },
+    recordSpin: async (picks: SpinPick[]) => set.setLast({ id: Date.now(), spunAt: Date.now(), picks }),
+    eraseEverything: async () => {},
+  };
 }
 
+export function GearProvider({ children }: { children: ReactNode }) {
+  const [slots, setSlots] = useState<SlotConfig[]>(SHOWCASE_WHEELS.map((category, slotIndex) => ({ slotIndex, category, lockedItemId: null })));
+  const [last, setLast] = useState<SpinRecord | null>(null);
+  const value = useMemo(() => build(ITEMS, slots, last, { setSlots, setLast }), [slots, last]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+const EMPTY = build([], [], null, { setSlots: () => {}, setLast: () => {} });
+
 export function useGear() {
-  return state;
+  return useContext(Ctx) ?? EMPTY;
 }
