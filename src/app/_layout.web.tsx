@@ -9,6 +9,34 @@ import { DevBanner } from '@/components/dev-banner';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { setThemePref, useThemePref, type ThemePref } from '@/lib/theme-preference';
+
+const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
+  { value: 'system', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
+/** Light, dark, or follow the device; remembered in this browser. */
+function ThemeToggle() {
+  const scheme = useColorScheme();
+  const c = Colors[scheme];
+  const pref = useThemePref();
+  return (
+    <View style={[styles.toggle, { borderColor: c.border, backgroundColor: c.backgroundElement }]} accessibilityRole="radiogroup" accessibilityLabel="Color theme">
+      {THEME_OPTIONS.map((o) => {
+        const on = pref === o.value;
+        return (
+          <Pressable key={o.value} onPress={() => setThemePref(o.value)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={[styles.toggleItem, on && { backgroundColor: c.accent }]}>
+            <ThemedText type="small" style={on ? styles.toggleOn : { color: c.textSecondary }}>
+              {o.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 function SiteHeader() {
   const scheme = useColorScheme();
@@ -32,6 +60,7 @@ function SiteHeader() {
           <Link href="/privacy">
             <ThemedText type="link">Privacy</ThemedText>
           </Link>
+          <ThemeToggle />
         </View>
       </View>
     </View>
@@ -60,5 +89,8 @@ const styles = StyleSheet.create({
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.three, flexWrap: 'wrap' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   logo: { width: 36, height: 36, borderRadius: 9 },
-  nav: { flexDirection: 'row', gap: Spacing.three, flexWrap: 'wrap' },
+  nav: { flexDirection: 'row', gap: Spacing.three, flexWrap: 'wrap', alignItems: 'center' },
+  toggle: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 2 },
+  toggleItem: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+  toggleOn: { color: '#FFFFFF', fontWeight: '700' },
 });
