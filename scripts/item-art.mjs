@@ -24,7 +24,7 @@ function shape(category, it) {
     case 'Pen':
       return {
         body: `<path d="M44 148 H214 L270 156 L286 160 L270 164 L214 172 H44 Z" /><rect x="40" y="148" width="14" height="24" rx="6"/>`,
-        after: `<path d="M196 148 V138 H250 V143 H206 V148 Z" fill="url(#steel)"/><path d="M270 156 L292 160 L270 164 Z" fill="url(#steel)"/><rect x="214" y="146" width="6" height="28" fill="#0004"/>`,
+        after: `<path d="M50 150 V138 Q50 133 56 133 H136 Q143 133 143 139 V143 H62 V150 Z" fill="url(#steel)"/><circle cx="50" cy="150" r="4" fill="url(#steel)"/><path d="M270 156 L292 160 L270 164 Z" fill="url(#steel)"/><rect x="214" y="146" width="6" height="28" fill="#0004"/>`,
       };
     case 'Multi-tool':
       return {

@@ -10,7 +10,8 @@ import { CUTOUT_BGS, cutoutLayout, type Cutout, type CutoutBg, type CutoutLook }
 
 let counter = 0;
 
-export const CutoutImage = memo(function CutoutImage({ uri, cutout, size, look, bg }: { uri: string; cutout: Cutout; size: number; look: CutoutLook; bg: CutoutBg }) {
+/** `region` (fractions of the photo) says which square of a bigger photo the outline is drawn on; leave it out when the photo is already that square. */
+export const CutoutImage = memo(function CutoutImage({ uri, cutout, size, look, bg, region }: { uri: string; cutout: Cutout; size: number; look: CutoutLook; bg: CutoutBg; region?: { x: number; y: number; w: number; h: number } }) {
   const id = useMemo(() => `cut${(counter += 1)}`, []);
   const layout = useMemo(() => cutoutLayout(cutout, 100, look), [cutout, look]);
   const colors = CUTOUT_BGS[bg];
@@ -30,7 +31,7 @@ export const CutoutImage = memo(function CutoutImage({ uri, cutout, size, look, 
         <Rect x={0} y={0} width={100} height={100} fill={colors.fill} />
         <Ellipse cx={layout.shadow.cx} cy={layout.shadow.cy} rx={layout.shadow.rx} ry={layout.shadow.ry} fill={`url(#${id}s)`} />
         <G transform={layout.transform}>
-          <SvgImage href={{ uri }} x={0} y={0} width={100} height={100} preserveAspectRatio="none" clipPath={`url(#${id}c)`} />
+          <SvgImage href={{ uri }} x={region ? (-region.x / region.w) * 100 : 0} y={region ? (-region.y / region.h) * 100 : 0} width={region ? 100 / region.w : 100} height={region ? 100 / region.h : 100} preserveAspectRatio="none" clipPath={`url(#${id}c)`} />
         </G>
       </Svg>
     </View>

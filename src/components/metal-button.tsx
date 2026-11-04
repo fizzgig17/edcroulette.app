@@ -70,11 +70,12 @@ function TurningRing({ size, offset }: { size: number; offset: number }) {
 
 /** The glyph and label on a disc. */
 export function DiscLabel({ icon, label, size, plate }: { icon?: IconName; label?: string; size: number; plate?: boolean }) {
-  const text = (
+  const words = (
     <ThemedText type="smallBold" style={[styles.label, plate && styles.engraved, { fontSize: plate ? Math.round(size * 0.3) : Math.max(10, size * 0.14) }]}>
       {label}
     </ThemedText>
   );
+  const text = words;
   return (
     <>
       {icon ? <Icon name={icon} size={size * (label ? 0.26 : 0.42)} color="#FFFFFF" /> : null}
@@ -95,7 +96,7 @@ export function MetalGlyph({ icon, size, lit }: { icon: IconName; size: number; 
 const styles = StyleSheet.create({
   face: { position: 'absolute', overflow: 'hidden' },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  // On the long pill the word is set like a stamped mark: lighter weight, wide spacing, a tight dark edge for legibility.
-  engraved: { fontWeight: '600', letterSpacing: 5, textShadowColor: '#000000B3', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+  // The same white lettering and dark glow as the round Spin button, set bolder and wider on the long one.
+  engraved: { fontWeight: '800', letterSpacing: 4, textShadowColor: '#000000E6', textShadowRadius: 5, textShadowOffset: { width: 0, height: 1 } },
   label: { color: '#FFFFFF', letterSpacing: 1.6, textTransform: 'uppercase', ...GLYPH_SHADOW },
 });

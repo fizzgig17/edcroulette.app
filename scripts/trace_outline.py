@@ -15,9 +15,9 @@ contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 c = max(contours, key=cv2.contourArea)
 x, y, bw, bh = cv2.boundingRect(c)
 peri = cv2.arcLength(c, True)
-eps = 0.004 * peri
+eps = 0.0006 * peri  # close to the real edge: this stands in for the phone's own object finder
 pts = cv2.approxPolyDP(c, eps, True)
-while len(pts) > 22:
+while len(pts) > 180:
     eps *= 1.25
     pts = cv2.approxPolyDP(c, eps, True)
 print(json.dumps({
