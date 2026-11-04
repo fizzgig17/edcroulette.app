@@ -75,8 +75,7 @@ export function DiscLabel({ icon, label, size, plate }: { icon?: IconName; label
       {label}
     </ThemedText>
   );
-  // On the long button the word sits on a smoked-glass pill, so it reads clearly over any busy metal pattern.
-  const text = plate ? <View style={[styles.smoke, { paddingHorizontal: size * 0.3, paddingVertical: size * 0.05, borderRadius: size }]}>{words}</View> : words;
+  const text = words;
   return (
     <>
       {icon ? <Icon name={icon} size={size * (label ? 0.26 : 0.42)} color="#FFFFFF" /> : null}
@@ -97,8 +96,7 @@ export function MetalGlyph({ icon, size, lit }: { icon: IconName; size: number; 
 const styles = StyleSheet.create({
   face: { position: 'absolute', overflow: 'hidden' },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 1 },
-  // On the long pill the word is set like a stamped mark: lighter weight, wide spacing, a tight dark edge for legibility.
-  engraved: { fontWeight: '800', letterSpacing: 4, textShadowColor: '#000000', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
-  smoke: { backgroundColor: 'rgba(8,10,14,0.62)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)' },
+  // The same white lettering and dark glow as the round Spin button, set bolder and wider on the long one.
+  engraved: { fontWeight: '800', letterSpacing: 4, textShadowColor: '#000000E6', textShadowRadius: 5, textShadowOffset: { width: 0, height: 1 } },
   label: { color: '#FFFFFF', letterSpacing: 1.6, textTransform: 'uppercase', ...GLYPH_SHADOW },
 });
