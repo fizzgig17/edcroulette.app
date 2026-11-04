@@ -71,6 +71,9 @@ const items = ITEMS.map((it, i) => ({
   notes: it.answer.notes,
   box: found[i].box,
   outline: found[i].outline,
+  // Traced from the exact shape, like the phone's own object finder: drawn tight against the item and usable as a cutout.
+  tight: true,
+  outlineSource: 'object finder',
 }));
 writeFileSync(
   'src/content/demo-photo.ts',
