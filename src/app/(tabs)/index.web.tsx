@@ -145,10 +145,13 @@ export default function Landing() {
       <View style={styles.page}>
         <Head>
           <title>EDC Roulette — spin for today's carry</title>
-          <meta name="description" content="A slot-machine randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
-          <meta property="og:title" content="EDC Roulette" />
-          <meta property="og:description" content="Spin for today's everyday carry." />
-          <meta property="og:image" content="/og-image.png" />
+          <meta name="description" content="A randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
+          <link rel="canonical" href="https://edcroulette.app/" />
+          <meta property="og:url" content="https://edcroulette.app/" />
+          <meta property="og:title" content="EDC Roulette — spin for today's carry" />
+          <meta property="og:description" content="A randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
+          <meta name="twitter:title" content="EDC Roulette — spin for today's carry" />
+          <meta name="twitter:description" content="A randomizer for your everyday-carry gear: lock what you're carrying, spin for the rest." />
         </Head>
 
         <View style={styles.hero}>
