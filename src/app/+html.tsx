@@ -12,6 +12,15 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#121418" />
         <meta property="og:site_name" content="EDC Roulette" />
         <meta property="og:type" content="website" />
+        <meta property="og:locale" content="en_US" />
+        <meta property="og:image" content="https://edcroulette.app/og-image.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="The EDC Roulette icon: four spinning wheels of gear, beside the name EDC Roulette." />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="https://edcroulette.app/og-image.png" />
+        <meta name="twitter:image:alt" content="The EDC Roulette icon: four spinning wheels of gear, beside the name EDC Roulette." />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
