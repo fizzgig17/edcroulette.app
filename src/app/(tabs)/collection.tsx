@@ -18,6 +18,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { IS_DEV_BUILD } from '@/lib/env';
 import { useGear } from '@/lib/gear';
+import { usePro } from '@/lib/pro';
 import { useContentWidth, useEmbedded } from '@/lib/pane';
 import { select, success, tap } from '@/lib/haptics';
 import { setCollectionView, setFoldedCategories, useCollectionView, useFoldedCategories, type CollectionView } from '@/lib/preferences';
@@ -38,6 +39,7 @@ const uniq = (values: (string | null)[]) => [...new Set(values.filter((v): v is 
 
 export default function CollectionScreen() {
   const theme = useTheme();
+  const pro = usePro();
   const { items: allItems, maxItems, slots, ownCount, sampleCount, addSamples, removeItem, toggleFavorite } = useGear();
   const insets = useSafeAreaInsets();
 
@@ -329,7 +331,7 @@ export default function CollectionScreen() {
         </Pressable>
       }>
       <ThemedText type="small" themeColor="textSecondary" style={styles.small}>
-        {IS_DEV_BUILD ? `${ownCount} items. Dev build: no item limit.` : `${ownCount} of ${maxItems} items in the free version${full ? ' — remove one to add another.' : '.'}`}
+        {pro ? `${ownCount} items.` : `${ownCount} of ${maxItems} items in the free version${full ? ' — remove one to add another, or get Pro.' : '.'}`}
         {sampleCount > 0 ? ` Plus ${sampleCount} samples (Settings removes them).` : ''}
       </ThemedText>
 

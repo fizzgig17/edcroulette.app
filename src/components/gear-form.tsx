@@ -28,6 +28,7 @@ import { identifyPhoto, type Identified } from '@/lib/api';
 import { DEMO_ITEMS, DEMO_SIZE } from '@/content/demo-photo';
 import { DEMO_PHOTO_BASE64 } from '@/content/demo-photo-data';
 import { useGear } from '@/lib/gear';
+import { usePro } from '@/lib/pro';
 import { success } from '@/lib/haptics';
 import { PhotoFlow } from '@/components/photo-flow';
 import { deletePhoto, photoBase64, photoSize, photoUri, pickPhoto, savePhoto, type PhotoCrop, type PickedPhoto, type PhotoSource } from '@/lib/photos';
@@ -47,6 +48,9 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
   const theme = useTheme();
   const { addItem, updateItem, removeItem } = useGear();
   const aiConsent = useAiConsent();
+  const pro = usePro();
+  const proRef = useRef(pro);
+  proRef.current = pro;
   const defaultPhotoStyle = usePhotoStyle();
   const turnCutout = (by: number, reset = false) => {
     setDraft((d) => {
@@ -142,7 +146,13 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     if (stale()) return;
     log('photo.lookup', { found: found.length });
     // One clean object: it can be shown cut out right away (the photo is already framed on it).
-    if (found.length === 1 && found[0]?.outline) setDraft((d) => (d.imageUri === stored ? { ...d, cutout: { outline: found[0]!.outline as [number, number][], turn: 0 } } : d));
+    if (proRef.current && found.length === 1 && found[0]?.outline) setDraft((d) => (d.imageUri === stored ? { ...d, cutout: { outline: found[0]!.outline as [number, number][], turn: 0 } } : d));
+    if (found.length > 1 && !proRef.current) {
+      log('pro.gate', { gate: 'multi-scan' });
+      setFinding(null);
+      Alert.alert('Several items found', 'Pro can find each item in a photo and add them one by one. For now this photo is used as it is.', [{ text: 'OK' }]);
+      found = [];
+    }
     if (found.length > 1) {
       setBatch({ stored, items: found, done: [], current: null });
       setPicking(true);
@@ -198,7 +208,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
       }
       applyIdentified(r);
       // Several items in the photo: let the person pick which one they mean, in the same window.
-      if (allowPicker && r.items && r.items.length > 1) {
+      if (allowPicker && proRef.current && r.items && r.items.length > 1) {
         // Tighten the rough outlines against the real picture (keeps the rough ones if that fails).
         let items = r.items;
         try {
@@ -304,7 +314,7 @@ export function GearForm({ item, defaultCategory, demo }: { item?: GearItem; def
     try {
       own = (await cropFor(index, dims)) ?? c.stored;
       const outline = own === c.stored ? null : (cropOutlines.current.get(index) ?? null);
-      setDraft((d) => ({ ...d, imageUri: own, cutout: outline ? { outline, turn: 0 } : null, photoStyle: null }));
+      setDraft((d) => ({ ...d, imageUri: own, cutout: outline && proRef.current ? { outline, turn: 0 } : null, photoStyle: null }));
       log('photo.cutout', { has: !!outline });
     } finally {
       setPreparing(false);

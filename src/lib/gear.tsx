@@ -9,7 +9,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { SAMPLE_GEAR } from '@/content/sample-gear';
 import * as db from '@/lib/db';
-import { FREE_MAX_SLOTS, MAX_ITEMS, MIN_SLOTS } from '@/lib/limits';
+import { FREE_MAX_SLOTS, MIN_SLOTS } from '@/lib/limits';
+import { maxItemsFor, usePro } from '@/lib/pro';
 import { deleteAllPhotos, deletePhoto } from '@/lib/photos';
 import type { GearDraft, GearItem, SlotConfig, SpinPick, SpinRecord } from '@/types/models';
 
@@ -75,8 +76,8 @@ export function GearProvider({ children }: { children: ReactNode }) {
   const [slots, setSlots] = useState<SlotConfig[]>([]);
   const [last, setLast] = useState<SpinRecord | null>(null);
 
-  // Premium (phase 3) raises these.
-  const maxItems = MAX_ITEMS;
+  // Pro raises the item limit (the wheel limit stays).
+  const maxItems = maxItemsFor(usePro());
   const maxSlots = FREE_MAX_SLOTS;
 
   const reload = useCallback(async () => {

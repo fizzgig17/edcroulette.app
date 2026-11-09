@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DevBanner } from '@/components/dev-banner';
 import { TourOverlay } from '@/components/tour';
 import { UpdateBanner } from '@/components/update-banner';
+import { AuthProvider } from '@/lib/auth';
 import { StartupError } from '@/components/startup-error';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -70,6 +71,7 @@ function App() {
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme;
   return (
     <LocalDataProvider>
+      <AuthProvider>
       <UpdateProvider>
       <TourProvider>
         <HideSplashWhenLoaded />
@@ -86,6 +88,7 @@ function App() {
               <Stack.Screen name="support" />
               <Stack.Screen name="manual" />
               <Stack.Screen name="delete-account" />
+              <Stack.Screen name="pro" />
             </Stack>
             <UpdateBanner />
             <TourOverlay />
@@ -93,6 +96,7 @@ function App() {
         </ThemeProvider>
       </TourProvider>
       </UpdateProvider>
+      </AuthProvider>
     </LocalDataProvider>
   );
 }

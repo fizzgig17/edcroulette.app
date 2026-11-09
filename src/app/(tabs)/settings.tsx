@@ -19,6 +19,7 @@ import { useGear } from '@/lib/gear';
 import { select } from '@/lib/haptics';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
+import { PRO_ENFORCED } from '@/lib/pro';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
 import { setCutoutBg, setCutoutLook, setPhotoStyle, useCutoutBg, useCutoutLook, usePhotoStyle } from '@/lib/preferences';
@@ -555,12 +556,18 @@ export default function SettingsScreen() {
           <Label text="Tour" info="A quick walk through the wheels, your collection and these settings." />
           <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
         </Card>
-        <Card>
-          <Label text="Premium" info="Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade." />
-          <ThemedText type="small" themeColor="textSecondary">
-            Coming soon.
-          </ThemedText>
-        </Card>
+        {PRO_ENFORCED ? (
+          <Card padded={false}>
+            <LinkRow first label="Pro & account" href="/pro" />
+          </Card>
+        ) : (
+          <Card>
+            <Label text="Premium" info="Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade." />
+            <ThemedText type="small" themeColor="textSecondary">
+              Coming soon.
+            </ThemedText>
+          </Card>
+        )}
         <Card padded={false}>
           <LinkRow first label="User manual" href="/manual" />
           <LinkRow label="Privacy policy" href="/privacy" />
