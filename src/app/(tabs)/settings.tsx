@@ -20,7 +20,7 @@ import { select } from '@/lib/haptics';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
 import { BackupCard } from '@/components/backup-card';
-import { PRO_ENFORCED } from '@/lib/pro';
+import { PRO_ENFORCED, setPurchased, usePro, usePurchased } from '@/lib/pro';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
 import { setCutoutBg, setCutoutLook, setPhotoStyle, useCutoutBg, useCutoutLook, usePhotoStyle } from '@/lib/preferences';
@@ -238,6 +238,8 @@ function LinkRow({ label, href, first }: { label: string; href: Href; first?: bo
 export default function SettingsScreen() {
   const theme = useTheme();
   const pref = useThemePref();
+  const pro = usePro();
+  const purchased = usePurchased();
   const spinStyle = useSpinStyle();
   const boost = useFavoriteBoost();
   const photoStyle = usePhotoStyle();
@@ -534,6 +536,32 @@ export default function SettingsScreen() {
         <Button label="Erase everything on this phone" variant="danger" icon="trash" onPress={erase} />
       </Section>
 
+      <Section title="Pro & backup" summary={PRO_ENFORCED ? `${pro ? 'Pro' : 'Free'} · backup` : 'Backup'} info="What Pro adds, your optional account for syncing across devices, and keeping a copy of your collection.">
+        {PRO_ENFORCED ? (
+          <Card padded={false}>
+            <LinkRow first label={pro ? 'Pro and account' : 'Get Pro, or sign in'} href="/pro" />
+          </Card>
+        ) : (
+          <Card>
+            <Label text="Premium" info="Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade." />
+            <ThemedText type="small" themeColor="textSecondary">
+              Coming soon.
+            </ThemedText>
+          </Card>
+        )}
+        {IS_DEV_BUILD && PRO_ENFORCED ? (
+          <Card>
+            <View style={styles.inline}>
+              <ThemedText style={styles.flex}>Test with Pro (dev builds only)</ThemedText>
+              <Switch value={purchased} onValueChange={(v) => setPurchased(v)} />
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              Turn off to try the free version’s limits.
+            </ThemedText>
+          </Card>
+        ) : null}
+        <BackupCard />
+      </Section>
       <Section title="Help and about" summary="Updates, tour, policies" info="Checking for a new version, a walk through the app, what's coming, and the legal pages.">
         {update.supported ? (
           <Card>
@@ -557,19 +585,6 @@ export default function SettingsScreen() {
           <Label text="Tour" info="A quick walk through the wheels, your collection and these settings." />
           <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
         </Card>
-        <BackupCard />
-        {PRO_ENFORCED ? (
-          <Card padded={false}>
-            <LinkRow first label="Pro & account" href="/pro" />
-          </Card>
-        ) : (
-          <Card>
-            <Label text="Premium" info="Coming soon: unlimited gear, cloud backup across your devices, EDC Friends, and a web dashboard. Everything you add now stays on this phone and will move over when you upgrade." />
-            <ThemedText type="small" themeColor="textSecondary">
-              Coming soon.
-            </ThemedText>
-          </Card>
-        )}
         <Card padded={false}>
           <LinkRow first label="User manual" href="/manual" />
           <LinkRow label="Privacy policy" href="/privacy" />

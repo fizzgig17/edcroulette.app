@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Platform, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -9,8 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { facebookEnabled, googleEnabled, useAuth, type Provider } from '@/lib/auth';
-import { IS_DEV_BUILD } from '@/lib/env';
-import { getPurchased, PRO_ENFORCED, PRO_FEATURES, setPurchased, usePro } from '@/lib/pro';
+import { PRO_ENFORCED, PRO_FEATURES, usePro } from '@/lib/pro';
 
 /** What Pro adds, and the optional account (cloud backup and sync). Reached from Settings. */
 export default function ProScreen() {
@@ -83,18 +82,6 @@ export default function ProScreen() {
         </Card>
       ) : null}
 
-      {IS_DEV_BUILD ? (
-        <Card>
-          <ThemedText type="smallBold">Testing (dev builds only)</ThemedText>
-          <View style={styles.row}>
-            <ThemedText style={styles.flex}>Pro purchase on this phone</ThemedText>
-            <Switch value={getPurchased()} onValueChange={(v) => setPurchased(v)} />
-          </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            Turn off to try the free version’s limits.
-          </ThemedText>
-        </Card>
-      ) : null}
       <Button label="Done" variant="ghost" onPress={() => router.back()} />
     </Screen>
   );

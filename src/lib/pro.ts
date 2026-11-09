@@ -52,10 +52,13 @@ export function setAccountPremium(on: boolean) {
   emit();
 }
 
-export const getPro = () => !PRO_ENFORCED || getPurchased() || accountPremium;
+// Dev builds: the test switch alone decides (so the free version can be tried even when signed in to a premium account).
+export const getPro = () => !PRO_ENFORCED || (IS_DEV_BUILD ? getPurchased() : getPurchased() || accountPremium);
 
 // The snapshot has to be a stable primitive: combine the two sources into one string.
 const snapshot = () => (getPro() ? '1' : '0');
 export const usePro = () => useSyncExternalStore(subscribe, snapshot, () => '1') === '1';
+
+export const usePurchased = () => useSyncExternalStore(subscribe, () => (getPurchased() ? '1' : '0'), () => '1') === '1';
 
 export const maxItemsFor = (pro: boolean) => (pro ? PRO_MAX_ITEMS : FREE_MAX_ITEMS);
