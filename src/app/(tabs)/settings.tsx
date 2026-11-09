@@ -19,6 +19,7 @@ import { useGear } from '@/lib/gear';
 import { select } from '@/lib/haptics';
 import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import { METALS, metalById } from '@/constants/metals';
+import { BackupCard } from '@/components/backup-card';
 import { PRO_ENFORCED } from '@/lib/pro';
 import { useTour } from '@/lib/tour';
 import { useUpdate } from '@/lib/update-context';
@@ -556,6 +557,7 @@ export default function SettingsScreen() {
           <Label text="Tour" info="A quick walk through the wheels, your collection and these settings." />
           <Button label="Show the tour again" icon="sparkle" variant="secondary" onPress={() => startTour()} />
         </Card>
+        <BackupCard />
         {PRO_ENFORCED ? (
           <Card padded={false}>
             <LinkRow first label="Pro & account" href="/pro" />

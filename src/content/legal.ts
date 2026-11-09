@@ -132,7 +132,7 @@ export const SUPPORT: Section[] = [
   {
     title: 'I got a new phone. Can I move my collection?',
     body: [
-      'Not yet: the free version keeps everything on the phone it was added on. Cloud backup and syncing are planned for Premium.',
+      'Yes. Your collection is part of your phone’s own iCloud or Google backup if that is turned on (we don’t run or see that backup), and Settings → Backup can save it to a file you keep and add it back on another phone, iPhone or Android. Cloud syncing across devices is planned for Premium.',
     ],
   },
   {

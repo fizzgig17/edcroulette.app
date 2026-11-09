@@ -109,7 +109,7 @@ export const MANUAL: Section[] = [
     body: [
       'The wheels don’t turn: check you have at least two pieces in a category (a wheel with one piece or a locked wheel lands without turning).',
       'AI help does nothing: it needs an internet connection and AI help turned on in Settings. Without it, spins are random and photos stay on your phone.',
-      'A new phone: the free version keeps everything on the phone it was added on, so there is nothing to move yet. Cloud backup is planned for Premium.',
+      'A new phone: your collection is part of your phone’s iCloud or Google backup if that’s turned on, and comes back when you set the new phone up from it. To move between an iPhone and an Android phone, or to keep your own copy, use Settings → Backup: “Save a backup file” on the old phone and “Add items from a backup file” on the new one.',
       `Something else: email ${SUPPORT_EMAIL} with your phone model and what happened. Screenshots help.`,
     ],
   },

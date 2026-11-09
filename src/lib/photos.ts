@@ -143,3 +143,10 @@ export async function photoBase64(stored: string | null | undefined): Promise<st
     return null;
   }
 }
+
+/** Saves a photo that came out of a backup file (base64 JPEG) into the app's folder; returns the stored name. */
+export function savePhotoFromBase64(b64: string): string {
+  const name = `${Crypto.randomUUID()}.jpg`;
+  new File(photosDir(), name).write(b64, { encoding: 'base64' });
+  return `${FOLDER}/${name}`;
+}
